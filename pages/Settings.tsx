@@ -308,7 +308,7 @@ export const SettingsPage = () => {
                               <Badge variant={loc.connection_status === 'connected' ? 'success' : 'neutral'}>
                                   {loc.connection_status === 'connected' ? 'Connecté' : 'Déconnecté'}
                               </Badge>
-                          </div>
+                          </CardContent>
                       </Card>
                   ))}
               </div>
