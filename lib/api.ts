@@ -45,7 +45,6 @@ const authService = {
         const { data: { user } } = await supabase!.auth.getUser();
         if (!user) return null;
         
-        // Try to get role/org from public.users table
         const { data: profile } = await supabase!
             .from('users')
             .select('*')
@@ -262,9 +261,13 @@ const organizationService = {
 
                   const { data: locations } = await supabase!.from('locations').select('*').eq('organization_id', profile.organization_id);
                   
+                  // Fusionner avec les valeurs par défaut pour éviter les erreurs si la DB est ancienne
                   return {
                       ...INITIAL_ORG,
                       ...org,
+                      brand: org.brand || INITIAL_ORG.brand,
+                      integrations: org.integrations || INITIAL_ORG.integrations,
+                      saved_replies: org.saved_replies || INITIAL_ORG.saved_replies,
                       locations: locations || []
                   } as Organization;
               } catch (e) {
@@ -292,17 +295,17 @@ const organizationService = {
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
+          // RÉCUPÉRATION CLÉ API
           const apiKey = import.meta.env.VITE_API_KEY;
           
-          // Log de débogage (visible dans la console du navigateur)
-          console.log("Tentative génération IA. Clé présente:", !!apiKey);
+          console.log("Tentative IA (Clé présente ?):", !!apiKey);
 
           if (!apiKey) {
-             throw new Error("ERREUR CONFIGURATION: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
+             throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
           }
 
           try {
-              const org = await organizationService.get(); // Use internal service reference
+              const org = await organizationService.get(); 
               const usage = org?.ai_usage_count || 0;
               const limit = org?.subscription_plan === 'free' ? 3 : org?.subscription_plan === 'starter' ? 100 : 300;
               
@@ -311,9 +314,8 @@ const aiService = {
               }
 
               const genAI = new GoogleGenerativeAI(apiKey);
-              // Utilisation du modèle flash (plus rapide et fiable)
-              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-
+              
+              // --- PREPARATION DU PROMPT ---
               const brand: BrandSettings = org?.brand || { 
                 tone: 'professionnel', 
                 description: '', 
@@ -324,37 +326,57 @@ const aiService = {
               };
               const industry = org?.industry || 'other';
 
-              const knowledgeBaseContext = brand.knowledge_base 
-                ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}`
-                : '';
-
               const prompt = `
-                Rôle: Expert Relation Client pour une entreprise de type "${industry}".
+                Tu es un expert en relation client pour une entreprise de type "${industry}".
                 
-                [IDENTITÉ MARQUE]
+                [IDENTITÉ]
                 - Ton: ${options.tone || brand.tone}
                 - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
                 - Emojis: ${brand.use_emojis ? 'Oui' : 'Non'}
-                ${knowledgeBaseContext}
+                ${brand.knowledge_base ? `[CONTEXTE]: ${brand.knowledge_base}` : ''}
 
                 TACHE: Rédige une réponse empathique et personnalisée à cet avis.
-                Ne mets pas de guillemets. Sois concis.
+                Ne mets pas de guillemets. Sois concis et direct.
 
                 Avis client (${review.rating}/5) de ${review.author_name}: "${review.body}"
               `;
 
-              const result = await model.generateContent(prompt);
-              const response = await result.response;
-              const text = response.text();
+              // --- STRATÉGIE DE MODÈLE (2.5 Flash -> 1.5 Flash -> Pro) ---
+              let text = '';
+              
+              try {
+                  // Essai 1: Le dernier modèle rapide (2.5)
+                  console.log("Essai gemini-2.5-flash...");
+                  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
+                  const result = await model.generateContent(prompt);
+                  text = result.response.text();
+              } catch (err1: any) {
+                  console.warn("Gemini 2.5 indisponible, essai 1.5...", err1.message);
+                  try {
+                      // Essai 2: Le modèle stable actuel (1.5)
+                      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+                      const result = await model.generateContent(prompt);
+                      text = result.response.text();
+                  } catch (err2: any) {
+                      console.warn("Gemini 1.5 indisponible, repli sur Pro...", err2.message);
+                      // Essai 3: Le modèle classique (Pro) en dernier recours
+                      const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+                      const result = await model.generateContent(prompt);
+                      text = result.response.text();
+                  }
+              }
               
               if (!text) throw new Error("Réponse vide de l'IA.");
+
+              // Incrémenter l'usage
+              // (Optionnel : appel API pour update usage)
 
               return text;
 
           } catch (e: any) {
-              console.error("ERREUR IA:", e);
-              if (e.message?.includes('404')) throw new Error("Modèle IA indisponible. Contactez le support.");
+              console.error("ERREUR IA FINALE:", e);
               if (e.message?.includes('403') || e.message?.includes('API key')) throw new Error("Clé API invalide.");
+              if (e.message?.includes('429')) throw new Error("Quota Google dépassé.");
               throw new Error(`Erreur IA: ${e.message}`);
           }
       },
@@ -363,24 +385,35 @@ const aiService = {
           if (!apiKey) throw new Error("Clé API manquante");
 
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-
           const prompt = `Crée un post ${platform} pour cet avis : "${review.body}" (${review.rating}/5). Ajoute emojis et hashtags.`;
           
-          const result = await model.generateContent(prompt);
-          const response = await result.response;
-          return response.text();
+          // Même stratégie de repli simplifiée
+          try {
+             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
+             const result = await model.generateContent(prompt);
+             return result.response.text();
+          } catch (e) {
+             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+             const result = await model.generateContent(prompt);
+             return result.response.text();
+          }
       },
       runCustomTask: async (payload: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
           if (!apiKey) throw new Error("Clé API manquante");
 
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-          
-          const result = await model.generateContent(JSON.stringify(payload));
-          const response = await result.response;
-          return JSON.parse(response.text());
+          const prompt = JSON.stringify(payload);
+
+          try {
+             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
+             const result = await model.generateContent(prompt);
+             return JSON.parse(result.response.text());
+          } catch (e) {
+             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+             const result = await model.generateContent(prompt);
+             return JSON.parse(result.response.text());
+          }
       }
 };
 
@@ -389,12 +422,12 @@ const socialService = {
           await new Promise(resolve => setTimeout(resolve, 2000));
           
           if (isSupabaseConfigured()) {
-              const org = await organizationService.get(); // Use internal service reference
+              const org = await organizationService.get(); 
               if (org) {
                   const integrations = org.integrations || { google: false, facebook: false, instagram_posting: false, facebook_posting: false };
                   const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
                   (integrations as any)[key] = true;
-                  await organizationService.update({ integrations }); // Use internal service reference
+                  await organizationService.update({ integrations }); 
               }
           } else {
               const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
@@ -469,6 +502,7 @@ const seedCloudDatabase = async () => {
       try {
           console.log("1. Démarrage de l'injection...");
 
+          // Create Organization
           const { data: org, error: orgError } = await supabase!
             .from('organizations')
             .insert({ 
@@ -490,6 +524,7 @@ const seedCloudDatabase = async () => {
           }
           const orgId = org.id;
           
+          // Link User
           const { error: userError } = await supabase!.from('users').upsert({
               id: user.id,
               email: user.email,
@@ -503,6 +538,7 @@ const seedCloudDatabase = async () => {
               throw new Error(`Impossible de lier votre utilisateur: ${userError.message}`);
           }
           
+          // Create Locations
           const { data: locs, error: locError } = await supabase!.from('locations').insert([
               { organization_id: orgId, name: "Boutique Paris Centre", city: "Paris", country: "France", connection_status: "connected", platform_rating: 4.8 },
               { organization_id: orgId, name: "Atelier Lyon", city: "Lyon", country: "France", connection_status: "disconnected", platform_rating: 4.2 }
@@ -513,6 +549,7 @@ const seedCloudDatabase = async () => {
               throw locError;
           }
           
+          // Create Reviews
           const locId = locs[0].id;
           const reviewsPayload = INITIAL_REVIEWS.map(r => ({
               location_id: locId,
@@ -536,6 +573,7 @@ const seedCloudDatabase = async () => {
               throw new Error(`Erreur Reviews: ${revError.message}`);
           }
 
+          // Create Competitors
           const competitorsPayload = INITIAL_COMPETITORS.map(c => ({
               organization_id: orgId,
               name: c.name,
@@ -546,7 +584,8 @@ const seedCloudDatabase = async () => {
               weaknesses: c.weaknesses || []
           }));
           
-          await supabase!.from('competitors').insert(competitorsPayload);
+          const { error: compError } = await supabase!.from('competitors').insert(competitorsPayload);
+          if (compError) console.warn("Erreur Competitors (non bloquant):", compError);
           
           console.log("Injection terminée.");
           window.location.reload();
