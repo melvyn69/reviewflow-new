@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Location, SavedReply, BrandSettings } from '../types';
+import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, MessageSquare, Instagram, Facebook, Trash2, Save } from 'lucide-react';
 
 export const SettingsPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
+  const [team, setTeam] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState('general');
   const [loading, setLoading] = useState(true);
   const toast = useToast();
@@ -20,12 +21,20 @@ export const SettingsPage = () => {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
 
+  // Template State
+  const [newTemplateTitle, setNewTemplateTitle] = useState('');
+  const [newTemplateContent, setNewTemplateContent] = useState('');
+
+  // Team Invite State
+  const [inviteEmail, setInviteEmail] = useState('');
+
   useEffect(() => {
     const timer = setTimeout(() => {
         if (!org) setLoading(false);
     }, 3000);
 
     loadOrg();
+    loadTeam();
     return () => clearTimeout(timer);
   }, []);
 
@@ -40,6 +49,11 @@ export const SettingsPage = () => {
     }
   };
 
+  const loadTeam = async () => {
+      const data = await api.team.list();
+      setTeam(data);
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!org) return;
@@ -51,6 +65,12 @@ export const SettingsPage = () => {
       if (!org) return;
       await api.organization.update({ brand: org.brand });
       toast.success("Identité de marque sauvegardée");
+  };
+
+  const handleSaveNotifications = async () => {
+      if (!org) return;
+      await api.organization.update({ notification_settings: org.notification_settings });
+      toast.success("Préférences de notification sauvegardées");
   };
 
   const handleAddLocation = async () => {
@@ -107,6 +127,46 @@ export const SettingsPage = () => {
               setImportProgress(0);
           }
       }, 1500);
+  };
+
+  const handleAddTemplate = async () => {
+      if (!newTemplateTitle || !newTemplateContent || !org) return;
+      const newTemplate: SavedReply = {
+          id: `tpl-${Date.now()}`,
+          title: newTemplateTitle,
+          content: newTemplateContent,
+          category: 'positive'
+      };
+      const updatedTemplates = [...(org.saved_replies || []), newTemplate];
+      await api.organization.update({ saved_replies: updatedTemplates });
+      setOrg({ ...org, saved_replies: updatedTemplates });
+      setNewTemplateTitle('');
+      setNewTemplateContent('');
+      toast.success("Modèle ajouté");
+  };
+
+  const handleDeleteTemplate = async (id: string) => {
+      if (!org) return;
+      const updatedTemplates = (org.saved_replies || []).filter(t => t.id !== id);
+      await api.organization.update({ saved_replies: updatedTemplates });
+      setOrg({ ...org, saved_replies: updatedTemplates });
+      toast.success("Modèle supprimé");
+  };
+
+  const handleInvite = async () => {
+      if (!inviteEmail) return;
+      await api.team.invite(inviteEmail, 'editor');
+      toast.success(`Invitation envoyée à ${inviteEmail}`);
+      setInviteEmail('');
+  };
+
+  const handleToggleIntegration = async (key: string, current: boolean) => {
+      if (!org) return;
+      // In a real app this would trigger OAuth flow
+      const updatedIntegrations = { ...org.integrations, [key]: !current };
+      setOrg({ ...org, integrations: updatedIntegrations });
+      await api.organization.update({ integrations: updatedIntegrations });
+      toast.success(current ? "Intégration désactivée" : "Intégration activée");
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Chargement des paramètres...</div>;
@@ -175,7 +235,6 @@ export const SettingsPage = () => {
                   <CardContent className="space-y-4">
                       <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
                           <div className="flex items-center gap-3">
-                              {/* CORRECTION : Utilisation de 'org' au lieu de la promesse getUser() */}
                               <div className={`h-2 w-2 rounded-full ${org ? 'bg-green-500' : 'bg-red-500'}`}></div>
                               <span className="text-sm font-medium">Base de données : Connectée</span>
                           </div>
@@ -284,6 +343,119 @@ export const SettingsPage = () => {
           </div>
       )}
 
+      {/* Templates Tab */}
+      {activeTab === 'templates' && (
+          <div className="space-y-6 animate-in fade-in">
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Réponses Types</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                      <div className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                          <h4 className="text-sm font-semibold mb-3">Créer un nouveau modèle</h4>
+                          <div className="space-y-3">
+                              <Input 
+                                placeholder="Titre (ex: Remerciement Standard)" 
+                                value={newTemplateTitle}
+                                onChange={(e) => setNewTemplateTitle(e.target.value)}
+                              />
+                              <textarea 
+                                className="w-full p-3 border border-slate-200 rounded-lg text-sm h-24"
+                                placeholder="Contenu de la réponse..."
+                                value={newTemplateContent}
+                                onChange={(e) => setNewTemplateContent(e.target.value)}
+                              />
+                              <div className="flex justify-end">
+                                  <Button size="sm" icon={Plus} onClick={handleAddTemplate} disabled={!newTemplateTitle || !newTemplateContent}>Ajouter</Button>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="space-y-3">
+                          {org.saved_replies?.map((reply) => (
+                              <div key={reply.id} className="flex justify-between items-start p-4 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
+                                  <div>
+                                      <h5 className="font-medium text-slate-900">{reply.title}</h5>
+                                      <p className="text-sm text-slate-500 mt-1">{reply.content}</p>
+                                  </div>
+                                  <button onClick={() => handleDeleteTemplate(reply.id)} className="text-slate-400 hover:text-red-600">
+                                      <Trash2 className="h-4 w-4" />
+                                  </button>
+                              </div>
+                          ))}
+                          {(!org.saved_replies || org.saved_replies.length === 0) && (
+                              <p className="text-center text-slate-400 py-4">Aucun modèle enregistré.</p>
+                          )}
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
+      )}
+
+      {/* Notifications Tab */}
+      {activeTab === 'notifications' && org.notification_settings && (
+          <div className="space-y-6 animate-in fade-in">
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Préférences de Notification</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                      <div className="flex items-center justify-between p-4 border border-slate-100 rounded-lg">
+                          <div className="flex items-center gap-3">
+                              <Bell className="h-5 w-5 text-indigo-600" />
+                              <div>
+                                  <h4 className="font-medium text-slate-900">Alertes par Email</h4>
+                                  <p className="text-xs text-slate-500">Recevoir un email pour les nouveaux avis.</p>
+                              </div>
+                          </div>
+                          <Toggle 
+                            checked={org.notification_settings.email_alerts} 
+                            onChange={(c) => setOrg({...org, notification_settings: {...org.notification_settings!, email_alerts: c}})}
+                          />
+                      </div>
+
+                      {org.notification_settings.email_alerts && (
+                          <div className="ml-8">
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Seuil d'alerte</label>
+                              <div className="flex items-center gap-2">
+                                  <Select 
+                                    className="w-48"
+                                    value={org.notification_settings.alert_threshold}
+                                    onChange={(e) => setOrg({...org, notification_settings: {...org.notification_settings!, alert_threshold: parseInt(e.target.value)}})}
+                                  >
+                                      <option value="1">1 Étoile (Critique)</option>
+                                      <option value="2">2 Étoiles et moins</option>
+                                      <option value="3">3 Étoiles et moins</option>
+                                      <option value="4">4 Étoiles et moins</option>
+                                      <option value="5">Tous les avis</option>
+                                  </Select>
+                                  <span className="text-xs text-slate-500">M'alerter uniquement si la note est inférieure ou égale à ce seuil.</span>
+                              </div>
+                          </div>
+                      )}
+
+                      <div className="flex items-center justify-between p-4 border border-slate-100 rounded-lg">
+                          <div className="flex items-center gap-3">
+                              <Mail className="h-5 w-5 text-indigo-600" />
+                              <div>
+                                  <h4 className="font-medium text-slate-900">Digest Hebdomadaire</h4>
+                                  <p className="text-xs text-slate-500">Un résumé de vos performances chaque Lundi.</p>
+                              </div>
+                          </div>
+                          <Toggle 
+                            checked={org.notification_settings.weekly_digest} 
+                            onChange={(c) => setOrg({...org, notification_settings: {...org.notification_settings!, weekly_digest: c}})}
+                          />
+                      </div>
+
+                      <div className="flex justify-end">
+                          <Button onClick={handleSaveNotifications}>Enregistrer</Button>
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
+      )}
+
       {/* Locations Tab */}
       {activeTab === 'locations' && (
           <div className="space-y-6 animate-in fade-in">
@@ -310,6 +482,103 @@ export const SettingsPage = () => {
                       </Card>
                   ))}
               </div>
+          </div>
+      )}
+
+      {/* Team Tab */}
+      {activeTab === 'team' && (
+          <div className="space-y-6 animate-in fade-in">
+              <Card>
+                  <CardHeader className="flex flex-row justify-between items-center">
+                      <CardTitle>Membres de l'équipe</CardTitle>
+                      <Badge variant="neutral">{team.length} membres</Badge>
+                  </CardHeader>
+                  <CardContent>
+                      <div className="flex gap-2 mb-6">
+                          <Input 
+                            placeholder="Email du collaborateur..." 
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                          />
+                          <Button onClick={handleInvite} disabled={!inviteEmail}>Inviter</Button>
+                      </div>
+
+                      <div className="divide-y divide-slate-100">
+                          {team.map((user) => (
+                              <div key={user.id} className="py-4 flex justify-between items-center">
+                                  <div className="flex items-center gap-3">
+                                      <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                                          {user.name.charAt(0)}
+                                      </div>
+                                      <div>
+                                          <div className="font-medium text-slate-900">{user.name}</div>
+                                          <div className="text-xs text-slate-500">{user.email}</div>
+                                      </div>
+                                  </div>
+                                  <Badge variant={user.role === 'admin' ? 'default' : 'neutral'}>{user.role}</Badge>
+                              </div>
+                          ))}
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
+      )}
+
+      {/* Integrations Tab */}
+      {activeTab === 'integrations' && (
+          <div className="space-y-6 animate-in fade-in">
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Sources d'Avis</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
+                          <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center border border-slate-100 shadow-sm">
+                                  <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="h-5 w-5" alt="Google" />
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-slate-900">Google Business Profile</h4>
+                                  <p className="text-xs text-slate-500">Synchronisation des avis et réponses.</p>
+                              </div>
+                          </div>
+                          <Toggle checked={org.integrations.google} onChange={(c) => handleToggleIntegration('google', org.integrations.google)} />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
+                          <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 bg-[#1877F2] rounded-full flex items-center justify-center shadow-sm">
+                                  <Facebook className="h-5 w-5 text-white" />
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-slate-900">Facebook Page</h4>
+                                  <p className="text-xs text-slate-500">Récupération des avis et recommandations.</p>
+                              </div>
+                          </div>
+                          <Toggle checked={org.integrations.facebook} onChange={(c) => handleToggleIntegration('facebook', org.integrations.facebook)} />
+                      </div>
+                  </CardContent>
+              </Card>
+
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Publication Sociale (Marketing)</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
+                          <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 bg-gradient-to-tr from-yellow-400 to-purple-600 rounded-full flex items-center justify-center shadow-sm">
+                                  <Instagram className="h-5 w-5 text-white" />
+                              </div>
+                              <div>
+                                  <h4 className="font-bold text-slate-900">Instagram Business</h4>
+                                  <p className="text-xs text-slate-500">Pour publier vos avis en story ou post.</p>
+                              </div>
+                          </div>
+                          <Toggle checked={org.integrations.instagram_posting} onChange={(c) => handleToggleIntegration('instagram_posting', org.integrations.instagram_posting)} />
+                      </div>
+                  </CardContent>
+              </Card>
           </div>
       )}
 

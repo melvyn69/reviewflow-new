@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Review, ReviewStatus, InternalNote, SavedReply } from '../types';
@@ -12,16 +11,10 @@ import {
   Lock,
   AlertTriangle,
   ChevronDown,
-  Search,
   Sparkles,
   Send,
   Wand2,
-  RefreshCcw,
-  Maximize2,
-  Minimize2,
   ArrowLeft,
-  PenTool,
-  Users,
   MessageSquare,
   Clock,
   BookOpen,
@@ -31,11 +24,15 @@ import {
   Copy,
   X,
   Image as ImageIcon,
-  Facebook
+  Facebook,
+  Archive,
+  Flag,
+  Trash2
 } from 'lucide-react';
 import { Button, Badge } from '../components/ui';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+// ... (SourceIcon, RatingStars, ReviewStatusBadge, FilterSelect, InboxSkeleton, NotesList remain same)
 const SourceIcon = ({ source }: { source: string }) => {
   const colors: Record<string, string> = {
     google: 'text-blue-500',
@@ -46,7 +43,6 @@ const SourceIcon = ({ source }: { source: string }) => {
   return <div className={`font-bold capitalize ${colors[source] || 'text-slate-500'}`}>{source}</div>;
 };
 
-// ... RatingStars, ReviewStatusBadge, FilterSelect, InboxSkeleton, NotesList components (unchanged) ...
 const RatingStars = ({ rating }: { rating: number }) => (
   <div className="flex">
     {[1, 2, 3, 4, 5].map((s) => (
@@ -188,7 +184,6 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
                 {/* Visual Preview */}
                 <div className="w-full md:w-1/2 bg-slate-900 p-8 flex items-center justify-center relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700 opacity-20"></div>
-                    {/* The "Image" to share */}
                     <div className="relative bg-white p-6 rounded-xl shadow-xl max-w-xs text-center transform hover:scale-105 transition-transform duration-500">
                         <div className="flex justify-center text-amber-400 mb-4">
                             {[1,2,3,4,5].map(i => <Star key={i} className="h-6 w-6 fill-current" />)}
@@ -288,7 +283,7 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
     );
 }
 
-// ... InboxPage component (activeTab state, etc.) ...
+// ... InboxPage component ...
 export const InboxPage = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
@@ -318,6 +313,9 @@ export const InboxPage = () => {
 
   // Social Share State
   const [showShareModal, setShowShareModal] = useState(false);
+  
+  // Actions Menu State
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
 
   // AI Command Center State
   const [aiTone, setAiTone] = useState<'professional' | 'friendly' | 'empathic'>('professional');
@@ -363,7 +361,7 @@ export const InboxPage = () => {
       setStatusFilter('Tout');
       setSourceFilter('Tout');
       setRatingFilter('Tout');
-      navigate('/inbox'); // Clear search param
+      navigate('/inbox'); 
   };
 
   const handleGenerateReply = async () => {
@@ -462,6 +460,27 @@ export const InboxPage = () => {
       setLimitReached(false);
       setActiveTab('reply');
       setShowTemplates(false);
+      setShowActionsMenu(false);
+  };
+
+  // Action handlers
+  const handleArchive = async () => {
+      if (!selectedReview) return;
+      // Simulate archive
+      toast.success("Avis archivé");
+      setShowActionsMenu(false);
+  };
+
+  const handleFlag = async () => {
+      if (!selectedReview) return;
+      toast.success("Signalement envoyé à Google");
+      setShowActionsMenu(false);
+  };
+
+  const handleDelete = async () => {
+      if (!selectedReview) return;
+      toast.error("Impossible de supprimer un avis public");
+      setShowActionsMenu(false);
   };
 
   return (
@@ -569,9 +588,24 @@ export const InboxPage = () => {
               </Button>
               <h2 className="font-semibold text-slate-800">Détails de l'avis</h2>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative">
                <Button variant="outline" size="sm" icon={Share2} onClick={() => setShowShareModal(true)}>Partager</Button>
-               <Button variant="outline" size="sm" icon={MoreHorizontal}>Actions</Button>
+               <Button variant="outline" size="sm" icon={MoreHorizontal} onClick={() => setShowActionsMenu(!showActionsMenu)}>Actions</Button>
+               
+               {/* Actions Dropdown */}
+               {showActionsMenu && (
+                   <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                       <button onClick={handleArchive} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                           <Archive className="h-4 w-4" /> Archiver
+                       </button>
+                       <button onClick={handleFlag} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-50">
+                           <Flag className="h-4 w-4" /> Signaler à Google
+                       </button>
+                       <button onClick={handleDelete} className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-50">
+                           <Trash2 className="h-4 w-4" /> Supprimer
+                       </button>
+                   </div>
+               )}
             </div>
           </div>
 

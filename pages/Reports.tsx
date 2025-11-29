@@ -1,19 +1,21 @@
-
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { ReportConfig } from '../types';
-import { Button, Card, Badge, Toggle, useToast } from '../components/ui';
-import { FileText, Plus, Download, Mail, Trash2 } from 'lucide-react';
+import { Button, Card, Badge, Toggle, useToast, Input, Select, CardHeader, CardTitle, CardContent } from '../components/ui';
+import { FileText, Plus, Download, Mail, Trash2, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export const ReportsPage = () => {
   const [reports, setReports] = useState<ReportConfig[]>([]);
   const toast = useToast();
+  
+  // Edit State
+  const [editingReport, setEditingReport] = useState<ReportConfig | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editFrequency, setEditFrequency] = useState<'weekly'|'monthly'|'daily'>('weekly');
 
   useEffect(() => {
-    // Start with empty then simulate fetch or use initial if wanted
-    // For now we just use a local state mock
     setReports([
       {
         id: 'rep1',
@@ -50,10 +52,22 @@ export const ReportsPage = () => {
       toast.success("Rapport supprimé");
   };
 
+  const handleEdit = (report: ReportConfig) => {
+      setEditingReport(report);
+      setEditName(report.name);
+      setEditFrequency(report.frequency);
+  };
+
+  const handleSaveEdit = () => {
+      if (!editingReport) return;
+      setReports(reports.map(r => r.id === editingReport.id ? { ...r, name: editName, frequency: editFrequency } : r));
+      setEditingReport(null);
+      toast.success("Rapport mis à jour");
+  };
+
   const handleDownload = async () => {
       toast.info("Génération du rapport PDF...");
       try {
-          // Fetch real data for the report
           const [analytics, reviews] = await Promise.all([
               api.analytics.getOverview(),
               api.reviews.list({ status: 'all' })
@@ -61,7 +75,6 @@ export const ReportsPage = () => {
 
           const doc = new jsPDF();
           
-          // Header
           doc.setFontSize(22);
           doc.setTextColor(79, 70, 229); // Indigo
           doc.text("Reviewflow", 20, 20);
@@ -75,7 +88,6 @@ export const ReportsPage = () => {
           doc.text(`Généré le: ${new Date().toLocaleDateString('fr-FR')}`, 20, 40);
           doc.text("Période: 30 derniers jours", 20, 45);
 
-          // Key Metrics
           doc.setFontSize(14);
           doc.setTextColor(0);
           doc.text("Résumé des KPI", 20, 60);
@@ -96,7 +108,6 @@ export const ReportsPage = () => {
               styles: { fontSize: 11 }
           });
 
-          // Reviews Table
           doc.text("Derniers Avis Traités", 20, (doc as any).lastAutoTable.finalY + 20);
           
           const reviewsData = reviews.slice(0, 15).map(r => [
@@ -116,7 +127,6 @@ export const ReportsPage = () => {
               columnStyles: { 4: { cellWidth: 80 } }
           });
 
-          // Footer
           const pageCount = (doc as any).internal.getNumberOfPages();
           for(let i = 1; i <= pageCount; i++) {
               doc.setPage(i);
@@ -183,7 +193,7 @@ export const ReportsPage = () => {
                   <Toggle checked={report.enabled} onChange={() => handleToggle(report.id)} />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex items-center justify-end gap-3">
-                  <button className="text-indigo-600 hover:text-indigo-900">Éditer</button>
+                  <button onClick={() => handleEdit(report)} className="text-indigo-600 hover:text-indigo-900">Éditer</button>
                   <button className="text-slate-400 hover:text-slate-600" onClick={handleDownload} title="Télécharger"><Download className="h-4 w-4" /></button>
                   <button className="text-slate-400 hover:text-red-600" onClick={() => handleDelete(report.id)}><Trash2 className="h-4 w-4" /></button>
                 </td>
@@ -197,6 +207,35 @@ export const ReportsPage = () => {
           </tbody>
         </table>
       </Card>
+
+      {/* Edit Modal */}
+      {editingReport && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <Card className="w-full max-w-md animate-in zoom-in-95">
+                  <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 pb-4">
+                      <CardTitle>Modifier le rapport</CardTitle>
+                      <button onClick={() => setEditingReport(null)}><X className="h-5 w-5 text-slate-400" /></button>
+                  </CardHeader>
+                  <CardContent className="pt-6 space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Nom</label>
+                          <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Fréquence</label>
+                          <Select value={editFrequency} onChange={(e) => setEditFrequency(e.target.value as any)}>
+                              <option value="daily">Quotidien</option>
+                              <option value="weekly">Hebdomadaire</option>
+                              <option value="monthly">Mensuel</option>
+                          </Select>
+                      </div>
+                      <div className="flex justify-end pt-2">
+                          <Button onClick={handleSaveEdit}>Enregistrer</Button>
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
+      )}
     </div>
   );
 };
