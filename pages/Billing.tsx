@@ -193,14 +193,15 @@ export const BillingPage = () => {
         setUpgrading(plan);
         try {
             const url = await api.billing.createCheckoutSession(plan);
-            // In real app: window.location.href = url;
-            // Here we simulate success:
-            await api.organization.upgradePlan(plan);
-            toast.success(`Félicitations ! Vous êtes passé au plan ${plan.toUpperCase()}.`);
-            await loadOrg();
-        } catch (e) {
-            toast.error("Erreur lors de la redirection vers le paiement.");
-        } finally {
+            // MODIFICATION : Redirection réelle vers l'URL de paiement Stripe
+            if (url && url.startsWith('http')) {
+                window.location.href = url;
+            } else {
+                throw new Error("URL de paiement invalide");
+            }
+        } catch (e: any) {
+            console.error(e);
+            toast.error(e.message || "Erreur lors de la redirection vers le paiement.");
             setUpgrading(null);
         }
     };
@@ -219,7 +220,7 @@ export const BillingPage = () => {
                     <h1 className="text-2xl font-bold text-slate-900">Abonnement & Facturation</h1>
                     <p className="text-slate-500">Gérez votre plan et vos méthodes de paiement.</p>
                 </div>
-                <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then(() => toast.info("Ouverture du portail Stripe..."))}>
+                <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url) => window.location.href = url)}>
                     Gérer carte bancaire
                 </Button>
             </div>
