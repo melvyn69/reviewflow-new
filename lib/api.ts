@@ -292,78 +292,79 @@ const organizationService = {
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
+          // RÉCUPÉRATION DE LA CLÉ DEPUIS VERCEL
           const apiKey = import.meta.env.VITE_API_KEY;
           
           if (!apiKey) {
-              console.error("VITE_API_KEY manquante. Veuillez ajouter la variable d'environnement dans Vercel.");
-              throw new Error("Clé API Google manquante. Vérifiez la configuration Vercel.");
+             throw new Error("ERREUR CRITIQUE : Clé API 'VITE_API_KEY' manquante dans les réglages Vercel.");
           }
 
-          const org = await organizationService.get(); 
-          const usage = org?.ai_usage_count || 0;
-          const limit = org?.subscription_plan === 'free' ? 3 : org?.subscription_plan === 'starter' ? 100 : 300;
-          
-          if (usage >= limit) {
-              throw new Error('LIMIT_REACHED');
+          try {
+              const org = await organizationService.get(); 
+              
+              // Initialisation SDK Google Generative AI
+              const genAI = new GoogleGenerativeAI(apiKey);
+              // Utilisation de gemini-pro pour le texte (ou gemini-1.5-flash si disponible/préféré pour la vitesse)
+              const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+
+              const brand: BrandSettings = org?.brand || { 
+                tone: 'professionnel', 
+                description: '', 
+                knowledge_base: '',
+                use_emojis: false,
+                language_style: 'formal',
+                signature: ''
+              };
+              const industry = org?.industry || 'other';
+
+              const knowledgeBaseContext = brand.knowledge_base 
+                ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}`
+                : '';
+
+              const prompt = `
+                Tu es un expert en relation client pour une entreprise de type "${industry}".
+                
+                [IDENTITÉ]
+                - Ton: ${options.tone || brand.tone}
+                - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
+                - Emojis: ${brand.use_emojis ? 'Oui' : 'Non'}
+                ${knowledgeBaseContext}
+
+                Rédige une réponse empathique, sans être robotique.
+                Longueur: ${options.length || 'medium'}.
+                Langue: Français.
+
+                Avis client (${review.rating}/5) de ${review.author_name}: "${review.body}"
+                
+                Réponds uniquement avec le texte de la réponse.
+              `;
+
+              const result = await model.generateContent(prompt);
+              const response = await result.response;
+              const text = response.text();
+              
+              if (!text) throw new Error("L'IA a renvoyé une réponse vide.");
+              
+              return text;
+
+          } catch (e: any) {
+              console.error("ERREUR IA:", e);
+              // On renvoie l'erreur brute pour l'afficher à l'utilisateur
+              throw new Error(`Échec IA: ${e.message || "Erreur inconnue"}`);
           }
-
-          const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-
-          const brand: BrandSettings = org?.brand || { 
-            tone: 'professionnel', 
-            description: '', 
-            knowledge_base: '',
-            use_emojis: false,
-            language_style: 'formal',
-            signature: ''
-          };
-          const industry = org?.industry || 'other';
-
-          const knowledgeBaseContext = brand.knowledge_base 
-            ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}`
-            : '';
-
-          const prompt = `
-            Tu es un expert en relation client pour une entreprise de type "${industry}".
-            
-            [IDENTITÉ]
-            - Ton: ${options.tone || brand.tone}
-            - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
-            - Emojis: ${brand.use_emojis ? 'Oui' : 'Non'}
-            ${knowledgeBaseContext}
-
-            Rédige une réponse empathique, sans être robotique.
-            Longueur: ${options.length || 'medium'}.
-            Langue: Français.
-
-            Avis client (${review.rating}/5) de ${review.author_name}: "${review.body}"
-          `;
-
-          const result = await model.generateContent(prompt);
-          return result.response.text();
       },
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante");
+          if (!apiKey) throw new Error("Clé API manquante dans Vercel");
 
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: "gemini-pro"});
 
-          const prompt = `
-            Transforme cet avis client positif en un post pour les réseaux sociaux (${platform}).
-            
-            Avis: "${review.body}" par ${review.author_name} (${review.rating}/5).
-            
-            Le but est de remercier le client et de montrer notre qualité de service.
-            Utilise des emojis et des hashtags pertinents.
-            Ton: Enthousiaste et reconnaissant.
-            
-            Format: Texte complet du post uniquement.
-          `;
+          const prompt = `Crée un post ${platform} pour cet avis : "${review.body}" (${review.rating}/5). Ajoute emojis et hashtags.`;
           
           const result = await model.generateContent(prompt);
-          return result.response.text();
+          const response = await result.response;
+          return response.text();
       },
       runCustomTask: async (payload: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
@@ -372,9 +373,9 @@ const aiService = {
           const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: "gemini-pro"});
           
-          const prompt = JSON.stringify(payload);
-          const result = await model.generateContent(prompt);
-          return JSON.parse(result.response.text());
+          const result = await model.generateContent(JSON.stringify(payload));
+          const response = await result.response;
+          return JSON.parse(response.text());
       }
 };
 
@@ -383,12 +384,12 @@ const socialService = {
           await new Promise(resolve => setTimeout(resolve, 2000));
           
           if (isSupabaseConfigured()) {
-              const org = await organizationService.get(); 
+              const org = await organizationService.get(); // Use internal service reference
               if (org) {
                   const integrations = org.integrations || { google: false, facebook: false, instagram_posting: false, facebook_posting: false };
                   const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
                   (integrations as any)[key] = true;
-                  await organizationService.update({ integrations });
+                  await organizationService.update({ integrations }); // Use internal service reference
               }
           } else {
               const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
@@ -423,7 +424,7 @@ const automationService = {
           let actionCount = 0;
           let alertCount = 0;
 
-          const org = await organizationService.get();
+          const org = await organizationService.get(); // Use internal service reference
           const alertThreshold = org?.notification_settings?.alert_threshold || 3;
           const emailAlerts = org?.notification_settings?.email_alerts || false;
 
@@ -442,13 +443,9 @@ const automationService = {
                                actionCount++;
                            }
                            if (action.type === 'publish_social') {
-                               try {
-                                   const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); 
-                                   await socialService.publish(action.config.platform || 'instagram', postContent);
-                                   actionCount++;
-                               } catch (e) {
-                                   console.error("Automation error (social):", e);
-                               }
+                               const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); // Use internal service reference
+                               await socialService.publish(action.config.platform || 'instagram', postContent); // Use internal service reference
+                               actionCount++;
                            }
                        }
                   }
@@ -458,7 +455,6 @@ const automationService = {
       }
 };
 
-// Seed function logic
 const seedCloudDatabase = async () => {
       if (!isSupabaseConfigured()) throw new Error("Supabase non connecté");
       
@@ -557,7 +553,6 @@ const seedCloudDatabase = async () => {
       }
 };
 
-// Main API Export
 export const api = {
   auth: authService,
   reviews: reviewsService,
@@ -595,7 +590,7 @@ export const api = {
       },
       add: async (data: Omit<Competitor, 'id'>) => {
           if (isSupabaseConfigured()) {
-              const user = await authService.getUser(); // Use service directly
+              const user = await authService.getUser();
               if (user?.organization_id) {
                   const { data: comp } = await supabase!.from('competitors').insert({
                       ...data,
@@ -622,7 +617,7 @@ export const api = {
   locations: {
       create: async (data: any) => {
           if (isSupabaseConfigured()) {
-              const user = await authService.getUser(); // Use service directly
+              const user = await authService.getUser();
               if (user?.organization_id) {
                   const { data: loc, error } = await supabase!.from('locations').insert({
                       ...data,

@@ -32,13 +32,13 @@ import {
 import { Button, Badge } from '../components/ui';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-// ... (SourceIcon, RatingStars, ReviewStatusBadge, FilterSelect, InboxSkeleton, NotesList remain same)
 const SourceIcon = ({ source }: { source: string }) => {
   const colors: Record<string, string> = {
     google: 'text-blue-500',
     facebook: 'text-blue-700',
     tripadvisor: 'text-green-600',
-    yelp: 'text-red-600'
+    yelp: 'text-red-600',
+    direct: 'text-purple-600'
   };
   return <div className={`font-bold capitalize ${colors[source] || 'text-slate-500'}`}>{source}</div>;
 };
@@ -141,7 +141,6 @@ const NotesList = ({ notes }: { notes: InternalNote[] }) => {
     );
 };
 
-// Social Share Modal
 export const SocialShareModal = ({ review, onClose }: { review: Review; onClose: () => void }) => {
     const [platform, setPlatform] = useState<'instagram' | 'facebook' | 'linkedin'>('instagram');
     const [caption, setCaption] = useState('');
@@ -154,8 +153,8 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
         try {
             const text = await api.ai.generateSocialPost(review, platform as any);
             setCaption(text);
-        } catch (e) {
-            toast.error("Erreur de génération");
+        } catch (e: any) {
+            toast.error("Erreur de génération : " + e.message);
         } finally {
             setLoading(false);
         }
@@ -181,7 +180,6 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
     return (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95">
-                {/* Visual Preview */}
                 <div className="w-full md:w-1/2 bg-slate-900 p-8 flex items-center justify-center relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700 opacity-20"></div>
                     <div className="relative bg-white p-6 rounded-xl shadow-xl max-w-xs text-center transform hover:scale-105 transition-transform duration-500">
@@ -203,7 +201,6 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
                     </div>
                 </div>
 
-                {/* Controls */}
                 <div className="w-full md:w-1/2 p-6 flex flex-col">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-slate-900 flex items-center gap-2">
@@ -283,7 +280,6 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
     );
 }
 
-// ... InboxPage component ...
 export const InboxPage = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
@@ -293,12 +289,10 @@ export const InboxPage = () => {
   const searchQuery = searchParams.get('search') || '';
   const toast = useToast();
 
-  // Filters State
   const [statusFilter, setStatusFilter] = useState('Tout');
   const [sourceFilter, setSourceFilter] = useState('Tout');
   const [ratingFilter, setRatingFilter] = useState('Tout');
 
-  // Detail panel state
   const [activeTab, setActiveTab] = useState<'reply' | 'notes'>('reply');
   const [replyText, setReplyText] = useState('');
   const [noteText, setNoteText] = useState('');
@@ -307,17 +301,12 @@ export const InboxPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   
-  // Templates State
   const [savedReplies, setSavedReplies] = useState<SavedReply[]>([]);
   const [showTemplates, setShowTemplates] = useState(false);
 
-  // Social Share State
   const [showShareModal, setShowShareModal] = useState(false);
-  
-  // Actions Menu State
   const [showActionsMenu, setShowActionsMenu] = useState(false);
 
-  // AI Command Center State
   const [aiTone, setAiTone] = useState<'professional' | 'friendly' | 'empathic'>('professional');
   const [aiLength, setAiLength] = useState<'short' | 'medium' | 'long'>('medium');
 
@@ -376,11 +365,11 @@ export const InboxPage = () => {
         });
         setReplyText(draftText);
     } catch (error: any) {
-        if (error.message === 'LIMIT_REACHED') {
+        if (error.message.includes('LIMIT_REACHED')) {
             setLimitReached(true);
         } else {
-            setReplyText("Erreur lors de la génération.");
-            toast.error("L'IA n'a pas pu générer de réponse.");
+            setReplyText("");
+            toast.error(error.message); // Show real error
         }
     } finally {
         setIsGenerating(false);
@@ -397,7 +386,6 @@ export const InboxPage = () => {
     if (!selectedReview) return;
     await api.reviews.reply(selectedReview.id, replyText);
     
-    // Optimistic update
     const updatedReview: Review = { 
         ...selectedReview, 
         status: 'sent', 
@@ -463,10 +451,8 @@ export const InboxPage = () => {
       setShowActionsMenu(false);
   };
 
-  // Action handlers
   const handleArchive = async () => {
       if (!selectedReview) return;
-      // Simulate archive
       toast.success("Avis archivé");
       setShowActionsMenu(false);
   };
@@ -485,10 +471,8 @@ export const InboxPage = () => {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] -m-4 md:-m-8 overflow-hidden bg-white">
-      {/* List Panel */}
       <div className={`flex-1 flex flex-col min-w-0 border-r border-slate-200 transition-all duration-300 ${selectedReview ? 'hidden lg:flex lg:w-1/2' : 'w-full'}`}>
         
-        {/* Inbox Toolbar */}
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -510,7 +494,7 @@ export const InboxPage = () => {
                 label="Source" 
                 value={sourceFilter} 
                 onChange={setSourceFilter} 
-                options={['Google', 'Facebook', 'TripAdvisor']} 
+                options={['Google', 'Facebook', 'TripAdvisor', 'Direct']} 
              />
              <FilterSelect 
                 label="Note" 
@@ -578,7 +562,6 @@ export const InboxPage = () => {
         </div>
       </div>
 
-      {/* Detail Panel */}
       {selectedReview ? (
         <div className="fixed inset-0 z-50 lg:static lg:z-auto flex-1 w-full lg:w-1/2 flex flex-col bg-slate-50/50 min-w-0">
           <div className="px-4 md:px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center h-[73px]">
@@ -592,7 +575,6 @@ export const InboxPage = () => {
                <Button variant="outline" size="sm" icon={Share2} onClick={() => setShowShareModal(true)}>Partager</Button>
                <Button variant="outline" size="sm" icon={MoreHorizontal} onClick={() => setShowActionsMenu(!showActionsMenu)}>Actions</Button>
                
-               {/* Actions Dropdown */}
                {showActionsMenu && (
                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
                        <button onClick={handleArchive} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
@@ -610,7 +592,6 @@ export const InboxPage = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-            {/* Review Card */}
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
@@ -672,9 +653,7 @@ export const InboxPage = () => {
               </CardContent>
             </Card>
 
-            {/* AI Command Center (Reply Interface) */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col relative pb-20 lg:pb-0">
-              {/* Tab Header */}
               <div className="flex border-b border-slate-100 bg-slate-50/50">
                   <button 
                     onClick={() => setActiveTab('reply')}
@@ -694,7 +673,6 @@ export const InboxPage = () => {
               </div>
               
               <div className="p-4 md:p-6 flex-1">
-                 {/* REPLY TAB */}
                  {activeTab === 'reply' && (
                      selectedReview.status === 'sent' ? (
                         <div className="flex flex-col items-center justify-center py-8 text-center animate-in zoom-in-95 duration-300">
@@ -717,7 +695,6 @@ export const InboxPage = () => {
                         </div>
                      ) : (
                         <>
-                            {/* AI Controls Chips */}
                             <div className="flex flex-col sm:flex-row gap-2 mb-4 justify-between">
                                 <div className="flex gap-2">
                                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit overflow-x-auto">
@@ -782,7 +759,6 @@ export const InboxPage = () => {
                                 onChange={(e) => setReplyText(e.target.value)}
                                 ></textarea>
                                 
-                                {/* Loading State Overlay */}
                                 {isGenerating && (
                                     <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center rounded-xl backdrop-blur-[1px] z-10">
                                         <div className="h-1.5 w-48 bg-slate-100 rounded-full overflow-hidden mb-3">
@@ -813,7 +789,6 @@ export const InboxPage = () => {
                      )
                  )}
 
-                 {/* NOTES TAB */}
                  {activeTab === 'notes' && (
                      <div className="h-full flex flex-col">
                          <div className="flex-1 overflow-y-auto pr-2">
