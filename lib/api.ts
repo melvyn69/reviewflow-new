@@ -292,20 +292,27 @@ const organizationService = {
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
-          // RÉCUPÉRATION DE LA CLÉ DEPUIS VERCEL
           const apiKey = import.meta.env.VITE_API_KEY;
           
+          // Log de débogage (visible dans la console du navigateur)
+          console.log("Tentative génération IA. Clé présente:", !!apiKey);
+
           if (!apiKey) {
-             throw new Error("ERREUR CRITIQUE : Clé API 'VITE_API_KEY' manquante dans les réglages Vercel.");
+             throw new Error("ERREUR CONFIGURATION: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
           }
 
           try {
-              const org = await organizationService.get(); 
+              const org = await organizationService.get(); // Use internal service reference
+              const usage = org?.ai_usage_count || 0;
+              const limit = org?.subscription_plan === 'free' ? 3 : org?.subscription_plan === 'starter' ? 100 : 300;
               
-              // Initialisation SDK Google Generative AI
+              if (usage >= limit) {
+                  throw new Error("Limite d'utilisation atteinte. Passez au plan supérieur.");
+              }
+
               const genAI = new GoogleGenerativeAI(apiKey);
-              // Utilisation de gemini-pro pour le texte (ou gemini-1.5-flash si disponible/préféré pour la vitesse)
-              const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+              // Utilisation du modèle flash (plus rapide et fiable)
+              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
               const brand: BrandSettings = org?.brand || { 
                 tone: 'professionnel', 
@@ -322,43 +329,41 @@ const aiService = {
                 : '';
 
               const prompt = `
-                Tu es un expert en relation client pour une entreprise de type "${industry}".
+                Rôle: Expert Relation Client pour une entreprise de type "${industry}".
                 
-                [IDENTITÉ]
+                [IDENTITÉ MARQUE]
                 - Ton: ${options.tone || brand.tone}
                 - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
                 - Emojis: ${brand.use_emojis ? 'Oui' : 'Non'}
                 ${knowledgeBaseContext}
 
-                Rédige une réponse empathique, sans être robotique.
-                Longueur: ${options.length || 'medium'}.
-                Langue: Français.
+                TACHE: Rédige une réponse empathique et personnalisée à cet avis.
+                Ne mets pas de guillemets. Sois concis.
 
                 Avis client (${review.rating}/5) de ${review.author_name}: "${review.body}"
-                
-                Réponds uniquement avec le texte de la réponse.
               `;
 
               const result = await model.generateContent(prompt);
               const response = await result.response;
               const text = response.text();
               
-              if (!text) throw new Error("L'IA a renvoyé une réponse vide.");
-              
+              if (!text) throw new Error("Réponse vide de l'IA.");
+
               return text;
 
           } catch (e: any) {
               console.error("ERREUR IA:", e);
-              // On renvoie l'erreur brute pour l'afficher à l'utilisateur
-              throw new Error(`Échec IA: ${e.message || "Erreur inconnue"}`);
+              if (e.message?.includes('404')) throw new Error("Modèle IA indisponible. Contactez le support.");
+              if (e.message?.includes('403') || e.message?.includes('API key')) throw new Error("Clé API invalide.");
+              throw new Error(`Erreur IA: ${e.message}`);
           }
       },
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante dans Vercel");
+          if (!apiKey) throw new Error("Clé API manquante");
 
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
           const prompt = `Crée un post ${platform} pour cet avis : "${review.body}" (${review.rating}/5). Ajoute emojis et hashtags.`;
           
@@ -371,7 +376,7 @@ const aiService = {
           if (!apiKey) throw new Error("Clé API manquante");
 
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
           
           const result = await model.generateContent(JSON.stringify(payload));
           const response = await result.response;
@@ -553,6 +558,7 @@ const seedCloudDatabase = async () => {
       }
 };
 
+// Main API Export
 export const api = {
   auth: authService,
   reviews: reviewsService,
@@ -590,7 +596,7 @@ export const api = {
       },
       add: async (data: Omit<Competitor, 'id'>) => {
           if (isSupabaseConfigured()) {
-              const user = await authService.getUser();
+              const user = await authService.getUser(); // Use service directly
               if (user?.organization_id) {
                   const { data: comp } = await supabase!.from('competitors').insert({
                       ...data,
@@ -617,7 +623,7 @@ export const api = {
   locations: {
       create: async (data: any) => {
           if (isSupabaseConfigured()) {
-              const user = await authService.getUser();
+              const user = await authService.getUser(); // Use service directly
               if (user?.organization_id) {
                   const { data: loc, error } = await supabase!.from('locations').insert({
                       ...data,

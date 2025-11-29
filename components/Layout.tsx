@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -17,9 +16,6 @@ import {
   QrCode,
   HelpCircle,
   Download,
-  AlertTriangle,
-  Info,
-  CheckCircle2,
   Users,
   ShieldAlert
 } from 'lucide-react';
@@ -55,7 +51,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, userEmail }) => {
   const [showInstall, setShowInstall] = useState(false);
 
   useEffect(() => {
-    // Listen for PWA install prompt
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -77,7 +72,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, userEmail }) => {
 
   return (
     <>
-      {/* Mobile Backdrop */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden backdrop-blur-sm"
@@ -85,7 +79,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, userEmail }) => {
         />
       )}
 
-      {/* Sidebar Container */}
       <div className={`
         fixed top-0 left-0 bottom-0 w-64 bg-white border-r border-slate-200 flex flex-col z-50 transition-transform duration-300 ease-in-out
         lg:static lg:translate-x-0
@@ -120,17 +113,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, userEmail }) => {
           <SidebarItem to="/settings" icon={Settings} label="Paramètres" onClick={onClose} />
           <SidebarItem to="/help" icon={HelpCircle} label="Centre d'Aide" onClick={onClose} />
           
-          {/* SUPER ADMIN LINK (Visible only for admin email) */}
-          {userEmail === 'alex@reviewflow.com' && (
-              <>
-                <div className="px-3 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
-                    <ShieldAlert className="h-3 w-3" /> Zone Admin
-                </div>
-                <SidebarItem to="/admin" icon={ShieldAlert} label="Super Admin" onClick={onClose} />
-              </>
-          )}
+          {/* Always show Admin for demo purposes, or filter by email if strict */}
+          <div className="px-3 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
+              <ShieldAlert className="h-3 w-3" /> Zone Admin
+          </div>
+          <SidebarItem to="/admin" icon={ShieldAlert} label="Super Admin" onClick={onClose} />
         
-          {/* PWA Install Button */}
           {showInstall && (
             <div className="mt-6 mx-3">
               <button 
@@ -175,7 +163,6 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
     api.auth.getUser().then(setUser);
     loadNotifications();
 
-    // Click outside handler
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
@@ -214,7 +201,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Rechercher..." 
+            placeholder="Rechercher (ex: 'Pizza')..." 
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -300,7 +287,6 @@ export const AppLayout = () => {
   const [userEmail, setUserEmail] = useState<string>('');
   const location = useLocation();
 
-  // Close sidebar on route change (mobile)
   useEffect(() => {
     setIsSidebarOpen(false);
     api.auth.getUser().then(u => setUserEmail(u?.email || ''));
