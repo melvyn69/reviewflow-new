@@ -45,6 +45,7 @@ const authService = {
         const { data: { user } } = await supabase!.auth.getUser();
         if (!user) return null;
         
+        // Try to get role/org from public.users table
         const { data: profile } = await supabase!
             .from('users')
             .select('*')
@@ -274,7 +275,7 @@ const organizationService = {
       },
       update: async (data: Partial<Organization>) => {
           if (isSupabaseConfigured()) {
-              const user = await authService.getUser(); // Use service directly
+              const user = await authService.getUser();
               if (user?.organization_id) {
                   await supabase!.from('organizations').update(data).eq('id', user.organization_id);
               }
@@ -291,7 +292,7 @@ const organizationService = {
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
-          const org = await organizationService.get(); // Use service directly
+          const org = await organizationService.get(); // Use internal service reference
           const usage = org?.ai_usage_count || 0;
           const limit = org?.subscription_plan === 'free' ? 3 : org?.subscription_plan === 'starter' ? 100 : 300;
           
@@ -366,16 +367,15 @@ const aiService = {
 
 const socialService = {
       connect: async (platform: 'instagram' | 'facebook') => {
-          // Simulate OAuth flow
           await new Promise(resolve => setTimeout(resolve, 2000));
           
           if (isSupabaseConfigured()) {
-              const org = await organizationService.get();
+              const org = await organizationService.get(); // Use internal service reference
               if (org) {
                   const integrations = org.integrations || { google: false, facebook: false, instagram_posting: false, facebook_posting: false };
                   const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
                   (integrations as any)[key] = true;
-                  await organizationService.update({ integrations });
+                  await organizationService.update({ integrations }); // Use internal service reference
               }
           } else {
               const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
@@ -410,7 +410,7 @@ const automationService = {
           let actionCount = 0;
           let alertCount = 0;
 
-          const org = await organizationService.get();
+          const org = await organizationService.get(); // Use internal service reference
           const alertThreshold = org?.notification_settings?.alert_threshold || 3;
           const emailAlerts = org?.notification_settings?.email_alerts || false;
 
@@ -429,8 +429,8 @@ const automationService = {
                                actionCount++;
                            }
                            if (action.type === 'publish_social') {
-                               const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram');
-                               await socialService.publish(action.config.platform || 'instagram', postContent);
+                               const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); // Use internal service reference
+                               await socialService.publish(action.config.platform || 'instagram', postContent); // Use internal service reference
                                actionCount++;
                            }
                        }
@@ -441,103 +441,8 @@ const automationService = {
       }
 };
 
-// Main API Export
-export const api = {
-  auth: authService,
-  reviews: reviewsService,
-  organization: organizationService,
-  ai: aiService,
-  social: socialService,
-  automation: automationService,
-  
-  analytics: {
-      getOverview: async (period?: string): Promise<AnalyticsSummary> => {
-          if (isSupabaseConfigured()) {
-              const { count } = await supabase!.from('reviews').select('*', { count: 'exact', head: true });
-              return {
-                  ...INITIAL_ANALYTICS,
-                  total_reviews: count || 0
-              };
-          }
-          return INITIAL_ANALYTICS;
-      }
-  },
-
-  competitors: {
-      list: async (): Promise<Competitor[]> => {
-          if (isSupabaseConfigured()) {
-              try {
-                  const { data, error } = await supabase!.from('competitors').select('*');
-                  if (error) return INITIAL_COMPETITORS;
-                  return data && data.length > 0 ? data : INITIAL_COMPETITORS;
-              } catch (e) {
-                  return INITIAL_COMPETITORS;
-              }
-          }
-          return INITIAL_COMPETITORS;
-      },
-      add: async (data: Omit<Competitor, 'id'>) => {
-          if (isSupabaseConfigured()) {
-              const user = await authService.getUser();
-              if (user?.organization_id) {
-                  const { data: comp } = await supabase!.from('competitors').insert({
-                      ...data,
-                      organization_id: user.organization_id
-                  }).select().single();
-                  return comp;
-              }
-          }
-          const newComp = { ...data, id: `comp-${Date.now()}` };
-          INITIAL_COMPETITORS.push(newComp);
-          return newComp;
-      }
-  },
-
-  notifications: {
-      list: async (): Promise<AppNotification[]> => {
-          return [
-              { id: 'n1', type: 'info', title: 'Rapport mensuel disponible', message: 'Votre rapport est prêt.', created_at: new Date().toISOString(), read: false, link: '/reports' }
-          ];
-      },
-      markAllRead: async () => { return true; }
-  },
-
-  locations: {
-      create: async (data: any) => {
-          if (isSupabaseConfigured()) {
-              const user = await authService.getUser();
-              if (user?.organization_id) {
-                  const { data: loc, error } = await supabase!.from('locations').insert({
-                      ...data,
-                      organization_id: user.organization_id,
-                      connection_status: 'disconnected'
-                  }).select().single();
-                  if (error) throw error;
-                  return loc;
-              }
-          }
-          return { ...data, id: 'loc-new' };
-      }
-  },
-  team: {
-      list: async (): Promise<User[]> => { return INITIAL_USERS; },
-      invite: async (email: string, role: string) => { return true; },
-      remove: async (userId: string) => { return true; }
-  },
-  billing: {
-      getInvoices: async () => { return []; },
-      downloadInvoice: (id: string) => { alert("Téléchargement"); },
-      createCheckoutSession: async (plan: string) => { return "https://stripe.com"; },
-      createPortalSession: async () => { return "https://stripe.com"; }
-  },
-  onboarding: {
-      checkStatus: async () => { return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 }; }
-  },
-  activity: {
-      getRecent: async () => { return []; }
-  },
-
-  seedCloudDatabase: async () => {
+// Seed function logic
+const seedCloudDatabase = async () => {
       if (!isSupabaseConfigured()) throw new Error("Supabase non connecté");
       
       const { data: { user } } = await supabase!.auth.getUser();
@@ -633,6 +538,103 @@ export const api = {
           console.error("Erreur Fatale Injection:", e);
           throw e;
       }
+};
+
+// Main API Export
+export const api = {
+  auth: authService,
+  reviews: reviewsService,
+  organization: organizationService,
+  ai: aiService,
+  social: socialService,
+  automation: automationService,
+  seedCloudDatabase: seedCloudDatabase,
+  
+  analytics: {
+      getOverview: async (period?: string): Promise<AnalyticsSummary> => {
+          if (isSupabaseConfigured()) {
+              const { count } = await supabase!.from('reviews').select('*', { count: 'exact', head: true });
+              return {
+                  ...INITIAL_ANALYTICS,
+                  total_reviews: count || 0
+              };
+          }
+          return INITIAL_ANALYTICS;
+      }
+  },
+
+  competitors: {
+      list: async (): Promise<Competitor[]> => {
+          if (isSupabaseConfigured()) {
+              try {
+                  const { data, error } = await supabase!.from('competitors').select('*');
+                  if (error) return INITIAL_COMPETITORS;
+                  return data && data.length > 0 ? data : INITIAL_COMPETITORS;
+              } catch (e) {
+                  return INITIAL_COMPETITORS;
+              }
+          }
+          return INITIAL_COMPETITORS;
+      },
+      add: async (data: Omit<Competitor, 'id'>) => {
+          if (isSupabaseConfigured()) {
+              const user = await authService.getUser(); // Use service directly
+              if (user?.organization_id) {
+                  const { data: comp } = await supabase!.from('competitors').insert({
+                      ...data,
+                      organization_id: user.organization_id
+                  }).select().single();
+                  return comp;
+              }
+          }
+          const newComp = { ...data, id: `comp-${Date.now()}` };
+          INITIAL_COMPETITORS.push(newComp);
+          return newComp;
+      }
+  },
+
+  notifications: {
+      list: async (): Promise<AppNotification[]> => {
+          return [
+              { id: 'n1', type: 'info', title: 'Rapport mensuel disponible', message: 'Votre rapport est prêt.', created_at: new Date().toISOString(), read: false, link: '/reports' }
+          ];
+      },
+      markAllRead: async () => { return true; }
+  },
+
+  locations: {
+      create: async (data: any) => {
+          if (isSupabaseConfigured()) {
+              const user = await authService.getUser(); // Use service directly
+              if (user?.organization_id) {
+                  const { data: loc, error } = await supabase!.from('locations').insert({
+                      ...data,
+                      organization_id: user.organization_id,
+                      connection_status: 'disconnected'
+                  }).select().single();
+                  if (error) throw error;
+                  return loc;
+              }
+          }
+          return { ...data, id: 'loc-new' };
+      }
+  },
+  team: {
+      list: async (): Promise<User[]> => { return INITIAL_USERS; },
+      invite: async (email: string, role: string) => { return true; },
+      remove: async (userId: string) => { return true; }
+  },
+  billing: {
+      getInvoices: async () => { return []; },
+      downloadInvoice: (id: string) => { alert("Téléchargement"); },
+      createCheckoutSession: async (plan: string) => { return "https://stripe.com"; },
+      createPortalSession: async () => { return "https://stripe.com"; }
+  },
+  onboarding: {
+      checkStatus: async () => { return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 }; }
+  },
+  activity: {
+      getRecent: async () => { return []; }
   },
 
   public: {
