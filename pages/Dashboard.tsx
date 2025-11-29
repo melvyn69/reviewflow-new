@@ -9,16 +9,12 @@ import {
   Star, 
   Clock, 
   AlertCircle, 
-  ArrowRight, 
-  ChevronDown,
-  Calendar, 
+  UploadCloud, // CORRECTION : Bon nom d'icône
+  Rocket, 
+  ExternalLink,
   Activity, 
   Zap, 
   CheckCircle2, 
-  UploadCloud, // Using correct icon name
-  Rocket, 
-  ExternalLink,
-  Eye,
   ShieldAlert
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -126,7 +122,6 @@ export const DashboardPage = () => {
   }, [period]);
 
   const loadData = async () => {
-    // Simulate slight delay for skeleton demo
     try {
       const [analyticsData, reviewsData, status, org] = await Promise.all([
         api.analytics.getOverview(period),
@@ -165,7 +160,6 @@ export const DashboardPage = () => {
       }
   };
 
-  // Safe checks for empty/new account
   const isNewAccount = !stats || stats.total_reviews === 0;
 
   return (

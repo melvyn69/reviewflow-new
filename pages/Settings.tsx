@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { CreditCard, Check, Zap, AlertTriangle, Link, Loader2, Terminal, Building2, Plus, MapPin, Globe, UploadCloud, X, HelpCircle, Sparkles, FileText, Upload, Briefcase, Download, Users, Mail, Trash2, Bell, Calendar, MessageSquare, BookOpen, Instagram, Facebook, Share2, Database, CheckCircle2, XCircle } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database } from 'lucide-react';
 
 export const SettingsPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -21,7 +21,6 @@ export const SettingsPage = () => {
   const [importProgress, setImportProgress] = useState(0);
 
   useEffect(() => {
-    // Safety timeout to prevent infinite loading
     const timer = setTimeout(() => {
         if (!org) setLoading(false);
     }, 3000);
@@ -86,11 +85,9 @@ export const SettingsPage = () => {
       setImporting(true);
       setImportProgress(10);
       
-      // Simulate reading and processing
       setTimeout(async () => {
           setImportProgress(50);
           try {
-              // Mock bulk data
               const mockData = Array(50).fill(null).map((_, i) => ({
                   source: 'google',
                   rating: 5,
@@ -178,7 +175,8 @@ export const SettingsPage = () => {
                   <CardContent className="space-y-4">
                       <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
                           <div className="flex items-center gap-3">
-                              <div className={`h-2 w-2 rounded-full ${api.auth.getUser() ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                              {/* CORRECTION : Utilisation de 'org' au lieu de la promesse getUser() */}
+                              <div className={`h-2 w-2 rounded-full ${org ? 'bg-green-500' : 'bg-red-500'}`}></div>
                               <span className="text-sm font-medium">Base de données : Connectée</span>
                           </div>
                           <Badge variant="success">OK</Badge>
