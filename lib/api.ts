@@ -300,7 +300,7 @@ const aiService = {
               throw new Error('LIMIT_REACHED');
           }
 
-          const genAI = new GoogleGenerativeAI(process.env.API_KEY || '');
+          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_API_KEY || '');
           const model = genAI.getGenerativeModel({ model: "gemini-pro"});
 
           const brand: BrandSettings = org?.brand || { 
