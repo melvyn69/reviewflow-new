@@ -1,7 +1,6 @@
-
 // Follow this setup guide to deploy: https://supabase.com/docs/guides/functions/deploy
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { GoogleGenAI } from 'https://esm.sh/@google/genai'
+import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai' // CHANGED
 
 declare const Deno: any;
 
@@ -11,27 +10,22 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req: any) => {
-  // Handle CORS
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  // ... (CORS handling same)
 
   try {
-    // 1. Initialize Supabase Client
+    // ... (Supabase client init same)
     const supabaseClient = createClient(
-      // Supabase API URL - env var automatically populated by Supabase
       Deno.env.get('SUPABASE_URL') ?? '',
-      // Supabase API Anon Key - env var automatically populated by Supabase
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
 
-    // 2. Fetch Pending Reviews
+    // ... (Fetch reviews same)
     const { data: reviews, error: fetchError } = await supabaseClient
       .from('reviews')
       .select('*, organization:locations(organization_id)')
       .eq('status', 'pending')
-      .limit(10); // Batch size
+      .limit(10);
 
     if (fetchError) throw fetchError;
     if (!reviews || reviews.length === 0) {
@@ -43,35 +37,31 @@ Deno.serve(async (req: any) => {
     // 3. Initialize AI
     const apiKey = Deno.env.get('API_KEY');
     if (!apiKey) throw new Error("Missing Google API Key");
-    const ai = new GoogleGenAI({ apiKey });
+    const genAI = new GoogleGenerativeAI(apiKey); // CHANGED
+    const model = genAI.getGenerativeModel({ model: "gemini-pro"}); // CHANGED
     
     const results = [];
 
     // 4. Process Each Review
     for (const review of reviews) {
-        // Generate AI Reply
         const prompt = `
             You are a helpful customer support agent.
             Review from ${review.author_name} (${review.rating}/5 stars): "${review.body}"
             Write a professional, short, and polite response in ${review.language || 'French'}.
         `;
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-        });
-        
-        const replyText = response.text;
+        const result = await model.generateContent(prompt);
+        const replyText = result.response.text();
 
-        // Update Review in DB
+        // ... (Update DB same)
         const { error: updateError } = await supabaseClient
             .from('reviews')
             .update({
-                status: 'draft', // Safety first: set to draft
+                status: 'draft',
                 ai_reply: {
                     text: replyText,
                     created_at: new Date().toISOString(),
-                    needs_manual_validation: review.rating <= 2 // Flag bad reviews
+                    needs_manual_validation: review.rating <= 2
                 }
             })
             .eq('id', review.id);
