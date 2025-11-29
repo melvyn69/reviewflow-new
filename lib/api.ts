@@ -292,7 +292,14 @@ const organizationService = {
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
-          const org = await organizationService.get(); // Use internal service reference
+          const apiKey = import.meta.env.VITE_API_KEY;
+          
+          if (!apiKey) {
+              console.error("VITE_API_KEY manquante. Veuillez ajouter la variable d'environnement dans Vercel.");
+              throw new Error("Clé API Google manquante. Vérifiez la configuration Vercel.");
+          }
+
+          const org = await organizationService.get(); 
           const usage = org?.ai_usage_count || 0;
           const limit = org?.subscription_plan === 'free' ? 3 : org?.subscription_plan === 'starter' ? 100 : 300;
           
@@ -300,7 +307,7 @@ const aiService = {
               throw new Error('LIMIT_REACHED');
           }
 
-          const genAI = new GoogleGenerativeAI(import.meta.env.VITE_API_KEY || '');
+          const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: "gemini-pro"});
 
           const brand: BrandSettings = org?.brand || { 
@@ -337,7 +344,10 @@ const aiService = {
           return result.response.text();
       },
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
-          const genAI = new GoogleGenerativeAI(process.env.API_KEY || '');
+          const apiKey = import.meta.env.VITE_API_KEY;
+          if (!apiKey) throw new Error("Clé API manquante");
+
+          const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: "gemini-pro"});
 
           const prompt = `
@@ -356,7 +366,10 @@ const aiService = {
           return result.response.text();
       },
       runCustomTask: async (payload: any) => {
-          const genAI = new GoogleGenerativeAI(process.env.API_KEY || '');
+          const apiKey = import.meta.env.VITE_API_KEY;
+          if (!apiKey) throw new Error("Clé API manquante");
+
+          const genAI = new GoogleGenerativeAI(apiKey);
           const model = genAI.getGenerativeModel({ model: "gemini-pro"});
           
           const prompt = JSON.stringify(payload);
@@ -370,12 +383,12 @@ const socialService = {
           await new Promise(resolve => setTimeout(resolve, 2000));
           
           if (isSupabaseConfigured()) {
-              const org = await organizationService.get(); // Use internal service reference
+              const org = await organizationService.get(); 
               if (org) {
                   const integrations = org.integrations || { google: false, facebook: false, instagram_posting: false, facebook_posting: false };
                   const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
                   (integrations as any)[key] = true;
-                  await organizationService.update({ integrations }); // Use internal service reference
+                  await organizationService.update({ integrations });
               }
           } else {
               const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
@@ -410,7 +423,7 @@ const automationService = {
           let actionCount = 0;
           let alertCount = 0;
 
-          const org = await organizationService.get(); // Use internal service reference
+          const org = await organizationService.get();
           const alertThreshold = org?.notification_settings?.alert_threshold || 3;
           const emailAlerts = org?.notification_settings?.email_alerts || false;
 
@@ -429,9 +442,13 @@ const automationService = {
                                actionCount++;
                            }
                            if (action.type === 'publish_social') {
-                               const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); // Use internal service reference
-                               await socialService.publish(action.config.platform || 'instagram', postContent); // Use internal service reference
-                               actionCount++;
+                               try {
+                                   const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); 
+                                   await socialService.publish(action.config.platform || 'instagram', postContent);
+                                   actionCount++;
+                               } catch (e) {
+                                   console.error("Automation error (social):", e);
+                               }
                            }
                        }
                   }
