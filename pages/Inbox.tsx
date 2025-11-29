@@ -353,10 +353,11 @@ export const InboxPage = () => {
       navigate('/inbox'); 
   };
 
-  const handleGenerateReply = async () => {
+const handleGenerateReply = async () => {
     if (!selectedReview) return;
     setIsGenerating(true);
     setLimitReached(false);
+    setReplyText("");
     
     try {
         const draftText = await api.ai.generateReply(selectedReview, {
@@ -365,11 +366,14 @@ export const InboxPage = () => {
         });
         setReplyText(draftText);
     } catch (error: any) {
+        console.error("Erreur UI Génération:", error);
         if (error.message.includes('LIMIT_REACHED')) {
             setLimitReached(true);
         } else {
-            setReplyText("");
-            toast.error(error.message); // Show real error
+            // Affichage de l'erreur dans la zone de texte pour feedback visuel immédiat
+            setReplyText(`[ERREUR] ${error.message}\n\n-> Vérifiez la clé API dans Vercel.`);
+            // Notification toast rouge
+            toast.error(error.message);
         }
     } finally {
         setIsGenerating(false);
@@ -453,13 +457,13 @@ export const InboxPage = () => {
 
   const handleArchive = async () => {
       if (!selectedReview) return;
-      toast.success("Avis archivé");
+      toast.success("Avis archivé (Simulation)");
       setShowActionsMenu(false);
   };
 
   const handleFlag = async () => {
       if (!selectedReview) return;
-      toast.success("Signalement envoyé à Google");
+      toast.success("Signalement envoyé à Google (Simulation)");
       setShowActionsMenu(false);
   };
 
