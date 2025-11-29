@@ -27,11 +27,10 @@ Deno.serve(async (req: any) => {
 
     const { plan, successUrl, cancelUrl } = await req.json()
 
-    // --- CONFIGURATION DES PRIX ---
-    // Vous devez créer ces produits dans Stripe et récupérer leur 'API ID' (ex: price_1P...)
+    // --- CONFIGURATION DES PRIX (VRAIS IDS) ---
     const prices: Record<string, string> = {
-        'starter': 'price_starter_monthly', 
-        'pro': 'price_pro_monthly'
+        'starter': 'price_1SYoOgGbX3nkKvzOsqUzRHQc', // Vrai ID Starter
+        'pro': 'price_1SYoQgGbX3nkKvzORj2RRUqZ'      // Vrai ID Pro
     }
 
     const priceId = prices[plan]
