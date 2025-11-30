@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule } from '../types';
@@ -56,14 +55,13 @@ export const AutomationPage = () => {
   const toast = useToast();
 
   useEffect(() => {
+    // REAL LOAD
     api.automation.getWorkflows().then(setWorkflows);
   }, []);
 
   const handleCreateWorkflow = async () => {
     setIsCreating(true);
-    await api.automation.create({}); // Simulate creation
     
-    // Optimistic update for UI feedback
     const newWorkflow: WorkflowRule = {
         id: `wf-${Date.now()}`,
         name: builderAction === 'publish_social' ? `Auto-Publish sur ${builderPlatform}` : 'Nouveau Workflow Auto',
@@ -75,8 +73,14 @@ export const AutomationPage = () => {
             config: builderAction === 'publish_social' ? { platform: builderPlatform } : {}
         }]
     };
+
+    // REAL SAVE via API
+    await api.automation.create(newWorkflow);
     
-    setWorkflows([...workflows, newWorkflow]);
+    // Refresh list
+    const updated = await api.automation.getWorkflows();
+    setWorkflows(updated);
+
     setIsCreating(false);
     setShowBuilder(false);
     toast.success("Workflow créé et activé !");

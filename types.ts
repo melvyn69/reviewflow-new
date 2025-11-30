@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   email: string;
@@ -52,6 +53,7 @@ export interface Organization {
   brand?: BrandSettings;
   notification_settings?: NotificationSettings;
   saved_replies?: SavedReply[];
+  workflows?: WorkflowRule[];
 }
 
 export interface Location {

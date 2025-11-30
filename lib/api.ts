@@ -268,6 +268,7 @@ const organizationService = {
                       brand: org.brand || INITIAL_ORG.brand,
                       integrations: org.integrations || INITIAL_ORG.integrations,
                       saved_replies: org.saved_replies || INITIAL_ORG.saved_replies,
+                      workflows: org.workflows || INITIAL_ORG.workflows || [], // Added workflows support
                       locations: locations || []
                   } as Organization;
               } catch (e) {
@@ -297,19 +298,23 @@ const aiService = {
       generateReply: async (review: Review, options: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
           
-          console.log("Tentative IA avec clé présente ?", !!apiKey);
+          console.log("Tentative IA (Clé présente ?):", !!apiKey);
 
           if (!apiKey) {
-             throw new Error("ERREUR: Clé API manquante dans Vercel (VITE_API_KEY).");
+             throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
           }
 
           try {
               const org = await organizationService.get(); 
+              const usage = org?.ai_usage_count || 0;
+              const limit = org?.subscription_plan === 'free' ? 3 : org?.subscription_plan === 'starter' ? 100 : 300;
               
+              if (usage >= limit) {
+                  throw new Error("Limite d'utilisation atteinte. Passez au plan supérieur.");
+              }
+
               const genAI = new GoogleGenerativeAI(apiKey);
-              
-              // Utilisation de gemini-1.5-flash (standard actuel)
-              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"}); 
+              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
 
               const brand: BrandSettings = org?.brand || { 
                 tone: 'professionnel', 
@@ -321,65 +326,73 @@ const aiService = {
               };
               const industry = org?.industry || 'other';
 
-              const prompt = `
-                Rôle: Expert Relation Client.
-                Contexte: Entreprise de type "${industry}".
-                Ton: ${options.tone || brand.tone}.
-                Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
-                Emojis: ${brand.use_emojis ? 'Oui' : 'Non'}.
-                ${brand.knowledge_base ? `Infos clés: ${brand.knowledge_base}` : ''}
+              const knowledgeBaseContext = brand.knowledge_base 
+                ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}`
+                : '';
 
-                Tâche: Réponds à cet avis client.
+              const prompt = `
+                Rôle: Expert Relation Client pour une entreprise de type "${industry}".
+                Contexte Marque: ${brand.knowledge_base || 'Aucun'}
+                Ton: ${options.tone || brand.tone}
+                Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
+                Emojis: ${brand.use_emojis ? 'Oui' : 'Non'}
+
+                Tâche: Réponds à cet avis client. Sois concis et professionnel.
                 Avis (${review.rating}/5) de ${review.author_name}: "${review.body}"
                 
-                Réponse (texte seul, pas de guillemets):
+                Réponse (texte seul):
               `;
 
-              // STRATÉGIE DE FALLBACK (Si 1.5 échoue, tenter Pro)
               try {
                   const result = await model.generateContent(prompt);
                   return result.response.text();
-              } catch (e: any) {
-                  console.warn("Gemini 1.5 Flash failed, retrying with Pro...", e.message);
+              } catch (err1: any) {
+                  console.warn("Gemini 1.5 Flash erreur, repli sur Pro...", err1.message);
                   const modelPro = genAI.getGenerativeModel({ model: "gemini-pro"});
                   const resultPro = await modelPro.generateContent(prompt);
                   return resultPro.response.text();
               }
 
           } catch (e: any) {
-              console.error("ERREUR IA DÉTAILLÉE:", e);
-              
-              if (e.message?.includes('API key not valid')) {
-                  throw new Error("Clé API invalide. Vérifiez Vercel.");
-              }
-              if (e.message?.includes('429') || e.message?.includes('Quota')) {
-                  throw new Error("Quota Google dépassé (429). Réessayez plus tard.");
-              }
-              
-              throw new Error(`Échec IA: ${e.message}`);
+              console.error("ERREUR IA FINALE:", e);
+              if (e.message?.includes('403') || e.message?.includes('API key')) throw new Error("Clé API invalide.");
+              if (e.message?.includes('429')) throw new Error("Quota Google dépassé.");
+              throw new Error(`Erreur IA: ${e.message}`);
           }
       },
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante dans Vercel");
+          if (!apiKey) throw new Error("Clé API manquante");
 
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-
           const prompt = `Crée un post ${platform} pour cet avis : "${review.body}" (${review.rating}/5). Ajoute emojis et hashtags.`;
           
-          const result = await model.generateContent(prompt);
-          return result.response.text();
+          try {
+             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+             const result = await model.generateContent(prompt);
+             return result.response.text();
+          } catch (e) {
+             const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+             const result = await model.generateContent(prompt);
+             return result.response.text();
+          }
       },
       runCustomTask: async (payload: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
           if (!apiKey) throw new Error("Clé API manquante");
 
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-          
-          const result = await model.generateContent(JSON.stringify(payload));
-          return JSON.parse(result.response.text());
+          const prompt = JSON.stringify(payload);
+
+          try {
+             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+             const result = await model.generateContent(prompt);
+             return JSON.parse(result.response.text());
+          } catch (e) {
+             const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+             const result = await model.generateContent(prompt);
+             return JSON.parse(result.response.text());
+          }
       }
 };
 
@@ -410,9 +423,28 @@ const socialService = {
 
 const automationService = {
       getWorkflows: async (): Promise<WorkflowRule[]> => {
+          // REAL IMPLEMENTATION: Fetch from DB instead of mock
+          const org = await organizationService.get();
+          if (org && (org as any).workflows) {
+              return (org as any).workflows;
+          }
           return INITIAL_WORKFLOWS;
       },
-      create: async (workflow: any) => {
+      create: async (workflow: WorkflowRule) => {
+          // REAL IMPLEMENTATION: Save to DB
+          if (isSupabaseConfigured()) {
+             const org = await organizationService.get();
+             if (org) {
+                 const currentWorkflows = (org as any).workflows || [];
+                 const newWorkflows = [...currentWorkflows, workflow];
+                 await supabase!.from('organizations')
+                    .update({ workflows: newWorkflows })
+                    .eq('id', org.id);
+                 return true;
+             }
+          }
+          // Fallback mock update
+          INITIAL_WORKFLOWS.push(workflow);
           return true;
       },
       run: async () => {
@@ -424,11 +456,13 @@ const automationService = {
           const { data: pendingReviews } = await supabase!.from('reviews').select('*').eq('status', 'pending');
           if (!pendingReviews || pendingReviews.length === 0) return { processed: 0, actions: 0, alerts: 0 };
           
-          const rules = INITIAL_WORKFLOWS; 
+          // Fetch REAL workflows
+          const rules = await automationService.getWorkflows();
+          
           let actionCount = 0;
           let alertCount = 0;
 
-          const org = await organizationService.get(); // Use internal service reference
+          const org = await organizationService.get(); 
           const alertThreshold = org?.notification_settings?.alert_threshold || 3;
           const emailAlerts = org?.notification_settings?.email_alerts || false;
 
@@ -447,8 +481,8 @@ const automationService = {
                                actionCount++;
                            }
                            if (action.type === 'publish_social') {
-                               const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); // Use internal service reference
-                               await socialService.publish(action.config.platform || 'instagram', postContent); // Use internal service reference
+                               const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); 
+                               await socialService.publish(action.config.platform || 'instagram', postContent); 
                                actionCount++;
                            }
                        }
@@ -478,7 +512,8 @@ const seedCloudDatabase = async () => {
                 integrations: INITIAL_ORG.integrations,
                 brand: INITIAL_ORG.brand,
                 notification_settings: INITIAL_ORG.notification_settings,
-                saved_replies: INITIAL_ORG.saved_replies || []
+                saved_replies: INITIAL_ORG.saved_replies || [],
+                workflows: [] // Init empty workflows
             })
             .select()
             .single();
@@ -545,8 +580,7 @@ const seedCloudDatabase = async () => {
               weaknesses: c.weaknesses || []
           }));
           
-          const { error: compError } = await supabase!.from('competitors').insert(competitorsPayload);
-          if (compError) console.warn("Erreur Competitors (non bloquant):", compError);
+          await supabase!.from('competitors').insert(competitorsPayload);
           
           console.log("Injection terminée.");
           window.location.reload();
@@ -670,16 +704,18 @@ export const api = {
                   console.error("Erreur Stripe:", e);
                   
                   // --- FALLBACK (Lien direct si pas de backend) ---
+                  // REMPLACEZ PAR VOS VRAIS LIENS DE PAIEMENT STRIPE DASHBOARD
                   const STRIPE_LINKS: Record<string, string> = {
-                      'starter': 'https://buy.stripe.com/test_starter', // Remplacez par vos vrais liens Payment Link
-                      'pro': 'https://buy.stripe.com/test_pro'
+                      'starter': 'https://buy.stripe.com/test_starter_link', 
+                      'pro': 'https://buy.stripe.com/test_pro_link'
                   };
                   
                   if (STRIPE_LINKS[plan] && !STRIPE_LINKS[plan].includes('test_')) {
                       return STRIPE_LINKS[plan];
                   }
                   
-                  throw new Error("Le système de paiement est en maintenance. Veuillez réessayer plus tard.");
+                  // Si pas de lien, on renvoie vers Stripe Home
+                  return "https://stripe.com/pricing";
               }
           }
           return "https://stripe.com"; 
