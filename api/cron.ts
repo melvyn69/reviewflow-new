@@ -1,99 +1,96 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Ces variables d'environnement sont accessibles automatiquement sur Vercel
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const API_KEY = process.env.VITE_API_KEY || process.env.API_KEY;
-
 export default async function handler(request, response) {
-  // Sécurité basique : Seul le Cron Vercel peut appeler cette fonction
-  // (Ou vous manuellement pour tester)
-  
-  console.log("🤖 Robot d'automatisation : Démarrage...");
+  console.log("🤖 Robot Reviewflow : Démarrage...");
+
+  // Récupération des variables d'environnement (Vercel injecte les VITE_ automatiquement)
+  const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const API_KEY = process.env.VITE_API_KEY || process.env.API_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_KEY || !API_KEY) {
-    return response.status(500).json({ error: 'Configuration manquante (Variables Env)' });
+    console.error("❌ Configuration manquante");
+    return response.status(500).json({ 
+        error: 'Variables manquantes. Vérifiez Vercel Settings.',
+        details: { hasUrl: !!SUPABASE_URL, hasKey: !!SUPABASE_KEY, hasAi: !!API_KEY }
+    });
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  const genAI = new GoogleGenerativeAI(API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
   try {
-    // 1. Récupérer les avis en attente (Batch de 10 pour être rapide et économe)
+    // 1. Connexion
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // 2. Récupérer les avis en attente
+    // On utilise une jointure pour avoir les infos de l'organisation (ton, règles...)
     const { data: reviews, error } = await supabase
       .from('reviews')
       .select(`
         *,
-        locations (
-          organization_id,
-          organizations (
+        location:locations (
+          organization:organizations (
             name,
             industry,
-            brand,
-            workflows
+            brand
           )
         )
       `)
       .eq('status', 'pending')
-      .limit(10);
+      .limit(5); // On traite 5 par 5 pour être sûr de ne pas dépasser le temps limite gratuit
 
     if (error) throw error;
 
     if (!reviews || reviews.length === 0) {
       console.log("✅ Aucun avis en attente.");
-      return response.status(200).json({ message: 'Aucun avis à traiter' });
+      return response.status(200).json({ message: 'Tout est à jour' });
     }
 
-    console.log(`🔄 Traitement de ${reviews.length} avis...`);
     const results = [];
 
-    // 2. Traiter chaque avis
+    // 3. Traitement IA
     for (const review of reviews) {
-      const org = review.locations?.organizations;
-      if (!org) continue;
+        const org = review.location?.organization;
+        const brand = org?.brand || { tone: 'professionnel' };
+        
+        const prompt = `
+            Agis comme le service client de "${org?.name || 'notre entreprise'}".
+            Ton: ${brand.tone}.
+            Tâche: Réponds à cet avis client (${review.rating}/5): "${review.text}".
+            Réponse courte et professionnelle.
+        `;
 
-      // Configuration de la marque
-      const brand = org.brand || { tone: 'professionnel' };
-      const industry = org.industry || 'commerce';
-      
-      // Prompt optimisé pour économiser des tokens
-      const prompt = `
-        Agis comme le service client de "${org.name}" (${industry}).
-        Ton: ${brand.tone}.
-        Avis client (${review.rating}/5): "${review.text}".
-        Rédige une réponse courte, professionnelle et empathique.
-        Réponds uniquement avec le texte de la réponse.
-      `;
+        try {
+            const aiResult = await model.generateContent(prompt);
+            const replyText = aiResult.response.text();
 
-      // Appel IA
-      const result = await model.generateContent(prompt);
-      const replyText = result.response.text();
+            // 4. Sauvegarde en Brouillon
+            const { error: updateError } = await supabase
+                .from('reviews')
+                .update({
+                    status: 'draft',
+                    ai_reply: {
+                        text: replyText,
+                        created_at: new Date().toISOString(),
+                        needs_manual_validation: true
+                    }
+                })
+                .eq('id', review.id);
 
-      // Mise à jour en base (Mode Brouillon par sécurité)
-      const { error: updateError } = await supabase
-        .from('reviews')
-        .update({
-          status: 'draft', // On met en brouillon pour validation humaine (best practice)
-          ai_reply: {
-            text: replyText,
-            created_at: new Date().toISOString(),
-            needs_manual_validation: true
-          }
-        })
-        .eq('id', review.id);
-
-      if (!updateError) {
-        results.push({ id: review.id, status: 'processed' });
-      }
+            if (!updateError) {
+                results.push({ id: review.id, status: 'processed' });
+            }
+        } catch (e) {
+            console.error(`Erreur avis ${review.id}:`, e);
+            results.push({ id: review.id, status: 'error', error: e.message });
+        }
     }
 
-    console.log("✅ Terminé.", results);
-    return response.status(200).json({ processed: results.length, details: results });
+    return response.status(200).json({ success: true, processed: results });
 
-  } catch (err) {
-    console.error("❌ Erreur Robot:", err);
+  } catch (err: any) {
+    console.error("❌ Erreur Critique:", err);
     return response.status(500).json({ error: err.message });
   }
 }
