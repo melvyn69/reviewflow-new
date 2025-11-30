@@ -215,14 +215,21 @@ const aiService = {
               
               const prompt = `Réponds à cet avis (${review.rating}/5): "${review.body}". Ton: ${options.tone || brand.tone}.`;
               
+              // Stratégie : 2.5 Flash -> 3 Pro -> 1.5 Flash
               try {
-                  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+                  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
                   const result = await model.generateContent(prompt);
                   return result.response.text();
               } catch (e) {
-                  const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-                  const result = await model.generateContent(prompt);
-                  return result.response.text();
+                  try {
+                      const model = genAI.getGenerativeModel({ model: "gemini-3-pro"});
+                      const result = await model.generateContent(prompt);
+                      return result.response.text();
+                  } catch (e2) {
+                      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+                      const result = await model.generateContent(prompt);
+                      return result.response.text();
+                  }
               }
           } catch (e: any) {
               throw new Error(`Erreur IA: ${e.message}`);
@@ -234,11 +241,11 @@ const aiService = {
           const genAI = new GoogleGenerativeAI(apiKey);
           
           try {
-              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+              const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
               const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
               return result.response.text();
           } catch (e) {
-              const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
               const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
               return result.response.text();
           }
@@ -247,7 +254,7 @@ const aiService = {
           const apiKey = import.meta.env.VITE_API_KEY;
           if (!apiKey) return { error: "Clé manquante" };
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+          const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
           const result = await model.generateContent(JSON.stringify(payload));
           return JSON.parse(result.response.text());
       }
@@ -304,11 +311,12 @@ const automationService = {
                        for (const action of rule.actions) {
                            if (action.type === 'generate_ai_reply' || action.type === 'auto_reply') {
                                
+                               // CORRECTION FINALE : Appel réel IA
                                let replyText = "";
                                try {
                                    replyText = await aiService.generateReply(review as Review, { tone: 'professional', length: 'medium' });
                                } catch (e) {
-                                   replyText = "Erreur génération IA.";
+                                   replyText = "Erreur génération IA. Veuillez vérifier manuellement.";
                                }
 
                                await supabase!.from('reviews').update({ 
@@ -367,8 +375,40 @@ const locationsService = {
 };
 
 const publicService = {
-    getLocationInfo: async (id: string) => ({ name: "Demo", city: "Paris", googleUrl: "#" }),
-    submitFeedback: async (id: string, rating: number, text: string, contact: string) => true
+    getLocationInfo: async (id: string) => {
+        if (isSupabaseConfigured()) {
+            try {
+                const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
+                if (!error && data) return { name: data.name, city: data.city, googleUrl: data.google_review_url || '#' };
+            } catch (e) { console.warn("Fallback public"); }
+        }
+        return { name: "Notre Établissement", city: "Paris", googleUrl: "#" };
+    },
+    submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
+        console.log("Feedback:", { locationId, rating, feedback });
+        if (isSupabaseConfigured()) {
+            try {
+                const newReview = {
+                    location_id: locationId,
+                    rating: rating,
+                    text: feedback,
+                    author_name: contact || 'Client Anonyme',
+                    source: 'direct',
+                    status: 'pending',
+                    received_at: new Date().toISOString(),
+                    language: 'fr',
+                    analysis: { sentiment: 'neutral', themes: [], keywords: [], flags: {} },
+                    ai_reply: null,
+                    internal_notes: [{ text: `Feedback direct (Funnel): ${feedback}`, author_name: 'Système', created_at: new Date().toISOString() }]
+                };
+                const { error } = await supabase!.from('reviews').insert(newReview);
+                if (error) throw error;
+            } catch (e) {
+                console.error("Erreur Supabase Feedback:", e);
+            }
+        }
+        return true;
+    }
 };
 
 const adminService = {
@@ -392,7 +432,7 @@ export const api = {
       getInvoices: async () => [], 
       downloadInvoice: (id: string) => {}, 
       createCheckoutSession: async (plan: string) => {
-          const links: Record<string, string> = { 'starter': 'https://buy.stripe.com/test_starter', 'pro': 'https://buy.stripe.com/test_pro' };
+          const links: Record<string, string> = { 'starter': 'https://buy.stripe.com/test_starter_link', 'pro': 'https://buy.stripe.com/test_pro_link' };
           return links[plan] || "https://stripe.com";
       },
       createPortalSession: async () => "https://billing.stripe.com" 
