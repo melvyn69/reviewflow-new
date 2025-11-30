@@ -1,18 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Ajout explicite des types 'any' pour request et response afin de satisfaire TypeScript
 export default async function handler(request: any, response: any) {
   console.log("🤖 Robot Reviewflow : Démarrage...");
 
-  // TENTATIVE 1 : Noms standards (Backend)
-  // TENTATIVE 2 : Noms Vite (Frontend, parfois injectés)
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  // Utilisation de la clé qui peut être Service Role si configuré dans Vercel pour contourner RLS
   const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   const API_KEY = process.env.API_KEY || process.env.VITE_API_KEY;
 
-  // Debug log (sans afficher les valeurs secrètes)
+  // Debug log
   console.log("Env Check:", {
       url: !!SUPABASE_URL,
       key: !!SUPABASE_KEY,
@@ -20,18 +16,13 @@ export default async function handler(request: any, response: any) {
   });
 
   if (!SUPABASE_URL || !SUPABASE_KEY || !API_KEY) {
-    console.error("❌ Configuration manquante");
-    return response.status(500).json({ 
-        error: 'Variables manquantes.',
-        details: { hasUrl: !!SUPABASE_URL, hasKey: !!SUPABASE_KEY, hasAi: !!API_KEY }
-    });
+    return response.status(500).json({ error: 'Variables manquantes' });
   }
 
   try {
-    // Connexion
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     const genAI = new GoogleGenerativeAI(API_KEY);
-
+    
     // Récupération des avis
     const { data: reviewsData, error } = await supabase
       .from('reviews')
@@ -55,16 +46,11 @@ export default async function handler(request: any, response: any) {
       .eq('status', 'pending')
       .limit(5);
 
-    if (error) {
-        console.error("Erreur Supabase:", error);
-        throw new Error(`Erreur DB: ${error.message}`);
-    }
+    if (error) throw error;
 
-    // Casting explicite pour TypeScript
     const reviews: any[] = reviewsData || [];
 
     if (reviews.length === 0) {
-      console.log("✅ Aucun avis en attente.");
       return response.status(200).json({ message: 'Tout est à jour (Connexion OK)' });
     }
 
@@ -73,7 +59,6 @@ export default async function handler(request: any, response: any) {
     const results = [];
 
     for (const review of reviews) {
-        // Gestion robuste de la relation organization (Tableau ou Objet)
         let org = null;
         if (review.location) {
             const orgData = review.location.organization;
@@ -88,29 +73,44 @@ export default async function handler(request: any, response: any) {
         
         const prompt = `
             Agis comme le service client de "${org?.name || 'notre entreprise'}".
-            Ton: ${brand.tone}. Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
+            Ton: ${brand.tone}.
             Tâche: Réponds à cet avis client (${review.rating}/5): "${review.text}".
-            Réponse courte, polie et professionnelle. Pas de guillemets.
+            Réponse courte, polie et professionnelle.
         `;
 
-        let replyText = "";
-        let usedModel = "";
-
         try {
-            // STRATÉGIE DE FALLBACK (Comme dans l'app)
+            let replyText = "";
+            let usedModel = "";
+
+            // STRATÉGIE DE CASCADE COMPLÈTE (2.5 -> 3 -> 1.5 -> Pro)
             try {
-                console.log("Essai 1.5 Flash...");
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                const aiResult = await model.generateContent(prompt);
-                replyText = aiResult.response.text();
-                usedModel = "1.5-flash";
-            } catch (err1: any) {
-                console.warn(`Echec 1.5 Flash (${err1.message}), essai Pro...`);
-                // Fallback sur Gemini Pro (v1.0 ou 1.5 selon dispo)
-                const modelPro = genAI.getGenerativeModel({ model: "gemini-pro" });
-                const aiResult = await modelPro.generateContent(prompt);
-                replyText = aiResult.response.text();
-                usedModel = "pro";
+                console.log("Essai 2.5 Flash...");
+                const m = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                const res = await m.generateContent(prompt);
+                replyText = res.response.text();
+                usedModel = "2.5-flash";
+            } catch (e1: any) {
+                console.warn(`Echec 2.5 (${e1.message}), essai 3 Pro...`);
+                try {
+                    const m = genAI.getGenerativeModel({ model: "gemini-3-pro" });
+                    const res = await m.generateContent(prompt);
+                    replyText = res.response.text();
+                    usedModel = "3-pro";
+                } catch (e2: any) {
+                    console.warn(`Echec 3 Pro (${e2.message}), essai 1.5 Flash...`);
+                    try {
+                        const m = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                        const res = await m.generateContent(prompt);
+                        replyText = res.response.text();
+                        usedModel = "1.5-flash";
+                    } catch (e3: any) {
+                        console.warn(`Echec 1.5 Flash, dernier recours Pro...`);
+                        const m = genAI.getGenerativeModel({ model: "gemini-pro" });
+                        const res = await m.generateContent(prompt);
+                        replyText = res.response.text();
+                        usedModel = "pro";
+                    }
+                }
             }
 
             if (!replyText) throw new Error("Réponse vide de l'IA");
@@ -131,7 +131,7 @@ export default async function handler(request: any, response: any) {
             if (updateError) throw updateError;
 
             results.push({ id: review.id, status: 'success', model: usedModel });
-            console.log(`✅ Avis ${review.id} traité avec succès.`);
+            console.log(`✅ Avis ${review.id} traité avec succès (${usedModel}).`);
 
         } catch (e: any) {
             console.error(`❌ Erreur sur l'avis ${review.id}:`, e.message);
@@ -139,11 +139,7 @@ export default async function handler(request: any, response: any) {
         }
     }
 
-    return response.status(200).json({ 
-        success: true, 
-        message: `Traitement terminé. ${results.length} avis traités.`,
-        details: results 
-    });
+    return response.status(200).json({ success: true, processed: results });
 
   } catch (err: any) {
     console.error("❌ Erreur Critique Script:", err);
