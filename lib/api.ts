@@ -202,108 +202,43 @@ const reviewsService = {
           return data.length;
       }
 };
-// ... imports
-
-// ... autres services
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
+          if (!apiKey) throw new Error("Clé API manquante (VITE_API_KEY).");
           
-          if (!apiKey) {
-             throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
-          }
-
           try {
               const org = await organizationService.get(); 
-              const usage = org?.ai_usage_count || 0;
-              // ... usage check
-
               const genAI = new GoogleGenerativeAI(apiKey);
+              const brand = org?.brand || { tone: 'professionnel' };
               
-              const brand: BrandSettings = org?.brand || { tone: 'professionnel', description: '', knowledge_base: '', use_emojis: false, language_style: 'formal', signature: '' };
-              const industry = org?.industry || 'other';
-              const knowledgeBaseContext = brand.knowledge_base ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}` : '';
-
-              const prompt = `
-                Rôle: Expert Relation Client (${industry}).
-                [IDENTITÉ] Ton: ${options.tone || brand.tone}. Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
-                ${knowledgeBaseContext}
-                Tâche: Réponds à cet avis client (${review.rating}/5): "${review.body}".
-              `;
-
-              // STRATÉGIE DE CASCADE (RETRY)
-              const models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+              const prompt = `Réponds à cet avis (${review.rating}/5): "${review.body}". Ton: ${options.tone || brand.tone}.`;
               
-              for (const modelName of models) {
-                  try {
-                      console.log(`Essai modèle ${modelName}...`);
-                      const model = genAI.getGenerativeModel({ model: modelName });
-                      const result = await model.generateContent(prompt);
-                      const text = result.response.text();
-                      if (text) return text;
-                  } catch (err: any) {
-                      console.warn(`Echec ${modelName}:`, err.message);
-                      if (modelName === models[models.length - 1]) throw err; // Si le dernier échoue, on lance l'erreur
-                  }
+              try {
+                  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+                  const result = await model.generateContent(prompt);
+                  return result.response.text();
+              } catch (e) {
+                  const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+                  const result = await model.generateContent(prompt);
+                  return result.response.text();
               }
-              throw new Error("Aucun modèle IA n'a répondu.");
-
           } catch (e: any) {
-              console.error("ERREUR IA FINALE:", e);
-              if (e.message?.includes('404')) throw new Error("Modèle IA introuvable (404).");
-              if (e.message?.includes('403')) throw new Error("Clé API invalide (403).");
               throw new Error(`Erreur IA: ${e.message}`);
           }
       },
-      
-      // ... (Même logique de cascade pour generateSocialPost et runCustomTask)
-      generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
-          const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante");
-          const genAI = new GoogleGenerativeAI(apiKey);
-          const prompt = `Post ${platform} pour avis: "${review.body}"`;
-          
-          const models = ["gemini-2.5-flash", "gemini-1.5-flash"];
-          for (const m of models) {
-              try {
-                  const model = genAI.getGenerativeModel({ model: m });
-                  const res = await model.generateContent(prompt);
-                  return res.response.text();
-              } catch (e) { continue; }
-          }
-          return "Erreur IA Post";
-      },
-      
-      runCustomTask: async (payload: any) => {
-          const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante");
-          const genAI = new GoogleGenerativeAI(apiKey);
-          const prompt = JSON.stringify(payload);
-
-          const models = ["gemini-2.5-flash", "gemini-1.5-flash"];
-          for (const m of models) {
-              try {
-                  const model = genAI.getGenerativeModel({ model: m });
-                  const res = await model.generateContent(prompt);
-                  return JSON.parse(res.response.text());
-              } catch (e) { continue; }
-          }
-          throw new Error("Erreur IA Custom");
-      }
-};
-
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
           const apiKey = import.meta.env.VITE_API_KEY;
           if (!apiKey) return "Clé manquante";
           const genAI = new GoogleGenerativeAI(apiKey);
           
           try {
-              const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
+              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
               const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
               return result.response.text();
           } catch (e) {
-              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+              const model = genAI.getGenerativeModel({ model: "gemini-pro"});
               const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
               return result.response.text();
           }
@@ -312,7 +247,7 @@ const aiService = {
           const apiKey = import.meta.env.VITE_API_KEY;
           if (!apiKey) return { error: "Clé manquante" };
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
           const result = await model.generateContent(JSON.stringify(payload));
           return JSON.parse(result.response.text());
       }
@@ -369,12 +304,11 @@ const automationService = {
                        for (const action of rule.actions) {
                            if (action.type === 'generate_ai_reply' || action.type === 'auto_reply') {
                                
-                               // CORRECTION FINALE : Appel réel IA
                                let replyText = "";
                                try {
                                    replyText = await aiService.generateReply(review as Review, { tone: 'professional', length: 'medium' });
                                } catch (e) {
-                                   replyText = "Erreur génération IA. Veuillez vérifier manuellement.";
+                                   replyText = "Erreur génération IA.";
                                }
 
                                await supabase!.from('reviews').update({ 
@@ -469,6 +403,12 @@ const publicService = {
     }
 };
 
+const customersService = {
+    list: async (): Promise<Customer[]> => {
+        return [];
+    }
+};
+
 const adminService = {
     getStats: async () => ({ mrr: "0", active_tenants: 0, total_reviews_processed: 0, tenants: [] })
 };
@@ -498,6 +438,6 @@ export const api = {
   onboarding: { checkStatus: async () => ({ googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 }) },
   activity: { getRecent: async () => [] },
   public: publicService,
-  customers: { list: async () => [] },
+  customers: customersService,
   admin: adminService
 };
