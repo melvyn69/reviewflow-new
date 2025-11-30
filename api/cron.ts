@@ -2,81 +2,85 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(request: any, response: any) {
-  console.log("🤖 Robot Reviewflow : Démarrage Diagnostique...");
+  console.log("🤖 Robot Reviewflow : Démarrage...");
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   const API_KEY = process.env.API_KEY || process.env.VITE_API_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_KEY || !API_KEY) {
-    return response.status(500).json({ error: 'Variables manquantes' });
+    console.error("❌ Configuration manquante");
+    return response.status(500).json({ 
+        error: 'Variables manquantes.',
+        details: { hasUrl: !!SUPABASE_URL, hasKey: !!SUPABASE_KEY, hasAi: !!API_KEY }
+    });
   }
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     const genAI = new GoogleGenerativeAI(API_KEY);
     
-    // 1. TEST BRUT : Récupérer tous les avis pending SANS JOINTURE
-    // Cela permet de voir si la base est accessible et si les avis existent
-    const { data: rawReviews, error: rawError } = await supabase
+    const { data: reviewsData, error } = await supabase
       .from('reviews')
-      .select('id, rating, status, location_id')
-      .eq('status', 'pending');
+      .select(`
+        id, 
+        rating, 
+        text, 
+        author_name, 
+        status,
+        location_id,
+        location:locations (
+            id,
+            organization:organizations (
+                id,
+                name,
+                brand,
+                workflows
+            )
+        )
+      `)
+      .eq('status', 'pending')
+      .limit(5);
 
-    if (rawError) {
-        console.error("Erreur lecture brute:", rawError);
-        return response.status(500).json({ error: rawError.message });
+    if (error) throw error;
+
+    const reviews: any[] = reviewsData || [];
+
+    if (reviews.length === 0) {
+      return response.status(200).json({ message: 'Tout est à jour (Connexion OK)' });
     }
 
-    console.log(`📊 DIAGNOSTIC: ${rawReviews?.length || 0} avis 'pending' trouvés au total.`);
-    
-    if (rawReviews && rawReviews.length > 0) {
-        console.log("IDs trouvés:", rawReviews.map(r => r.id));
-    } else {
-        return response.status(200).json({ message: "Aucun avis 'pending' trouvé dans la table reviews." });
-    }
-
-    // 2. Traitement (avec récupération manuelle des infos pour éviter les échecs de jointure)
     const results = [];
-    
-    // Modèle avec fallback
-    let model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    for (const reviewStub of rawReviews || []) {
-        console.log(`Traitement ID ${reviewStub.id}...`);
+    for (const review of reviews) {
+        // GESTION DE TYPE FORCÉE (any)
+        let org: any = null;
         
-        // Récupérer l'organisation liée
-        const { data: location } = await supabase
-            .from('locations')
-            .select('organization_id, organization:organizations(*)')
-            .eq('id', reviewStub.location_id)
-            .single();
-            
-        if (!location || !location.organization) {
-            console.warn(`⚠️ Avis ${reviewStub.id} orphelin : Pas d'organisation trouvée pour location ${reviewStub.location_id}`);
-            results.push({ id: reviewStub.id, status: 'ignored_no_org' });
-            continue;
+        if (review.location) {
+            const orgData = review.location.organization;
+            if (Array.isArray(orgData)) {
+                org = orgData[0];
+            } else {
+                org = orgData;
+            }
         }
 
-        const org = location.organization;
-        // Récupérer le texte complet de l'avis maintenant
-        const { data: fullReview } = await supabase
-            .from('reviews')
-            .select('*')
-            .eq('id', reviewStub.id)
-            .single();
-            
-        if (!fullReview) continue;
-
-        // Logique IA
-        const brand = org.brand || { tone: 'professionnel' };
-        const prompt = `Réponds à cet avis (${fullReview.rating}/5): "${fullReview.text}". Ton: ${brand.tone}.`;
+        const brand = org?.brand || { tone: 'professionnel', language_style: 'formal' };
+        
+        const prompt = `
+            Agis comme le service client de "${org?.name || 'notre entreprise'}".
+            Ton: ${brand.tone}. Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
+            Tâche: Réponds à cet avis client (${review.rating}/5): "${review.text}".
+            Réponse courte, polie et professionnelle. Pas de guillemets.
+        `;
 
         try {
-            const res = await model.generateContent(prompt);
-            const replyText = res.response.text();
+            // Modèle principal : 1.5 Flash
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const aiResult = await model.generateContent(prompt);
+            const replyText = aiResult.response.text();
 
-            await supabase
+            const { error: updateError } = await supabase
                 .from('reviews')
                 .update({
                     status: 'draft',
@@ -86,22 +90,19 @@ export default async function handler(request: any, response: any) {
                         needs_manual_validation: true
                     }
                 })
-                .eq('id', fullReview.id);
-                
-            results.push({ id: fullReview.id, status: 'success' });
-            console.log(`✅ Avis ${fullReview.id} traité.`);
-            
+                .eq('id', review.id);
+
+            if (updateError) throw updateError;
+
+            results.push({ id: review.id, status: 'success' });
+
         } catch (e: any) {
-            console.error(`Erreur IA ${fullReview.id}:`, e);
-            results.push({ id: fullReview.id, error: e.message });
+            console.error(`❌ Erreur avis ${review.id}:`, e.message);
+            results.push({ id: review.id, status: 'error', error: e.message });
         }
     }
 
-    return response.status(200).json({ 
-        success: true, 
-        diagnostic: `${rawReviews?.length} avis vus`,
-        results 
-    });
+    return response.status(200).json({ success: true, processed: results });
 
   } catch (err: any) {
     return response.status(500).json({ error: err.message });
