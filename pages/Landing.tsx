@@ -1,8 +1,7 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, CardContent } from '../components/ui';
-import { CheckCircle2, Star, Zap, MessageSquare, ShieldCheck, ArrowRight, BarChart3, Globe, Sparkles, HelpCircle, ChevronDown, QrCode, Workflow, Users, FileText, Smartphone, Mail, Layout } from 'lucide-react';
+import { CheckCircle2, Star, Zap, MessageSquare, ShieldCheck, ArrowRight, BarChart3, Globe, Sparkles, HelpCircle, ChevronDown, QrCode, Workflow, Users, FileText, Smartphone, Mail, Layout, Video } from 'lucide-react';
 
 const FeatureCard = ({ icon: Icon, title, description, color = "indigo" }: any) => {
   const colors: Record<string, string> = {
@@ -88,6 +87,15 @@ const Step = ({ number, title, description }: any) => (
 export const LandingPage = () => {
   const navigate = useNavigate();
 
+  useEffect(() => {
+      // Load Calendly script dynamically
+      const head = document.querySelector('head');
+      const script = document.createElement('script');
+      script.setAttribute('src', 'https://assets.calendly.com/assets/external/widget.js');
+      script.setAttribute('async', 'true');
+      head?.appendChild(script);
+  }, []);
+
   const scrollToSection = (id: string) => {
       const element = document.getElementById(id);
       if (element) {
@@ -111,7 +119,9 @@ export const LandingPage = () => {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
             <button onClick={() => scrollToSection('features')} className="hover:text-indigo-600 transition-colors">Fonctionnalités</button>
             <button onClick={() => scrollToSection('pricing')} className="hover:text-indigo-600 transition-colors">Tarifs</button>
-            <button onClick={() => scrollToSection('faq')} className="hover:text-indigo-600 transition-colors">FAQ</button>
+            <button onClick={() => scrollToSection('demo')} className="hover:text-indigo-600 transition-colors flex items-center gap-1 font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full">
+                <Video className="h-4 w-4"/> Démo
+            </button>
           </div>
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/login')} className="text-sm font-medium text-slate-600 hover:text-indigo-600">
@@ -143,8 +153,8 @@ export const LandingPage = () => {
               Commencer l'essai gratuit
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <Button size="lg" variant="secondary" className="h-14 px-8 text-lg" onClick={() => scrollToSection('features')}>
-              Découvrir les outils
+            <Button size="lg" variant="secondary" className="h-14 px-8 text-lg bg-white border-slate-200 hover:bg-slate-50 text-slate-700" onClick={() => scrollToSection('demo')} icon={Video}>
+              Réserver une Démo
             </Button>
           </div>
           <div className="mt-10 flex flex-wrap justify-center gap-6 text-sm text-slate-500 animate-in fade-in slide-in-from-bottom-12 duration-700">
@@ -295,6 +305,25 @@ export const LandingPage = () => {
               </div>
            </div>
         </div>
+      </div>
+
+      {/* DEMO SECTION (Calendly Inline) */}
+      <div id="demo" className="py-24 bg-indigo-50 border-y border-indigo-100">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-12">
+                  <h2 className="text-3xl font-bold text-slate-900 mb-4">Réservez votre démo personnalisée</h2>
+                  <p className="text-slate-500 max-w-2xl mx-auto">Nos experts vous montreront comment Reviewflow peut transformer votre activité en 15 minutes.</p>
+              </div>
+              
+              {/* Calendly Inline Widget */}
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+                  <div 
+                    className="calendly-inline-widget" 
+                    data-url="https://calendly.com/d/cw6r-k86-yz3?hide_gdpr_banner=1&background_color=ffffff&text_color=1e293b&primary_color=4f46e5" 
+                    style={{ minWidth: '320px', height: '700px' }} 
+                  />
+              </div>
+          </div>
       </div>
 
       {/* Pricing Section */}
