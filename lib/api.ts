@@ -22,6 +22,7 @@ import {
 } from '../types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// Helper
 const evaluateCondition = (review: Review, condition: any): boolean => {
   const { field, operator, value } = condition;
   const reviewValue = (review as any)[field];
@@ -36,13 +37,20 @@ const evaluateCondition = (review: Review, condition: any): boolean => {
   }
 };
 
-// Services définis en interne pour éviter les problèmes d'initialisation circulaire
+// --- Services Definition ---
+
 const authService = {
     getUser: async (): Promise<User | null> => {
       if (isSupabaseConfigured()) {
         const { data: { user } } = await supabase!.auth.getUser();
         if (!user) return null;
-        const { data: profile } = await supabase!.from('users').select('*').eq('id', user.id).single();
+        
+        const { data: profile } = await supabase!
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
         return {
           id: user.id,
           email: user.email || '',
@@ -71,7 +79,11 @@ const authService = {
     },
     register: async (name: string, email: string, password: string) => {
         if (isSupabaseConfigured()) {
-            const { data, error } = await supabase!.auth.signUp({ email, password, options: { data: { full_name: name } } });
+            const { data, error } = await supabase!.auth.signUp({ 
+                email, 
+                password,
+                options: { data: { full_name: name } }
+            });
             if (error) throw error;
             return;
         }
@@ -80,91 +92,124 @@ const authService = {
         return newUser;
     },
     logout: async () => {
-        if (isSupabaseConfigured()) { await supabase!.auth.signOut(); }
+        if (isSupabaseConfigured()) {
+            await supabase!.auth.signOut();
+        }
         localStorage.removeItem('mock_user');
     },
     resetPassword: async (email: string) => {
-        if (isSupabaseConfigured()) { await supabase!.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/#reset-callback' }); }
+        if (isSupabaseConfigured()) {
+            await supabase!.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin + '/#reset-callback'
+            });
+        }
         return true;
     },
     loginWithGoogle: async () => {
         if (isSupabaseConfigured()) {
             const { error } = await supabase!.auth.signInWithOAuth({
                 provider: 'google',
-                options: { redirectTo: window.location.origin, queryParams: { access_type: 'offline', prompt: 'consent' } }
+                options: {
+                    redirectTo: window.location.origin,
+                    queryParams: {
+                        access_type: 'offline',
+                        prompt: 'consent',
+                    },
+                }
             });
             if (error) throw error;
-        } else { throw new Error("Supabase not configured"); }
+        } else {
+            throw new Error("Supabase not configured for OAuth");
+        }
     }
-};
-
-const organizationService = {
-      get: async (): Promise<Organization | null> => {
-          if (isSupabaseConfigured()) {
-              try {
-                  const { data: { user } } = await supabase!.auth.getUser();
-                  if (!user) return INITIAL_ORG;
-                  const { data: profile } = await supabase!.from('users').select('organization_id').eq('id', user.id).single();
-                  if (!profile?.organization_id) return INITIAL_ORG;
-                  const { data: org, error } = await supabase!.from('organizations').select('*').eq('id', profile.organization_id).single();
-                  if (error || !org) return INITIAL_ORG;
-                  const { data: locations } = await supabase!.from('locations').select('*').eq('organization_id', profile.organization_id);
-                  return { ...INITIAL_ORG, ...org, locations: locations || [] } as Organization;
-              } catch (e) { return INITIAL_ORG; }
-          }
-          return INITIAL_ORG;
-      },
-      update: async (data: Partial<Organization>) => {
-          if (isSupabaseConfigured()) {
-              const user = await authService.getUser();
-              if (user?.organization_id) {
-                  await supabase!.from('organizations').update(data).eq('id', user.organization_id);
-              }
-          }
-          Object.assign(INITIAL_ORG, data);
-          return INITIAL_ORG;
-      }
 };
 
 const reviewsService = {
       list: async (filters: any): Promise<Review[]> => {
           if (isSupabaseConfigured()) {
               let query = supabase!.from('reviews').select('*').order('received_at', { ascending: false });
+              
               if (filters.status && filters.status !== 'Tout') query = query.eq('status', filters.status.toLowerCase());
               if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
               if (filters.rating && filters.rating !== 'Tout') query = query.eq('rating', parseInt(filters.rating));
               
               const { data, error } = await query;
-              if (error) return [];
+              if (error) {
+                  console.error(error);
+                  return [];
+              }
+              
               let result = (data || []).map((r: any) => ({
-                  ...r, internal_notes: r.internal_notes || [], analysis: r.analysis || { sentiment: 'neutral', themes: [], keywords: [], flags: {} }
+                  ...r,
+                  internal_notes: r.internal_notes || [],
+                  analysis: r.analysis || { sentiment: 'neutral', themes: [], keywords: [], flags: {} }
               })) as Review[];
+              
               if (filters.search) {
                   const q = filters.search.toLowerCase();
-                  result = result.filter(r => r.body?.toLowerCase().includes(q) || r.author_name?.toLowerCase().includes(q));
+                  result = result.filter(r => 
+                      r.body?.toLowerCase().includes(q) || 
+                      r.author_name?.toLowerCase().includes(q)
+                  );
               }
               return result;
           }
-          return INITIAL_REVIEWS;
+          let data = [...INITIAL_REVIEWS];
+          if (filters.status && filters.status !== 'Tout') data = data.filter(r => r.status === filters.status.toLowerCase());
+          if (filters.source && filters.source !== 'Tout') data = data.filter(r => r.source === filters.source.toLowerCase());
+          if (filters.rating && filters.rating !== 'Tout') data = data.filter(r => r.rating === parseInt(filters.rating.toString()[0]));
+          if (filters.search) {
+              const q = filters.search.toLowerCase();
+              data = data.filter(r => r.body.toLowerCase().includes(q) || r.author_name.toLowerCase().includes(q));
+          }
+          return data;
       },
       reply: async (id: string, text: string) => {
           if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ status: 'sent', posted_reply: text, replied_at: new Date().toISOString() }).eq('id', id);
+              await supabase!.from('reviews').update({
+                  status: 'sent',
+                  posted_reply: text,
+                  replied_at: new Date().toISOString()
+              }).eq('id', id);
+              return true;
           }
+          console.log(`Replied to ${id}: ${text}`);
           return true;
       },
       saveDraft: async (id: string, text: string) => {
           if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ status: 'draft', ai_reply: { text, needs_manual_validation: false, created_at: new Date().toISOString() } }).eq('id', id);
+              await supabase!.from('reviews').update({
+                  status: 'draft',
+                  ai_reply: { text: text, needs_manual_validation: false, created_at: new Date().toISOString() } 
+              }).eq('id', id);
+              return true;
+          }
+          console.log(`Draft saved for ${id}: ${text}`);
+          return true;
+      },
+      updateStatus: async (id: string, status: ReviewStatus) => {
+          if (isSupabaseConfigured()) {
+              await supabase!.from('reviews').update({ status }).eq('id', id);
+              return true;
           }
           return true;
       },
       addNote: async (id: string, text: string) => {
-          const newNote = { id: `n-${Date.now()}`, text, author_name: 'Me', created_at: new Date().toISOString() };
+          const newNote = {
+              id: `n-${Date.now()}`,
+              text,
+              author_name: 'Me', 
+              created_at: new Date().toISOString()
+          };
+          
           if (isSupabaseConfigured()) {
               const { data: review } = await supabase!.from('reviews').select('internal_notes').eq('id', id).single();
               const notes = review?.internal_notes || [];
-              await supabase!.from('reviews').update({ internal_notes: [...notes, newNote] }).eq('id', id);
+              const updatedNotes = [...notes, newNote];
+              
+              await supabase!.from('reviews').update({
+                  internal_notes: updatedNotes
+              }).eq('id', id);
           }
           return newNote;
       },
@@ -178,110 +223,438 @@ const reviewsService = {
                   body: r.text || '',
                   language: 'fr',
                   received_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
-                  status: 'pending'
+                  status: 'pending',
+                  analysis: {
+                      sentiment: 'neutral',
+                      themes: [],
+                      keywords: [],
+                      flags: { hygiene: false, security: false }
+                  }
               }));
+              
               const { error } = await supabase!.from('reviews').insert(formattedData);
               if (error) throw error;
+              return data.length;
           }
           return data.length;
       }
 };
 
+const organizationService = {
+      get: async (): Promise<Organization | null> => {
+          if (isSupabaseConfigured()) {
+              try {
+                  const { data: { user } } = await supabase!.auth.getUser();
+                  if (!user) return INITIAL_ORG;
+                  
+                  const { data: profile } = await supabase!.from('users').select('organization_id').eq('id', user.id).single();
+                  
+                  if (!profile?.organization_id) {
+                      return INITIAL_ORG;
+                  }
+                  
+                  const { data: org, error } = await supabase!.from('organizations').select('*').eq('id', profile.organization_id).single();
+                  
+                  if (error || !org) {
+                      return INITIAL_ORG;
+                  }
+
+                  const { data: locations } = await supabase!.from('locations').select('*').eq('organization_id', profile.organization_id);
+                  
+                  return {
+                      ...INITIAL_ORG,
+                      ...org,
+                      brand: org.brand || INITIAL_ORG.brand,
+                      integrations: org.integrations || INITIAL_ORG.integrations,
+                      saved_replies: org.saved_replies || INITIAL_ORG.saved_replies,
+                      workflows: org.workflows || INITIAL_ORG.workflows || [],
+                      locations: locations || []
+                  } as Organization;
+              } catch (e) {
+                  return INITIAL_ORG;
+              }
+          }
+          return INITIAL_ORG;
+      },
+      update: async (data: Partial<Organization>) => {
+          if (isSupabaseConfigured()) {
+              const user = await authService.getUser();
+              if (user?.organization_id) {
+                  await supabase!.from('organizations').update(data).eq('id', user.organization_id);
+              }
+              Object.assign(INITIAL_ORG, data);
+              return INITIAL_ORG;
+          }
+          Object.assign(INITIAL_ORG, data);
+          return INITIAL_ORG;
+      },
+      initiateGoogleAuth: async (clientId: string) => { await new Promise(resolve => setTimeout(resolve, 1000)); return true; },
+      toggleIntegration: async (provider: string, enabled: boolean) => { return true; },
+      upgradePlan: async (plan: string) => { return true; }
+};
+
 const aiService = {
       generateReply: async (review: Review, options: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante (VITE_API_KEY).");
+          
+          if (!apiKey) throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
+
           try {
               const org = await organizationService.get(); 
-              const genAI = new GoogleGenerativeAI(apiKey);
-              const brand = org?.brand || { tone: 'professionnel' };
+              const usage = org?.ai_usage_count || 0;
+              const limit = org?.subscription_plan === 'free' ? 3 : org?.subscription_plan === 'starter' ? 100 : 300;
               
-              // Fallback strategy: Flash -> Pro
-              const prompt = `Réponds à cet avis (${review.rating}/5): "${review.body}". Ton: ${options.tone || brand.tone}.`;
+              if (usage >= limit) {
+                  throw new Error("Limite d'utilisation atteinte. Passez au plan supérieur.");
+              }
+
+              const genAI = new GoogleGenerativeAI(apiKey);
+              const brand: BrandSettings = org?.brand || { tone: 'professionnel', description: '', knowledge_base: '', use_emojis: false, language_style: 'formal', signature: '' };
+              const industry = org?.industry || 'other';
+              const knowledgeBaseContext = brand.knowledge_base ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}` : '';
+
+              const prompt = `
+                Rôle: Expert Relation Client pour une entreprise de type "${industry}".
+                [IDENTITÉ MARQUE]
+                - Ton: ${options.tone || brand.tone}
+                - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
+                - Emojis: ${brand.use_emojis ? 'Oui' : 'Non'}
+                ${knowledgeBaseContext}
+
+                TACHE: Rédige une réponse empathique et personnalisée à cet avis.
+                Avis client (${review.rating}/5) de ${review.author_name}: "${review.body}"
+                Réponse (texte seul):
+              `;
+
               try {
                   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
                   const result = await model.generateContent(prompt);
                   return result.response.text();
-              } catch (e) {
-                  const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-                  const result = await model.generateContent(prompt);
-                  return result.response.text();
+              } catch (err1: any) {
+                  console.warn("Gemini 1.5 Flash erreur, repli sur Pro...", err1.message);
+                  const modelPro = genAI.getGenerativeModel({ model: "gemini-pro"});
+                  const resultPro = await modelPro.generateContent(prompt);
+                  return resultPro.response.text();
               }
+
           } catch (e: any) {
+              console.error("ERREUR IA FINALE:", e);
+              if (e.message?.includes('403') || e.message?.includes('API key')) throw new Error("Clé API invalide.");
+              if (e.message?.includes('429')) throw new Error("Quota Google dépassé.");
               throw new Error(`Erreur IA: ${e.message}`);
           }
       },
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) return "Clé manquante";
+          if (!apiKey) throw new Error("Clé API manquante");
+
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-          const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
-          return result.response.text();
+          const prompt = `Crée un post ${platform} pour cet avis : "${review.body}" (${review.rating}/5). Ajoute emojis et hashtags.`;
+          
+          try {
+             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+             const result = await model.generateContent(prompt);
+             return result.response.text();
+          } catch (e) {
+             const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+             const result = await model.generateContent(prompt);
+             return result.response.text();
+          }
       },
       runCustomTask: async (payload: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) return { error: "Clé manquante" };
+          if (!apiKey) throw new Error("Clé API manquante");
+
           const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-          const result = await model.generateContent(JSON.stringify(payload));
-          return JSON.parse(result.response.text());
+          const prompt = JSON.stringify(payload);
+
+          try {
+             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+             const result = await model.generateContent(prompt);
+             return JSON.parse(result.response.text());
+          } catch (e) {
+             const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+             const result = await model.generateContent(prompt);
+             return JSON.parse(result.response.text());
+          }
+      }
+};
+
+const socialService = {
+      connect: async (platform: string) => {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          if (isSupabaseConfigured()) {
+              const org = await organizationService.get(); 
+              if (org) {
+                  const integrations = org.integrations || { google: false, facebook: false, instagram_posting: false, facebook_posting: false };
+                  const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
+                  (integrations as any)[key] = true;
+                  await organizationService.update({ integrations }); 
+              }
+          }
+          return true;
+      },
+      publish: async (platform: string, content: string) => {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          console.log(`[SOCIAL] Published to ${platform}:`, content);
+          return true;
+      }
+};
+
+const automationService = {
+      getWorkflows: async (): Promise<WorkflowRule[]> => {
+          const org = await organizationService.get();
+          if (org && (org as any).workflows) {
+              return (org as any).workflows;
+          }
+          return INITIAL_WORKFLOWS;
+      },
+      create: async (workflow: WorkflowRule) => {
+          if (isSupabaseConfigured()) {
+             const org = await organizationService.get();
+             if (org) {
+                 const currentWorkflows = (org as any).workflows || [];
+                 const newWorkflows = [...currentWorkflows, workflow];
+                 await supabase!.from('organizations').update({ workflows: newWorkflows }).eq('id', org.id);
+                 return true;
+             }
+          }
+          INITIAL_WORKFLOWS.push(workflow);
+          return true;
+      },
+      run: async () => {
+          if (!isSupabaseConfigured()) {
+               const pendingReviews = INITIAL_REVIEWS.filter(r => r.status === 'pending');
+               return { processed: pendingReviews.length, actions: 0, alerts: 0 };
+          }
+          
+          const { data: pendingReviews } = await supabase!.from('reviews').select('*').eq('status', 'pending');
+          if (!pendingReviews || pendingReviews.length === 0) return { processed: 0, actions: 0, alerts: 0 };
+          
+          const rules = await automationService.getWorkflows();
+          let actionCount = 0;
+          let alertCount = 0;
+
+          const org = await organizationService.get(); 
+          const alertThreshold = org?.notification_settings?.alert_threshold || 3;
+          const emailAlerts = org?.notification_settings?.email_alerts || false;
+
+          for (const review of pendingReviews) {
+              if (emailAlerts && review.rating <= alertThreshold) {
+                  alertCount++;
+              }
+              for (const rule of rules) {
+                  if (rule.enabled && rule.conditions.every(c => evaluateCondition(review as Review, c))) {
+                       for (const action of rule.actions) {
+                           if (action.type === 'generate_ai_reply' || action.type === 'auto_reply') {
+                               await supabase!.from('reviews').update({ 
+                                  status: 'draft',
+                                  ai_reply: { text: "Réponse automatique générée...", needs_manual_validation: true, created_at: new Date().toISOString() }
+                               }).eq('id', review.id);
+                               actionCount++;
+                           }
+                       }
+                  }
+              }
+          }
+          return { processed: pendingReviews.length, actions: actionCount, alerts: alertCount };
       }
 };
 
 const seedCloudDatabase = async () => {
       if (!isSupabaseConfigured()) throw new Error("Supabase non connecté");
+      
       const { data: { user } } = await supabase!.auth.getUser();
-      if (!user) throw new Error("Connectez-vous.");
+      if (!user) throw new Error("Vous devez être connecté pour injecter les données.");
+
       try {
-          const { data: org, error } = await supabase!.from('organizations').insert({ name: 'Démo Org', subscription_plan: 'pro' }).select().single();
-          if (error) throw error;
-          await supabase!.from('users').upsert({ id: user.id, email: user.email, role: 'admin', organization_id: org.id });
-          const { data: locs } = await supabase!.from('locations').insert([{ organization_id: org.id, name: "Lieu Démo", address: "Paris" }]).select();
-          if (locs) {
-              const reviewsPayload = INITIAL_REVIEWS.map(r => ({ ...r, location_id: locs[0].id, internal_notes: [], analysis: r.analysis || {} }));
-              await supabase!.from('reviews').insert(reviewsPayload);
+          console.log("1. Démarrage de l'injection...");
+
+          const { data: org, error: orgError } = await supabase!
+            .from('organizations')
+            .insert({ 
+                name: 'Mon Organisation Démo',
+                subscription_plan: 'pro',
+                ai_usage_count: 12,
+                industry: 'restaurant',
+                integrations: INITIAL_ORG.integrations,
+                brand: INITIAL_ORG.brand,
+                notification_settings: INITIAL_ORG.notification_settings,
+                saved_replies: INITIAL_ORG.saved_replies || [],
+                workflows: []
+            })
+            .select()
+            .single();
+            
+          if (orgError) {
+              console.error("Erreur Création Org:", JSON.stringify(orgError));
+              throw new Error(`Erreur SQL Org: ${orgError.message}.`);
           }
+          const orgId = org.id;
+          
+          const { error: userError } = await supabase!.from('users').upsert({
+              id: user.id,
+              email: user.email,
+              name: user.user_metadata?.full_name || 'Admin',
+              role: 'admin',
+              organization_id: orgId
+          });
+
+          if (userError) {
+              console.error("Erreur Liaison User:", JSON.stringify(userError));
+              throw new Error(`Impossible de lier votre utilisateur: ${userError.message}`);
+          }
+          
+          const { data: locs, error: locError } = await supabase!.from('locations').insert([
+              { organization_id: orgId, name: "Boutique Paris Centre", city: "Paris", country: "France", connection_status: "connected", platform_rating: 4.8 },
+              { organization_id: orgId, name: "Atelier Lyon", city: "Lyon", country: "France", connection_status: "disconnected", platform_rating: 4.2 }
+          ]).select();
+          
+          if (locError) {
+              console.error("Erreur Locations:", JSON.stringify(locError));
+              throw locError;
+          }
+          
+          const locId = locs[0].id;
+          const reviewsPayload = INITIAL_REVIEWS.map(r => ({
+              location_id: locId,
+              source: r.source,
+              rating: r.rating,
+              author_name: r.author_name,
+              text: r.body || "",
+              language: r.language || "fr",
+              received_at: r.received_at,
+              status: r.status,
+              analysis: r.analysis || null,
+              ai_reply: r.ai_reply || null,
+              internal_notes: r.internal_notes || [],
+              posted_reply: r.posted_reply || null,
+              replied_at: r.replied_at || null
+          }));
+          
+          const { error: revError } = await supabase!.from('reviews').insert(reviewsPayload);
+          if (revError) {
+              console.error("Erreur Reviews:", JSON.stringify(revError));
+              throw new Error(`Erreur Reviews: ${revError.message}`);
+          }
+
+          const competitorsPayload = INITIAL_COMPETITORS.map(c => ({
+              organization_id: orgId,
+              name: c.name,
+              address: c.address,
+              rating: c.rating,
+              review_count: c.review_count,
+              strengths: c.strengths || [],
+              weaknesses: c.weaknesses || []
+          }));
+          
+          await supabase!.from('competitors').insert(competitorsPayload);
+          
+          console.log("Injection terminée.");
           window.location.reload();
           return true;
+
       } catch (e: any) {
-          console.error(e);
+          console.error("Erreur Fatale Injection:", e);
           throw e;
       }
 };
 
+const publicService = {
+    getLocationInfo: async (id: string) => {
+        if (isSupabaseConfigured()) {
+            try {
+                const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
+                if (!error && data) {
+                    return { name: data.name, city: data.city, googleUrl: data.google_review_url || '#' };
+                }
+            } catch (e) { console.warn("Fallback public"); }
+        }
+        return { name: "Notre Établissement", city: "Paris", googleUrl: "#" };
+    },
+    submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
+        if (isSupabaseConfigured()) {
+            try {
+                await supabase!.from('reviews').insert({
+                    location_id: locationId,
+                    rating,
+                    text: feedback,
+                    author_name: contact || 'Client Anonyme',
+                    source: 'direct',
+                    status: 'pending',
+                    received_at: new Date().toISOString(),
+                    language: 'fr',
+                    internal_notes: [{ text: `Feedback: ${feedback}`, author_name: 'Système', created_at: new Date().toISOString() }]
+                });
+            } catch (e) { console.warn("Error saving feedback", e); }
+        }
+        return true;
+    }
+};
+
+// Main API Export
 export const api = {
   auth: authService,
   reviews: reviewsService,
   organization: organizationService,
   ai: aiService,
-  social: { connect: async () => true, publish: async () => true },
-  automation: { 
-      getWorkflows: async () => INITIAL_WORKFLOWS, 
-      create: async () => true, 
-      run: async () => ({ processed: 0, actions: 0, alerts: 0 }) 
-  },
+  social: socialService,
+  automation: automationService,
   seedCloudDatabase,
-  analytics: { getOverview: async () => INITIAL_ANALYTICS },
-  competitors: { list: async () => INITIAL_COMPETITORS, add: async () => INITIAL_COMPETITORS[0] },
+  
+  analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS },
+  
+  competitors: {
+      list: async (): Promise<Competitor[]> => {
+          if (isSupabaseConfigured()) {
+              const { data } = await supabase!.from('competitors').select('*');
+              if (data && data.length) return data;
+          }
+          return INITIAL_COMPETITORS;
+      },
+      add: async (data: any) => {
+          if (isSupabaseConfigured()) {
+             const user = await authService.getUser();
+             if (user?.organization_id) {
+                 const { data: comp } = await supabase!.from('competitors').insert({...data, organization_id: user.organization_id}).select().single();
+                 return comp;
+             }
+          }
+          return INITIAL_COMPETITORS[0];
+      }
+  },
+
   notifications: { list: async () => [], markAllRead: async () => true },
-  locations: { create: async () => ({ id: 'new' }) },
-  team: { list: async () => INITIAL_USERS, invite: async () => true, remove: async () => true },
-  billing: { 
-      getInvoices: async () => [], 
-      downloadInvoice: () => {}, 
-      createCheckoutSession: async (plan: string) => {
-          const links: Record<string, string> = { 'starter': 'https://buy.stripe.com/test_starter', 'pro': 'https://buy.stripe.com/test_pro' };
-          return links[plan] || "https://stripe.com";
+  locations: { 
+      create: async (data: any) => {
+          if (isSupabaseConfigured()) {
+              const user = await authService.getUser();
+              if (user?.organization_id) {
+                  const { data: loc, error } = await supabase!.from('locations').insert({...data, organization_id: user.organization_id, connection_status: 'disconnected'}).select().single();
+                  if (error) throw error;
+                  return loc;
+              }
+          }
+          return { ...data, id: 'new' };
+      }
+  },
+  team: { list: async () => INITIAL_USERS, invite: async (email: string, role: string) => true, remove: async (id: string) => true },
+  
+  billing: {
+      getInvoices: async () => [],
+      downloadInvoice: (id: string) => {},
+      createCheckoutSession: async (plan: string) => { 
+          const STRIPE_LINKS: Record<string, string> = {
+              'starter': 'https://buy.stripe.com/test_starter_link', 
+              'pro': 'https://buy.stripe.com/test_pro_link'
+          };
+          return STRIPE_LINKS[plan] || "https://stripe.com"; 
       },
       createPortalSession: async () => "https://billing.stripe.com" 
   },
   onboarding: { checkStatus: async () => ({ googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 }) },
   activity: { getRecent: async () => [] },
-  public: { 
-      getLocationInfo: async (id: string) => ({ name: "Demo", city: "Paris", googleUrl: "#" }), 
-      submitFeedback: async () => true 
-  },
+  public: publicService,
   customers: { list: async () => [] },
   admin: { getStats: async () => ({ mrr: "0", active_tenants: 0, total_reviews_processed: 0, tenants: [] }) }
 };
