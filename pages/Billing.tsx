@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ArrowRight, ShieldCheck } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import jsPDF from 'jspdf';
@@ -69,7 +68,7 @@ const InvoiceTable = () => {
     const toast = useToast();
 
     useEffect(() => {
-        api.billing.getInvoices().then(data => {
+        api.billing.getInvoices().then((data: any) => {
             setInvoices(data);
             setLoading(false);
         });
@@ -100,10 +99,7 @@ const InvoiceTable = () => {
         // Client Info
         doc.text("Facturé à :", 20, 55);
         doc.setFont("helvetica", "bold");
-        doc.text("Groupe Multiservices", 20, 60);
-        doc.setFont("helvetica", "normal");
-        doc.text("12 rue de la Paix", 20, 65);
-        doc.text("75000 Paris", 20, 70);
+        doc.text("Client", 20, 60);
         
         // Table
         const price = parseFloat(invoice.amount.replace('€', ''));
@@ -131,8 +127,7 @@ const InvoiceTable = () => {
         const finalY = (doc as any).lastAutoTable.finalY + 20;
         doc.setFontSize(9);
         doc.setTextColor(150);
-        doc.text("Conditions de paiement : Paiement à réception.", 20, finalY);
-        doc.text("En cas de retard de paiement, une pénalité de 3 fois le taux d'intérêt légal sera appliquée.", 20, finalY + 5);
+        doc.text("Paiement acquitté.", 20, finalY);
 
         doc.save(`facture_${invoice.id}.pdf`);
         toast.success("Facture téléchargée");
@@ -193,15 +188,17 @@ export const BillingPage = () => {
         setUpgrading(plan);
         try {
             const url = await api.billing.createCheckoutSession(plan);
-            // MODIFICATION : Redirection réelle vers l'URL de paiement Stripe
+            // Redirection vers le lien Stripe Payment Link
             if (url && url.startsWith('http')) {
                 window.location.href = url;
             } else {
-                throw new Error("URL de paiement invalide");
+                // Fallback si lien vide (ex: en dev)
+                toast.error("Lien de paiement non configuré.");
             }
         } catch (e: any) {
             console.error(e);
-            toast.error(e.message || "Erreur lors de la redirection vers le paiement.");
+            toast.error(e.message || "Erreur paiement.");
+        } finally {
             setUpgrading(null);
         }
     };
@@ -220,7 +217,7 @@ export const BillingPage = () => {
                     <h1 className="text-2xl font-bold text-slate-900">Abonnement & Facturation</h1>
                     <p className="text-slate-500">Gérez votre plan et vos méthodes de paiement.</p>
                 </div>
-                <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url) => window.location.href = url)}>
+                <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url: string) => window.location.href = url)}>
                     Gérer carte bancaire
                 </Button>
             </div>
