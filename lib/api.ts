@@ -297,8 +297,6 @@ const aiService = {
       generateReply: async (review: Review, options: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
           
-          console.log("Tentative IA (Clé présente ?):", !!apiKey);
-
           if (!apiKey) {
              throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
           }
@@ -313,8 +311,6 @@ const aiService = {
               }
 
               const genAI = new GoogleGenerativeAI(apiKey);
-              
-              // --- CONFIGURATION DU PROMPT ---
               const brand: BrandSettings = org?.brand || { tone: 'professionnel', description: '', knowledge_base: '', use_emojis: false, language_style: 'formal', signature: '' };
               const industry = org?.industry || 'other';
               const knowledgeBaseContext = brand.knowledge_base ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}` : '';
@@ -334,11 +330,7 @@ const aiService = {
                 Réponse (texte seul, pas de guillemets):
               `;
 
-              // --- STRATÉGIE DE MODÈLE (Vos modèles spécifiques) ---
-              // 1. Gemini 2.5 Flash
-              // 2. Gemini 3 Pro
-              // 3. Gemini 1.5 Flash (Sécurité)
-
+              // Stratégie de modèle : 2.5 Flash -> 3 Pro -> 1.5 Flash
               const models = ["gemini-2.5-flash", "gemini-3-pro", "gemini-1.5-flash"];
               
               for (const modelName of models) {
@@ -350,8 +342,7 @@ const aiService = {
                       if (text) return text;
                   } catch (err: any) {
                       console.warn(`Echec ${modelName}:`, err.message);
-                      // Continue to next model
-                      if (modelName === models[models.length - 1]) throw err; // Throw if last one fails
+                      if (modelName === models[models.length - 1]) throw err;
                   }
               }
               
@@ -589,6 +580,55 @@ const seedCloudDatabase = async () => {
       }
 };
 
+const publicService = {
+    getLocationInfo: async (id: string) => {
+        if (isSupabaseConfigured()) {
+            try {
+                const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
+                if (!error && data) {
+                    return { name: data.name, city: data.city, googleUrl: data.google_review_url || '#' };
+                }
+            } catch (e) { console.warn("Using fallback for public location info"); }
+        }
+        return { name: "Notre Établissement", city: "Paris", googleUrl: "#" };
+    },
+    submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
+        console.log("Feedback:", { locationId, rating, feedback });
+        if (isSupabaseConfigured()) {
+            try {
+                await supabase!.from('reviews').insert({
+                    location_id: locationId,
+                    rating,
+                    text: feedback,
+                    author_name: contact || 'Client Anonyme',
+                    source: 'direct',
+                    status: 'pending',
+                    received_at: new Date().toISOString(),
+                    language: 'fr',
+                    internal_notes: [{
+                        text: `Feedback direct (Funnel): ${feedback}`,
+                        author_name: 'Système',
+                        created_at: new Date().toISOString()
+                    }]
+                });
+            } catch (e) {
+                console.warn("Could not save to DB (RLS?), saving locally only.");
+            }
+        }
+        return true;
+    }
+};
+
+const customersService = {
+    list: async (): Promise<Customer[]> => {
+        return [];
+    }
+};
+
+const adminService = {
+    getStats: async () => { return { mrr: "0", active_tenants: 0, total_reviews_processed: 0, tenants: [] }; }
+};
+
 // Main API Export
 export const api = {
   auth: authService,
@@ -651,46 +691,7 @@ export const api = {
   },
   onboarding: { checkStatus: async () => ({ googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 }) },
   activity: { getRecent: async () => [] },
-  public: { 
-      getLocationInfo: async (id: string) => {
-          if (isSupabaseConfigured()) {
-              try {
-                  const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
-                  if (!error && data) return { name: data.name, city: data.city, googleUrl: data.google_review_url || '#' };
-              } catch (e) { console.warn("Fallback public"); }
-          }
-          return { name: "Notre Établissement", city: "Paris", googleUrl: "#" };
-      }, 
-      submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
-          console.log("Feedback:", { locationId, rating, feedback });
-          if (isSupabaseConfigured()) {
-              try {
-                  await supabase!.from('reviews').insert({
-                      location_id: locationId,
-                      rating,
-                      text: feedback,
-                      author_name: contact || 'Client Anonyme',
-                      source: 'direct',
-                      status: 'pending',
-                      received_at: new Date().toISOString(),
-                      language: 'fr',
-                      internal_notes: [{
-                          text: `Feedback direct (Funnel): ${feedback}`,
-                          author_name: 'Système',
-                          created_at: new Date().toISOString()
-                      }]
-                  });
-              } catch (e) {
-                  console.warn("Could not save to DB (RLS?), saving locally only.");
-              }
-          }
-          return true;
-      }
-  },
-  customers: {
-      list: async () => { return []; }
-  },
-  admin: {
-      getStats: async () => { return { mrr: "0", active_tenants: 0, total_reviews_processed: 0, tenants: [] }; }
-  }
+  public: publicService,
+  customers: customersService,
+  admin: adminService
 };

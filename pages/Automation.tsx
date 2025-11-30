@@ -49,13 +49,16 @@ export const AutomationPage = () => {
   const [lastRunResult, setLastRunResult] = useState<{processed: number, actions: number, alerts: number} | null>(null);
   
   // Builder State
+  const [builderName, setBuilderName] = useState('Nouveau Workflow');
   const [builderAction, setBuilderAction] = useState('notify');
   const [builderPlatform, setBuilderPlatform] = useState('instagram');
+  const [builderConditionRating, setBuilderConditionRating] = useState(5);
+  const [builderConditionOperator, setBuilderConditionOperator] = useState('gte');
 
   const toast = useToast();
 
   useEffect(() => {
-    // REAL LOAD
+    // Charger les workflows existants
     api.automation.getWorkflows().then(setWorkflows);
   }, []);
 
@@ -64,26 +67,31 @@ export const AutomationPage = () => {
     
     const newWorkflow: WorkflowRule = {
         id: `wf-${Date.now()}`,
-        name: builderAction === 'publish_social' ? `Auto-Publish sur ${builderPlatform}` : 'Nouveau Workflow Auto',
+        name: builderName,
         enabled: true,
         trigger: 'review_created',
-        conditions: [{ field: 'rating', operator: 'gte', value: 5}],
+        conditions: [{ field: 'rating', operator: builderConditionOperator as any, value: builderConditionRating}],
         actions: [{ 
             type: builderAction as any, 
             config: builderAction === 'publish_social' ? { platform: builderPlatform } : {}
         }]
     };
 
-    // REAL SAVE via API
-    await api.automation.create(newWorkflow);
-    
-    // Refresh list
-    const updated = await api.automation.getWorkflows();
-    setWorkflows(updated);
+    // Sauvegarde réelle en DB
+    try {
+        await api.automation.create(newWorkflow);
+        
+        // Rafraîchir la liste
+        const updated = await api.automation.getWorkflows();
+        setWorkflows(updated);
 
-    setIsCreating(false);
-    setShowBuilder(false);
-    toast.success("Workflow créé et activé !");
+        setIsCreating(false);
+        setShowBuilder(false);
+        toast.success("Workflow créé et activé !");
+    } catch (e) {
+        toast.error("Erreur lors de la création");
+        setIsCreating(false);
+    }
   };
 
   const handleRunAutomation = async () => {
@@ -95,7 +103,7 @@ export const AutomationPage = () => {
           if (result.actions > 0 || result.alerts > 0) {
               toast.success(`${result.actions} actions effectuées (Réponses/Posts) et ${result.alerts} alertes.`);
           } else {
-              toast.info("Aucun avis ne correspond aux règles.");
+              toast.info("Analyse terminée : Aucun avis ne correspond aux règles.");
           }
       } catch (e) {
           console.error(e);
@@ -110,19 +118,27 @@ export const AutomationPage = () => {
       <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
         <div className="flex items-center gap-4 mb-6">
           <Button variant="ghost" onClick={() => setShowBuilder(false)}>← Retour</Button>
-          <h1 className="text-2xl font-bold text-slate-900">Nouveau Workflow</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Créer un Workflow</h1>
         </div>
 
         <div className="space-y-6">
           <Card>
-            <div className="p-4 border-b border-slate-200 font-semibold bg-slate-50 rounded-t-xl">1. Déclencheur</div>
-            <CardContent>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Quand ceci arrive :</label>
-              <select className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border">
-                <option value="review_created">Nouvel Avis Reçu</option>
-                <option value="review_updated">Avis Mis à jour</option>
-              </select>
-            </CardContent>
+             <div className="p-4 border-b border-slate-200 font-semibold bg-slate-50 rounded-t-xl">1. Nom & Déclencheur</div>
+             <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Nom du Workflow</label>
+                        <Input value={builderName} onChange={(e) => setBuilderName(e.target.value)} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Quand ceci arrive :</label>
+                        <select className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white">
+                            <option value="review_created">Nouvel Avis Reçu</option>
+                            <option value="review_updated">Avis Mis à jour</option>
+                        </select>
+                    </div>
+                </div>
+             </CardContent>
           </Card>
 
           <Card>
@@ -132,18 +148,30 @@ export const AutomationPage = () => {
                   <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Si la note est...</label>
                       <div className="flex gap-4 items-center">
-                          <select className="block w-32 rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 sm:text-sm px-3 py-2 border">
+                          <select 
+                            className="block w-48 rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 sm:text-sm px-3 py-2 border bg-white"
+                            value={builderConditionOperator}
+                            onChange={(e) => setBuilderConditionOperator(e.target.value)}
+                          >
                               <option value="gte">Supérieur ou égal à</option>
+                              <option value="lte">Inférieur ou égal à</option>
                               <option value="equals">Égal à</option>
                           </select>
-                          <select className="block w-20 rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 sm:text-sm px-3 py-2 border">
-                              <option value="5">5 ★</option>
-                              <option value="4">4 ★</option>
+                          <select 
+                            className="block w-24 rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 sm:text-sm px-3 py-2 border bg-white"
+                            value={builderConditionRating}
+                            onChange={(e) => setBuilderConditionRating(parseInt(e.target.value))}
+                          >
+                              <option value={5}>5 ★</option>
+                              <option value={4}>4 ★</option>
+                              <option value={3}>3 ★</option>
+                              <option value={2}>2 ★</option>
+                              <option value={1}>1 ★</option>
                           </select>
                       </div>
                   </div>
                   <div className="p-4 bg-slate-50 border border-slate-200 border-dashed rounded-lg text-center">
-                    <Button variant="outline" size="sm" icon={Plus}>Ajouter Condition</Button>
+                    <Button variant="outline" size="sm" icon={Plus}>Ajouter une autre Condition</Button>
                   </div>
               </div>
             </CardContent>
@@ -156,7 +184,7 @@ export const AutomationPage = () => {
                    <div>
                        <label className="block text-sm font-medium text-slate-700 mb-2">Effectuer cette action :</label>
                        <select 
-                            className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border mb-4"
+                            className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border mb-4 bg-white"
                             value={builderAction}
                             onChange={(e) => setBuilderAction(e.target.value)}
                         >
@@ -207,7 +235,7 @@ export const AutomationPage = () => {
 
           <div className="flex justify-end gap-3">
              <Button variant="ghost" onClick={() => setShowBuilder(false)}>Annuler</Button>
-             <Button variant="primary" icon={Play} onClick={handleCreateWorkflow} isLoading={isCreating}>Activer le Workflow</Button>
+             <Button variant="primary" icon={Play} onClick={handleCreateWorkflow} isLoading={isCreating}>Sauvegarder & Activer</Button>
           </div>
         </div>
       </div>
@@ -291,12 +319,11 @@ export const AutomationPage = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Règles de Workflow</h2>
-            <Button variant="ghost" size="xs" icon={Settings}>Configurer</Button>
         </div>
         {workflows.map(wf => (
           <WorkflowItem key={wf.id} workflow={wf} />
         ))}
-        {workflows.length === 0 && <div className="text-slate-400 italic text-center py-8">Aucun workflow configuré.</div>}
+        {workflows.length === 0 && <div className="text-slate-400 italic text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200">Aucun workflow configuré. Créez-en un pour commencer l'automatisation.</div>}
       </div>
       
       {/* Footer Hint */}
