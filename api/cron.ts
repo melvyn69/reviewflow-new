@@ -2,19 +2,29 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(request: any, response: any) {
-  console.log("🤖 Robot Reviewflow : Démarrage de la séquence...");
+  console.log("🤖 Robot Reviewflow : Démarrage...");
 
+  // TENTATIVE 1 : Noms standards (Backend)
+  // TENTATIVE 2 : Noms Vite (Frontend, parfois injectés)
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   const API_KEY = process.env.API_KEY || process.env.VITE_API_KEY;
 
+  // Debug log (sans afficher les valeurs secrètes)
+  console.log("Env Check:", {
+      url: !!SUPABASE_URL,
+      key: !!SUPABASE_KEY,
+      ai: !!API_KEY
+  });
+
   if (!SUPABASE_URL || !SUPABASE_KEY || !API_KEY) {
     console.error("❌ Configuration manquante");
     return response.status(500).json({ 
-        error: 'Variables d\'environnement manquantes sur le serveur.',
-        debug: { hasUrl: !!SUPABASE_URL, hasKey: !!SUPABASE_KEY, hasAi: !!API_KEY }
+        error: 'Variables manquantes.',
+        details: { hasUrl: !!SUPABASE_URL, hasKey: !!SUPABASE_KEY, hasAi: !!API_KEY }
     });
   }
+
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
