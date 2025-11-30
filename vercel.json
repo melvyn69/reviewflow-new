@@ -2,16 +2,20 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "installCommand": "npm install --legacy-peer-deps",
+  "rewrites": [
+    {
+      "source": "/api/cron",
+      "destination": "/api/cron.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
   "functions": {
     "api/cron.ts": {
       "memory": 1024,
       "maxDuration": 10
     }
-  },
-  "crons": [
-    {
-      "path": "/api/cron",
-      "schedule": "*/10 * * * *"
-    }
-  ]
+  }
 }
