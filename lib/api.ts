@@ -297,7 +297,11 @@ const aiService = {
       generateReply: async (review: Review, options: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
           
-          if (!apiKey) throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
+          console.log("Tentative IA (Clé présente ?):", !!apiKey);
+
+          if (!apiKey) {
+             throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
+          }
 
           try {
               const org = await organizationService.get(); 
@@ -309,12 +313,15 @@ const aiService = {
               }
 
               const genAI = new GoogleGenerativeAI(apiKey);
+              
+              // --- CONFIGURATION DU PROMPT ---
               const brand: BrandSettings = org?.brand || { tone: 'professionnel', description: '', knowledge_base: '', use_emojis: false, language_style: 'formal', signature: '' };
               const industry = org?.industry || 'other';
               const knowledgeBaseContext = brand.knowledge_base ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}` : '';
 
               const prompt = `
                 Rôle: Expert Relation Client pour une entreprise de type "${industry}".
+                
                 [IDENTITÉ MARQUE]
                 - Ton: ${options.tone || brand.tone}
                 - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
@@ -323,19 +330,32 @@ const aiService = {
 
                 TACHE: Rédige une réponse empathique et personnalisée à cet avis.
                 Avis client (${review.rating}/5) de ${review.author_name}: "${review.body}"
-                Réponse (texte seul):
+                
+                Réponse (texte seul, pas de guillemets):
               `;
 
-              try {
-                  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-                  const result = await model.generateContent(prompt);
-                  return result.response.text();
-              } catch (err1: any) {
-                  console.warn("Gemini 1.5 Flash erreur, repli sur Pro...", err1.message);
-                  const modelPro = genAI.getGenerativeModel({ model: "gemini-pro"});
-                  const resultPro = await modelPro.generateContent(prompt);
-                  return resultPro.response.text();
+              // --- STRATÉGIE DE MODÈLE (Vos modèles spécifiques) ---
+              // 1. Gemini 2.5 Flash
+              // 2. Gemini 3 Pro
+              // 3. Gemini 1.5 Flash (Sécurité)
+
+              const models = ["gemini-2.5-flash", "gemini-3-pro", "gemini-1.5-flash"];
+              
+              for (const modelName of models) {
+                  try {
+                      console.log(`Essai modèle: ${modelName}...`);
+                      const model = genAI.getGenerativeModel({ model: modelName });
+                      const result = await model.generateContent(prompt);
+                      const text = result.response.text();
+                      if (text) return text;
+                  } catch (err: any) {
+                      console.warn(`Echec ${modelName}:`, err.message);
+                      // Continue to next model
+                      if (modelName === models[models.length - 1]) throw err; // Throw if last one fails
+                  }
               }
+              
+              throw new Error("Tous les modèles IA ont échoué.");
 
           } catch (e: any) {
               console.error("ERREUR IA FINALE:", e);
@@ -351,15 +371,15 @@ const aiService = {
           const genAI = new GoogleGenerativeAI(apiKey);
           const prompt = `Crée un post ${platform} pour cet avis : "${review.body}" (${review.rating}/5). Ajoute emojis et hashtags.`;
           
-          try {
-             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-             const result = await model.generateContent(prompt);
-             return result.response.text();
-          } catch (e) {
-             const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-             const result = await model.generateContent(prompt);
-             return result.response.text();
+          const models = ["gemini-2.5-flash", "gemini-3-pro", "gemini-1.5-flash"];
+          for (const modelName of models) {
+              try {
+                  const model = genAI.getGenerativeModel({ model: modelName });
+                  const result = await model.generateContent(prompt);
+                  return result.response.text();
+              } catch (e) { continue; }
           }
+          return "Erreur génération post.";
       },
       runCustomTask: async (payload: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
@@ -368,21 +388,22 @@ const aiService = {
           const genAI = new GoogleGenerativeAI(apiKey);
           const prompt = JSON.stringify(payload);
 
-          try {
-             const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-             const result = await model.generateContent(prompt);
-             return JSON.parse(result.response.text());
-          } catch (e) {
-             const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-             const result = await model.generateContent(prompt);
-             return JSON.parse(result.response.text());
+          const models = ["gemini-2.5-flash", "gemini-3-pro", "gemini-1.5-flash"];
+          for (const modelName of models) {
+              try {
+                  const model = genAI.getGenerativeModel({ model: modelName });
+                  const result = await model.generateContent(prompt);
+                  return JSON.parse(result.response.text());
+              } catch (e) { continue; }
           }
+          throw new Error("Erreur Custom Task");
       }
 };
 
 const socialService = {
       connect: async (platform: string) => {
           await new Promise(resolve => setTimeout(resolve, 2000));
+          
           if (isSupabaseConfigured()) {
               const org = await organizationService.get(); 
               if (org) {
@@ -391,6 +412,9 @@ const socialService = {
                   (integrations as any)[key] = true;
                   await organizationService.update({ integrations }); 
               }
+          } else {
+              const key = platform === 'instagram' ? 'instagram_posting' : 'facebook_posting';
+              (INITIAL_ORG.integrations as any)[key] = true;
           }
           return true;
       },
@@ -451,6 +475,11 @@ const automationService = {
                                   status: 'draft',
                                   ai_reply: { text: "Réponse automatique générée...", needs_manual_validation: true, created_at: new Date().toISOString() }
                                }).eq('id', review.id);
+                               actionCount++;
+                           }
+                           if (action.type === 'publish_social') {
+                               const postContent = await aiService.generateSocialPost(review as Review, action.config.platform || 'instagram'); 
+                               await socialService.publish(action.config.platform || 'instagram', postContent); 
                                actionCount++;
                            }
                        }
@@ -560,38 +589,6 @@ const seedCloudDatabase = async () => {
       }
 };
 
-const publicService = {
-    getLocationInfo: async (id: string) => {
-        if (isSupabaseConfigured()) {
-            try {
-                const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
-                if (!error && data) {
-                    return { name: data.name, city: data.city, googleUrl: data.google_review_url || '#' };
-                }
-            } catch (e) { console.warn("Fallback public"); }
-        }
-        return { name: "Notre Établissement", city: "Paris", googleUrl: "#" };
-    },
-    submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
-        if (isSupabaseConfigured()) {
-            try {
-                await supabase!.from('reviews').insert({
-                    location_id: locationId,
-                    rating,
-                    text: feedback,
-                    author_name: contact || 'Client Anonyme',
-                    source: 'direct',
-                    status: 'pending',
-                    received_at: new Date().toISOString(),
-                    language: 'fr',
-                    internal_notes: [{ text: `Feedback: ${feedback}`, author_name: 'Système', created_at: new Date().toISOString() }]
-                });
-            } catch (e) { console.warn("Error saving feedback", e); }
-        }
-        return true;
-    }
-};
-
 // Main API Export
 export const api = {
   auth: authService,
@@ -654,7 +651,46 @@ export const api = {
   },
   onboarding: { checkStatus: async () => ({ googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 }) },
   activity: { getRecent: async () => [] },
-  public: publicService,
-  customers: { list: async () => [] },
-  admin: { getStats: async () => ({ mrr: "0", active_tenants: 0, total_reviews_processed: 0, tenants: [] }) }
+  public: { 
+      getLocationInfo: async (id: string) => {
+          if (isSupabaseConfigured()) {
+              try {
+                  const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
+                  if (!error && data) return { name: data.name, city: data.city, googleUrl: data.google_review_url || '#' };
+              } catch (e) { console.warn("Fallback public"); }
+          }
+          return { name: "Notre Établissement", city: "Paris", googleUrl: "#" };
+      }, 
+      submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
+          console.log("Feedback:", { locationId, rating, feedback });
+          if (isSupabaseConfigured()) {
+              try {
+                  await supabase!.from('reviews').insert({
+                      location_id: locationId,
+                      rating,
+                      text: feedback,
+                      author_name: contact || 'Client Anonyme',
+                      source: 'direct',
+                      status: 'pending',
+                      received_at: new Date().toISOString(),
+                      language: 'fr',
+                      internal_notes: [{
+                          text: `Feedback direct (Funnel): ${feedback}`,
+                          author_name: 'Système',
+                          created_at: new Date().toISOString()
+                      }]
+                  });
+              } catch (e) {
+                  console.warn("Could not save to DB (RLS?), saving locally only.");
+              }
+          }
+          return true;
+      }
+  },
+  customers: {
+      list: async () => { return []; }
+  },
+  admin: {
+      getStats: async () => { return { mrr: "0", active_tenants: 0, total_reviews_processed: 0, tenants: [] }; }
+  }
 };
