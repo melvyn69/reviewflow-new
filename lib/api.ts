@@ -137,84 +137,187 @@ const organizationService = {
 };
 
 const reviewsService = {
-      list: async (filters: any): Promise<Review[]> => {
-          if (isSupabaseConfigured()) {
-              let query = supabase!.from('reviews').select('*').order('received_at', { ascending: false });
-              if (filters.status && filters.status !== 'Tout') query = query.eq('status', filters.status.toLowerCase());
-              if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
-              if (filters.rating && filters.rating !== 'Tout') query = query.eq('rating', parseInt(filters.rating));
-              
-              const { data, error } = await query;
-              if (error) return [];
-              let result = (data || []).map((r: any) => ({
-                  ...r, internal_notes: r.internal_notes || [], analysis: r.analysis || { sentiment: 'neutral', themes: [], keywords: [], flags: {} }
-              })) as Review[];
-              if (filters.search) {
-                  const q = filters.search.toLowerCase();
-                  result = result.filter(r => r.body?.toLowerCase().includes(q) || r.author_name?.toLowerCase().includes(q));
-              }
-              return result;
-          }
-          let data = [...INITIAL_REVIEWS];
-          if (filters.status && filters.status !== 'Tout') data = data.filter(r => r.status === filters.status.toLowerCase());
-          if (filters.source && filters.source !== 'Tout') data = data.filter(r => r.source === filters.source.toLowerCase());
-          if (filters.rating && filters.rating !== 'Tout') data = data.filter(r => r.rating === parseInt(filters.rating.toString()[0]));
-          if (filters.search) {
-              const q = filters.search.toLowerCase();
-              data = data.filter(r => r.body.toLowerCase().includes(q) || r.author_name.toLowerCase().includes(q));
-          }
-          return data;
-      },
-      reply: async (id: string, text: string) => {
-          if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ status: 'sent', posted_reply: text, replied_at: new Date().toISOString() }).eq('id', id);
-          }
-          return true;
-      },
-      saveDraft: async (id: string, text: string) => {
-          if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ status: 'draft', ai_reply: { text, needs_manual_validation: false, created_at: new Date().toISOString() } }).eq('id', id);
-          }
-          return true;
-      },
-      updateStatus: async (id: string, status: ReviewStatus) => {
-          if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ status }).eq('id', id);
-          }
-          return true; 
-      },
-      addNote: async (id: string, text: string) => {
-          const newNote = { id: `n-${Date.now()}`, text, author_name: 'Me', created_at: new Date().toISOString() };
-          if (isSupabaseConfigured()) {
-              const { data: review } = await supabase!.from('reviews').select('internal_notes').eq('id', id).single();
-              const notes = review?.internal_notes || [];
-              await supabase!.from('reviews').update({ internal_notes: [...notes, newNote] }).eq('id', id);
-          }
-          return newNote;
-      },
-      importBulk: async (data: any[], locationId: string) => {
-          if (isSupabaseConfigured()) {
-              const formattedData = data.map(r => ({
-                  location_id: locationId,
-                  source: r.source?.toLowerCase() || 'google',
-                  rating: parseInt(r.rating) || 5,
-                  author_name: r.author_name || 'Anonyme',
-                  body: r.text || '',
-                  language: 'fr',
-                  received_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
-                  status: 'pending',
-                  analysis: {
-                      sentiment: 'neutral',
-                      themes: [],
-                      keywords: [],
-                      flags: { hygiene: false, security: false }
-                  }
-              }));
-              const { error } = await supabase!.from('reviews').insert(formattedData);
-              if (error) throw error;
-          }
-          return data.length;
+  list: async (filters: any): Promise<Review[]> => {
+    if (isSupabaseConfigured()) {
+      let query = supabase!
+        .from('reviews')
+        .select('*')
+        .order('received_at', { ascending: false });
+
+      if (filters.status && filters.status !== 'Tout') {
+        query = query.eq('status', filters.status.toLowerCase());
       }
+      if (filters.source && filters.source !== 'Tout') {
+        query = query.eq('source', filters.source.toLowerCase());
+      }
+      if (filters.rating && filters.rating !== 'Tout') {
+        query = query.eq('rating', parseInt(filters.rating, 10));
+      }
+
+      const { data, error } = await query;
+      if (error || !data) return [];
+
+      let result = (data || []).map((r: any) => ({
+        ...r,
+        internal_notes: r.internal_notes || [],
+        analysis:
+          r.analysis || {
+            sentiment: 'neutral',
+            themes: [],
+            keywords: [],
+            flags: {
+              hygiene: false,
+              discrimination: false,
+              security: false,
+              staff_conflict: false,
+              pricing_issue: false,
+            },
+          },
+      })) as Review[];
+
+      if (filters.search) {
+        const q = (filters.search as string).toLowerCase();
+        result = result.filter(
+          (r) =>
+            r.body?.toLowerCase().includes(q) ||
+            r.author_name?.toLowerCase().includes(q)
+        );
+      }
+
+      return result;
+    }
+
+    // ---- Fallback : données mock quand Supabase n'est pas configuré ----
+    let data = [...INITIAL_REVIEWS];
+
+    if (filters.status && filters.status !== 'Tout') {
+      data = data.filter(
+        (r) => r.status === filters.status.toLowerCase()
+      );
+    }
+    if (filters.source && filters.source !== 'Tout') {
+      data = data.filter(
+        (r) => r.source === filters.source.toLowerCase()
+      );
+    }
+    if (filters.rating && filters.rating !== 'Tout') {
+      const ratingInt = parseInt(filters.rating.toString(), 10);
+      data = data.filter((r) => r.rating === ratingInt);
+    }
+    if (filters.search) {
+      const q = (filters.search as string).toLowerCase();
+      data = data.filter(
+        (r) =>
+          r.body.toLowerCase().includes(q) ||
+          r.author_name.toLowerCase().includes(q)
+      );
+    }
+
+    return data;
+  },
+
+  reply: async (id: string, text: string) => {
+    if (isSupabaseConfigured()) {
+      await supabase!
+        .from('reviews')
+        .update({
+          status: 'sent',
+          posted_reply: text,
+          replied_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+    }
+    return true;
+  },
+
+  saveDraft: async (id: string, text: string) => {
+    if (isSupabaseConfigured()) {
+      await supabase!
+        .from('reviews')
+        .update({
+          status: 'draft',
+          ai_reply: {
+            text,
+            needs_manual_validation: false,
+            created_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', id);
+    }
+    return true;
+  },
+
+  updateStatus: async (id: string, status: ReviewStatus) => {
+    if (isSupabaseConfigured()) {
+      await supabase!
+        .from('reviews')
+        .update({ status })
+        .eq('id', id);
+    }
+    return true;
+  },
+
+  addNote: async (id: string, text: string) => {
+    const newNote = {
+      id: `n-${Date.now()}`,
+      text,
+      author_name: 'Me',
+      created_at: new Date().toISOString(),
+    };
+
+    if (isSupabaseConfigured()) {
+      const { data: review } = await supabase!
+        .from('reviews')
+        .select('internal_notes')
+        .eq('id', id)
+        .single();
+
+      const notes = review?.internal_notes || [];
+      await supabase!
+        .from('reviews')
+        .update({ internal_notes: [...notes, newNote] })
+        .eq('id', id);
+    }
+
+    return newNote;
+  },
+
+  importBulk: async (data: any[], locationId: string) => {
+    if (isSupabaseConfigured()) {
+      const formattedData = data.map((r) => ({
+        location_id: locationId,
+        source: r.source?.toLowerCase() || 'google',
+        rating: parseInt(r.rating, 10) || 5,
+        author_name: r.author_name || 'Anonyme',
+        body: r.text || '',
+        language: 'fr',
+        received_at: r.date
+          ? new Date(r.date).toISOString()
+          : new Date().toISOString(),
+        status: 'pending',
+        analysis: {
+          sentiment: 'neutral',
+          themes: [],
+          keywords: [],
+          flags: {
+            hygiene: false,
+            discrimination: false,
+            security: false,
+            staff_conflict: false,
+            pricing_issue: false,
+          },
+        },
+      }));
+
+      const { error } = await supabase!
+        .from('reviews')
+        .insert(formattedData);
+
+      if (error) throw error;
+    }
+
+    return data.length;
+  },
 };
 
 const aiService = {
