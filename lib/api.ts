@@ -507,24 +507,32 @@ const competitorsService = {
 
 const billingService = {
     createCheckoutSession: async (plan: 'starter' | 'pro') => {
-        try {
-            const res = await fetch('/api/create_checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    plan,
-                    successUrl: window.location.origin + '/#billing?success=true',
-                    cancelUrl: window.location.origin + '/#billing?canceled=true'
-                })
-            });
-            const data = await res.json();
-            if (data.url) return data.url;
-            throw new Error(data.error || 'Erreur inconnue');
-        } catch (e: any) {
-            throw new Error(e.message);
+        // --- NOUVELLE STRATÉGIE NO-CODE ---
+        // On récupère le lien directement depuis les variables d'environnement Vercel
+        const user = await authService.getUser();
+        const email = user?.email || '';
+
+        const linkStarter = import.meta.env.VITE_STRIPE_LINK_STARTER;
+        const linkPro = import.meta.env.VITE_STRIPE_LINK_PRO;
+
+        let url = plan === 'starter' ? linkStarter : linkPro;
+
+        if (!url) {
+            console.error(`Lien manquant pour le plan ${plan}. Vérifiez VITE_STRIPE_LINK_${plan.toUpperCase()}`);
+            throw new Error("La configuration de paiement est incomplète. Veuillez contacter le support.");
         }
+
+        // On ajoute l'email en paramètre pour pré-remplir le formulaire Stripe
+        // Stripe Payment Links supporte ?prefilled_email=...
+        if (email) {
+            const separator = url.includes('?') ? '&' : '?';
+            url = `${url}${separator}prefilled_email=${encodeURIComponent(email)}`;
+        }
+
+        return url;
     },
     createPortalSession: async () => {
+        // Lien vers le portail client générique (à configurer dans Stripe)
         return "https://billing.stripe.com/p/login/test"; 
     },
     getInvoices: async () => {

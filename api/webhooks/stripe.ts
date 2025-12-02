@@ -49,32 +49,45 @@ export default async function handler(req: any, res: any) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         
-        // userId doit être passé dans metadata lors de la création de la session checkout
-        const userId = session.client_reference_id; 
+        // 1. Essayer de récupérer l'ID utilisateur (si passé manuellement)
+        let userId = session.client_reference_id; 
         
-        // On récupère le plan depuis les metadata ou le line_item (selon implémentation create_checkout)
-        // Ici on suppose que create_checkout a envoyé le plan dans metadata
-        // ATTENTION : Stripe met parfois les metadatas à différents endroits
-        
-        // Pour simplifier, on va dire que si le montant > 5000 (50€), c'est PRO, sinon STARTER
-        // Dans une vraie app, on mappe le price_id reçu.
-        const amount = session.amount_total || 0;
-        const planId = amount > 5000 ? 'pro' : 'starter'; 
+        // 2. STRATÉGIE DE SECOURS (Payment Links) : 
+        // Si pas d'ID, on cherche l'utilisateur par son EMAIL dans Supabase
+        if (!userId) {
+            const customerEmail = session.customer_details?.email || session.customer_email;
+            if (customerEmail) {
+                console.log(`🔎 Recherche utilisateur par email : ${customerEmail}`);
+                const { data: user } = await supabase.from('users').select('id, organization_id').eq('email', customerEmail).single();
+                
+                if (user) {
+                    userId = user.id;
+                    console.log(`✅ Utilisateur retrouvé : ${userId} (Org: ${user.organization_id})`);
+                } else {
+                    console.warn(`⚠️ Aucun utilisateur trouvé pour l'email ${customerEmail}`);
+                }
+            }
+        }
 
+        // 3. Activation du plan
         if (userId) {
+            // Re-vérification de l'organisation
             const { data: user } = await supabase.from('users').select('organization_id').eq('id', userId).single();
-            
+
             if (user?.organization_id) {
+                const amount = session.amount_total || 0;
+                // Logique simple : > 50€ = Pro, sinon Starter
+                const planId = amount > 5000 ? 'pro' : 'starter'; 
+
                 await supabase.from('organizations').update({
                     subscription_plan: planId,
                     stripe_customer_id: session.customer as string
                 }).eq('id', user.organization_id);
-                console.log(`✅ Abonnement activé pour l'org ${user.organization_id} : ${planId}`);
-            } else {
-                console.error(`❌ User ${userId} trouvé mais pas d'organisation liée.`);
+                
+                console.log(`🎉 Abonnement ${planId.toUpperCase()} activé pour l'organisation ${user.organization_id}`);
             }
         } else {
-            console.error("❌ Pas de client_reference_id (userId) dans la session Stripe.");
+            console.error("❌ Impossible d'identifier le client pour activer l'abonnement.");
         }
         break;
       }
@@ -84,12 +97,12 @@ export default async function handler(req: any, res: any) {
         await supabase.from('organizations')
             .update({ subscription_plan: 'free' })
             .eq('stripe_customer_id', subscription.customer as string);
-        console.log(`⚠️ Abonnement supprimé pour le customer ${subscription.customer}`);
+        console.log(`⚠️ Abonnement résilié pour le client Stripe ${subscription.customer}`);
         break;
       }
 
       default:
-        console.log(`ℹ️ Type d'événement non géré : ${event.type}`);
+        console.log(`ℹ️ Type d'événement ignoré : ${event.type}`);
     }
 
     res.json({ received: true });
