@@ -466,6 +466,8 @@ const publicService = {
         // 1. Tenter via l'API Serverless (meilleur pour la sécurité, contourne RLS)
         // 2. Si échoue (ex: environnement local sans API), tenter en direct Supabase (nécessite RLS ouvert)
         
+        let apiError: any = null;
+
         try {
             const response = await fetch('/api/submit-review', {
                 method: 'POST',
@@ -477,13 +479,21 @@ const publicService = {
             if (response.status === 404) throw new Error("API Route not found");
 
             if (!response.ok) {
-                const err = await response.json().catch(() => ({}));
-                throw new Error(err.error || "Erreur API");
+                // Tenter de lire le message d'erreur JSON
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    const err = await response.json();
+                    throw new Error(err.error || "Erreur API inconnue");
+                } else {
+                    const text = await response.text();
+                    throw new Error(`Erreur API (${response.status}): ${text.substring(0, 50)}`);
+                }
             }
             return true;
 
-        } catch (apiError) {
-            console.warn("API Submit failed, attempting direct DB insert...", apiError);
+        } catch (e) {
+            apiError = e;
+            console.warn("API Submit failed, attempting direct DB insert...", e);
             
             // FALLBACK : Insertion directe
             const db = requireSupabase();
@@ -494,8 +504,8 @@ const publicService = {
                 location_id: locationId,
                 rating: rating,
                 text: finalBody,
-                body: finalBody,
-                author_name: contact || 'Client Anonyme',
+                body: finalBody, // Doublon pour compatibilité
+                author_name: contact || 'Client Anonyme (Funnel)',
                 source: 'direct',
                 status: 'pending',
                 received_at: new Date().toISOString(),
@@ -504,14 +514,17 @@ const publicService = {
                     sentiment: rating >= 4 ? 'positive' : 'negative', 
                     themes: tags || [], 
                     keywords: [], 
-                    flags: {} 
+                    flags: { hygiene: false, security: false } 
                 }
             };
 
             const { error } = await db.from('reviews').insert(newReview);
             if (error) {
                 console.error("DB Insert Error:", error);
-                throw new Error("Impossible d'enregistrer l'avis (Erreur API & Base de données).");
+                // Si les deux échouent, on retourne une erreur explicite
+                // On peut mentionner l'erreur initiale API pour le contexte
+                const msg = apiError ? `${apiError.message}` : error.message;
+                throw new Error(`Échec de l'envoi. Cause: ${msg}`);
             }
             return true;
         }

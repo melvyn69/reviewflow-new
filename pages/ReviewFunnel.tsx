@@ -90,7 +90,8 @@ export const ReviewFunnel = () => {
             setStep('success');
         } catch (error: any) {
             console.error("Feedback submission error", error);
-            toast.error("Erreur lors de l'envoi. Réessayez.");
+            // Afficher le message d'erreur réel pour le débogage
+            toast.error(`Erreur: ${error.message || "Problème technique"}`);
         } finally {
             setLoading(false);
         }

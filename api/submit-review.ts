@@ -17,17 +17,26 @@ export default async function handler(req: any, res: any) {
   }
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  // Utilisation de la clé SERVICE_ROLE pour avoir les droits d'écriture, ou fallback sur les autres clés
+  // Utilisation de la clé SERVICE_ROLE pour avoir les droits d'écriture
+  // NOTE: Assurez-vous que SUPABASE_SERVICE_ROLE_KEY est défini dans vos variables d'environnement Vercel
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return res.status(500).json({ error: 'Configuration Supabase manquante côté serveur.' });
+    console.error("Configuration Supabase manquante sur le serveur.");
+    return res.status(500).json({ error: 'Configuration serveur incomplète (Clés Supabase).' });
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  // Création d'un client propre pour chaque requête sans persistance de session
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false
+      }
+  });
 
   try {
-    // Parsing manuel du body si nécessaire (parfois req.body est une string sur certaines plateformes)
+    // Parsing manuel du body si nécessaire
     let body = req.body;
     if (typeof body === 'string') {
         try {
@@ -51,7 +60,7 @@ export default async function handler(req: any, res: any) {
         location_id: locationId,
         rating: rating,
         text: finalBody,
-        body: finalBody, // Doublon pour compatibilité
+        body: finalBody, 
         author_name: contact || 'Client Anonyme (Funnel)',
         source: 'direct',
         status: 'pending',
@@ -68,13 +77,15 @@ export default async function handler(req: any, res: any) {
     const { data, error } = await supabase.from('reviews').insert(newReview).select();
 
     if (error) {
-        throw error;
+        console.error("Supabase Insert Error:", error);
+        // On retourne l'erreur exacte pour le débogage client
+        return res.status(500).json({ error: `Erreur Base de données: ${error.message}` });
     }
 
     return res.status(200).json({ success: true, data });
 
   } catch (error: any) {
-    console.error('Erreur insertion avis:', error);
-    return res.status(500).json({ error: error.message || "Erreur serveur lors de l'enregistrement de l'avis." });
+    console.error('Erreur insertion avis handler:', error);
+    return res.status(500).json({ error: error.message || "Erreur interne du serveur." });
   }
 }
