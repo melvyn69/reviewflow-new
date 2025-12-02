@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": true,
+    "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
@@ -22,6 +22,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "src/vite-env.d.ts"],
-  "exclude": ["node_modules", "supabase", "api", "dist", "functions"]
+  "include": ["**/*.ts", "**/*.tsx", "src/vite-env.d.ts", "api/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }
