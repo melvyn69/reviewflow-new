@@ -2,19 +2,24 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  // Charge toutes les variables d'environnement
+  // Charge les variables d'environnement
+  // On utilise '.' au lieu de process.cwd() pour éviter les erreurs de typage
   const env = loadEnv(mode, '.', '');
 
   return {
     plugins: [react()],
-    // Polyfill global de process.env pour le navigateur
-    // Cela permet au SDK @google/genai de fonctionner sans erreur
     define: {
-      'process.env': env,
+      // Polyfill essentiel pour le SDK Google GenAI
+      // On injecte explicitement API_KEY pour qu'elle soit disponible via process.env.API_KEY
+      'process.env': {
+        API_KEY: env.API_KEY || env.VITE_API_KEY,
+        NODE_ENV: JSON.stringify(mode),
+      },
     },
     build: {
-      commonjsOptions: {
-        transformMixedEsModules: true,
+      rollupOptions: {
+        // On s'assure que le bundler ignore les fichiers backend
+        external: [/\/api\/.*/, /\/supabase\/.*/],
       },
     },
   };
