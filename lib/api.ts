@@ -74,12 +74,10 @@ const authService = {
 
             if (orgError) {
                 console.error("Error creating org:", orgError);
-                // Fallback: User created but org failed. User can retry later or support fixes it.
                 return;
             }
 
             // 3. Link User to Organization
-            // Note: We use update because public.users row already exists via Trigger
             const { error: linkError } = await db.from('users').update({
                 role: 'admin',
                 organization_id: org.id
@@ -112,7 +110,8 @@ const authService = {
 
 const organizationService = {
       get: async (): Promise<Organization | null> => {
-          if (!isSupabaseConfigured()) return INITIAL_ORG; // Keep fallback only for dev environment without env vars
+          // PROD: Fail silenty or return null if not configured, do NOT return mock data to avoid confusion
+          if (!isSupabaseConfigured()) return null;
 
           try {
               const { data: { user } } = await supabase!.auth.getUser();
@@ -146,7 +145,7 @@ const organizationService = {
               const { error } = await requireSupabase().from('organizations').update(data).eq('id', user.organization_id);
               if (error) throw error;
           }
-          return INITIAL_ORG;
+          return INITIAL_ORG; // fallback return type match
       },
       initiateGoogleAuth: async (clientId: string) => { 
           alert("Nécessite une App Google Cloud vérifiée avec scope 'business.manage'.");
@@ -161,8 +160,6 @@ const reviewsService = {
           if (!isSupabaseConfigured()) return [];
 
           let query = supabase!.from('reviews').select('*').order('received_at', { ascending: false });
-          
-          // Implicitly filtered by RLS policies
           
           if (filters.status && filters.status !== 'Tout') query = query.eq('status', filters.status.toLowerCase());
           if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
@@ -214,11 +211,9 @@ const reviewsService = {
           };
           
           const db = requireSupabase();
-          // Get existing
           const { data: review } = await db.from('reviews').select('internal_notes').eq('id', id).single();
           const notes = review?.internal_notes || [];
           
-          // Update
           const { error } = await db.from('reviews').update({ internal_notes: [...notes, newNote] }).eq('id', id);
           if (error) throw error;
 
@@ -250,7 +245,8 @@ const reviewsService = {
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
-          const apiKey = process.env.API_KEY;
+          // Utilisation directe de la clé API pour le client side, ou proxy via server side si besoin de sécurité accrue
+          const apiKey = process.env.API_KEY; 
           
           if (!apiKey) {
              throw new Error("Clé API Google Gemini manquante (process.env.API_KEY).");
@@ -267,7 +263,7 @@ const aiService = {
                 
                 [IDENTITÉ DE MARQUE]
                 - Ton: ${options.tone || brand.tone}
-                - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
+                - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
                 - Emojis: ${brand.use_emojis ? 'Oui, modérément' : 'Non'}
                 - Longueur: ${options.length || 'Moyenne (2-3 phrases)'}
                 ${knowledgeBaseContext}
@@ -290,7 +286,6 @@ const aiService = {
 
               const text = response.text || "";
 
-              // Track usage
               if (isSupabaseConfigured() && org) {
                   await supabase!.from('organizations').update({ ai_usage_count: (org.ai_usage_count || 0) + 1 }).eq('id', org.id);
               }
@@ -371,7 +366,6 @@ const seedCloudDatabase = async () => {
       if (!user) throw new Error("Vous devez être connecté pour initialiser la DB.");
       
       try {
-          // Check if user already has org
           const { data: existingUser } = await db.from('users').select('organization_id').eq('id', user.id).single();
           
           let orgId = existingUser?.organization_id;
@@ -472,7 +466,7 @@ const publicService = {
     }
 };
 
-// --- MOCK SERVICES FOR NON-CRITICAL FEATURES ---
+// --- MOCK SERVICES FOR NON-CRITICAL FEATURES (ANALYTICS) ---
 const customersService = {
     list: async (): Promise<Customer[]> => {
         return Array(20).fill(null).map((_, i) => ({
@@ -507,11 +501,11 @@ export const api = {
   social: { connect: async () => true, publish: async (platform: string, caption: string) => true },
   automation: automationService,
   seedCloudDatabase,
-  analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS }, // Analytics often heavy to query in SQL for this scale, keep mock for dashboard speed in V1
+  analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS }, 
   competitors: { list: async () => INITIAL_COMPETITORS, add: async () => INITIAL_COMPETITORS[0] },
   notifications: { list: async () => [], markAllRead: async () => true, sendAlert: async () => {} },
   locations: locationsService,
-  team: { list: async () => [], invite: async () => true, remove: async () => true },
+  team: { list: async () => [], invite: async (email: string, role: string) => true, remove: async (id: string) => true },
   billing: { 
       getInvoices: async () => [{id: 'INV-001', date: '2023-10-01', amount: '79.00€', status: 'Paid'}], 
       downloadInvoice: () => {}, 
