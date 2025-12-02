@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, MessageSquare, Instagram, Facebook, Trash2, Save } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, MessageSquare, Instagram, Facebook, Share2, Trash2, Save } from 'lucide-react';
 
 export const SettingsPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -63,8 +63,27 @@ export const SettingsPage = () => {
 
   const handleSaveBrand = async () => {
       if (!org) return;
-      await api.organization.update({ brand: org.brand });
-      toast.success("Identité de marque sauvegardée");
+      
+      // CORRECTION CRITIQUE : On s'assure que l'objet brand est complet avec la knowledge base
+      // Si knowledge_base est undefined, on met une chaine vide pour éviter les soucis
+      const currentKnowledgeBase = org.brand?.knowledge_base || '';
+      
+      const updatedBrand: BrandSettings = { 
+          ...org.brand!, // Force non-null car initialisé dans loadOrg
+          knowledge_base: currentKnowledgeBase
+      };
+      
+      try {
+          await api.organization.update({ brand: updatedBrand });
+          
+          // Mise à jour de l'état local pour refléter la sauvegarde
+          setOrg(prev => prev ? ({ ...prev, brand: updatedBrand }) : null);
+          
+          toast.success("Identité de marque et Base de Connaissance sauvegardées !");
+      } catch (e) {
+          console.error(e);
+          toast.error("Erreur lors de la sauvegarde de la marque.");
+      }
   };
 
   const handleSaveNotifications = async () => {
@@ -162,7 +181,6 @@ export const SettingsPage = () => {
 
   const handleToggleIntegration = async (key: string, current: boolean) => {
       if (!org) return;
-      // In a real app this would trigger OAuth flow
       const updatedIntegrations = { ...org.integrations, [key]: !current };
       setOrg({ ...org, integrations: updatedIntegrations });
       await api.organization.update({ integrations: updatedIntegrations });
@@ -330,7 +348,13 @@ export const SettingsPage = () => {
                             className="w-full p-3 border border-slate-200 rounded-lg text-sm h-32 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                             placeholder="Entrez ici les faits que l'IA doit connaître : 'Nous sommes fermés le lundi', 'Le Wifi est gratuit', 'Menu enfant à 12€'..."
                             value={org.brand.knowledge_base || ''}
-                            onChange={(e) => setOrg({...org, brand: {...org.brand!, knowledge_base: e.target.value}})}
+                            onChange={(e) => setOrg(prev => {
+                                if (!prev) return null;
+                                return { 
+                                    ...prev, 
+                                    brand: { ...prev.brand!, knowledge_base: e.target.value } 
+                                };
+                            })}
                           />
                           <p className="text-xs text-slate-500 mt-1">Ces informations seront utilisées par l'IA pour répondre aux questions spécifiques.</p>
                       </div>
