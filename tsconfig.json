@@ -23,5 +23,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "src/vite-env.d.ts"],
-  "exclude": ["node_modules", "supabase", "api"]
+  "exclude": ["node_modules", "supabase", "api", "dist", "functions"]
 }
