@@ -16,12 +16,12 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "src/vite-env.d.ts"],
-  "exclude": ["node_modules", "supabase"]
+  "exclude": ["node_modules", "supabase", "api"]
 }
