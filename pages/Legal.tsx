@@ -1,15 +1,15 @@
 import React from 'react';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui';
 
 const PageLayout = ({ title, children }: { title: string, children?: React.ReactNode }) => {
-    const history = useHistory();
+    const navigate = useNavigate();
     
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-3xl mx-auto bg-white shadow-sm rounded-2xl p-8 md:p-12">
-                <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-slate-500" onClick={() => history.push('/')}>
+                <Button variant="ghost" className="mb-6 pl-0 hover:bg-transparent text-slate-500" onClick={() => navigate('/')}>
                     <ArrowLeft className="h-4 w-4 mr-2" /> Retour à l'accueil
                 </Button>
                 <h1 className="text-3xl font-bold text-slate-900 mb-8 pb-4 border-b border-slate-100">{title}</h1>

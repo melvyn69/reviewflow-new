@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, ThumbsUp, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, ExternalLink, MessageSquare, ThumbsDown, Heart } from 'lucide-react';
 import { Button, Card, Input } from '../components/ui';
 import { api } from '../lib/api';
+import { useParams } from 'react-router-dom';
 
 const POSITIVE_TAGS = ['Accueil', 'Rapidité', 'Propreté', 'Qualité', 'Ambiance', 'Conseil'];
 const NEGATIVE_TAGS = ['Attente', 'Service', 'Prix', 'Bruit', 'Hygiène', 'Qualité'];
@@ -14,9 +15,9 @@ const Confetti = () => (
     </div>
 );
 
-export const ReviewFunnel = (props: any) => {
-    // Extract locationId from props.match.params in react-router v5
-    const { locationId } = props.match?.params || {};
+export const ReviewFunnel = () => {
+    // Extract locationId from URL using useParams hook (v6)
+    const { locationId } = useParams();
     
     const [step, setStep] = useState<'rating' | 'details' | 'redirect' | 'success'>('rating');
     const [rating, setRating] = useState(0);

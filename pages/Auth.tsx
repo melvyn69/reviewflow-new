@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
 import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, Copy, HelpCircle, ArrowLeft } from 'lucide-react';
-import { useHistory, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface AuthPageProps {
   onLoginSuccess: () => void;
@@ -16,7 +16,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [currentUrl, setCurrentUrl] = useState('');
-  const history = useHistory();
+  const navigate = useNavigate();
   const location = useLocation();
   
   // Form State
@@ -43,9 +43,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
           } else {
               setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '));
           }
-          history.replace(location.pathname);
+          navigate(location.pathname, { replace: true });
       }
-  }, [location, history]);
+  }, [location, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,7 +112,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
         <div className="p-6 sm:p-8 pb-0 text-center">
            <div 
              className="h-12 w-12 sm:h-14 sm:w-14 bg-indigo-600 rounded-xl mx-auto flex items-center justify-center mb-4 sm:mb-6 shadow-lg shadow-indigo-200 cursor-pointer hover:bg-indigo-700 transition-colors"
-             onClick={() => history.push('/')}
+             onClick={() => navigate('/')}
            >
               <svg className="h-6 w-6 sm:h-8 sm:w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -249,7 +249,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                 <p className="text-sm text-slate-600">
                 {isLogin ? "Pas de compte ? " : "Déjà inscrit ? "}
                 <button 
-                    onClick={() => history.push(isLogin ? '/register' : '/login')}
+                    onClick={() => navigate(isLogin ? '/register' : '/login')}
                     className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors"
                 >
                     {isLogin ? 'Essai gratuit' : 'Se connecter'}

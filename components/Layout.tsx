@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useHistory } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Inbox, 
@@ -159,7 +159,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-  const history = useHistory();
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.auth.getUser().then(setUser);
@@ -186,7 +186,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
 
   const handleSearch = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
-          history.push(`/inbox?search=${encodeURIComponent(searchTerm)}`);
+          navigate(`/inbox?search=${encodeURIComponent(searchTerm)}`);
       }
   }
 
@@ -248,7 +248,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
                                     className={`p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3 ${!notif.read ? 'bg-indigo-50/30' : ''}`}
                                     onClick={() => {
                                         if (notif.link) {
-                                            history.push(notif.link);
+                                            navigate(notif.link);
                                             setShowNotifications(false);
                                         }
                                     }}

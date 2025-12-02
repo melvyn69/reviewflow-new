@@ -25,7 +25,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { Button, Badge } from '../components/ui';
-import { useHistory, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const SourceIcon = ({ source }: { source: string }) => {
   const colors: Record<string, string> = {
@@ -144,7 +144,7 @@ export const InboxPage = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
-  const history = useHistory();
+  const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const searchQuery = searchParams.get('search') || '';
@@ -211,7 +211,7 @@ export const InboxPage = () => {
       setStatusFilter('Tout');
       setSourceFilter('Tout');
       setRatingFilter('Tout');
-      history.push('/inbox'); 
+      navigate('/inbox'); 
   };
 
 const handleGenerateReply = async () => {
@@ -345,7 +345,7 @@ const handleGenerateReply = async () => {
           
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center">
              {searchQuery && (
-                 <Badge variant="neutral" onClick={() => history.push('/inbox')} className="mr-2 cursor-pointer shrink-0">Recherche: {searchQuery} <span className="ml-1 opacity-50">×</span></Badge>
+                 <Badge variant="neutral" onClick={() => navigate('/inbox')} className="mr-2 cursor-pointer shrink-0">Recherche: {searchQuery} <span className="ml-1 opacity-50">×</span></Badge>
              )}
              <FilterSelect 
                 label="Statut" 
@@ -558,7 +558,7 @@ const handleGenerateReply = async () => {
                             <Lock className="h-8 w-8 text-amber-500 mx-auto mb-4" />
                             <h3 className="font-bold text-amber-900 text-lg mb-2">Limite Gratuite Atteinte</h3>
                             <p className="text-sm text-amber-800 mb-6 max-w-xs mx-auto">Vous avez atteint la limite quotidienne d'IA. Passez en Pro pour l'illimité.</p>
-                            <Button variant="primary" onClick={() => history.push('/billing')} className="bg-amber-600 hover:bg-amber-700 text-white border-none shadow-lg shadow-amber-200">Passer Pro</Button>
+                            <Button variant="primary" onClick={() => navigate('/billing')} className="bg-amber-600 hover:bg-amber-700 text-white border-none shadow-lg shadow-amber-200">Passer Pro</Button>
                         </div>
                      ) : (
                         <>
@@ -610,7 +610,7 @@ const handleGenerateReply = async () => {
                                             ) : (
                                                 <div className="text-center py-4 text-xs text-slate-400">
                                                     Aucun modèle.<br/>
-                                                    <span className="text-indigo-500 cursor-pointer hover:underline" onClick={() => history.push('/settings')}>En créer un</span>
+                                                    <span className="text-indigo-500 cursor-pointer hover:underline" onClick={() => navigate('/settings')}>En créer un</span>
                                                 </div>
                                             )}
                                         </div>
