@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link } from 'lucide-react';
 
 // --- GOOGLE CONNECT WIZARD COMPONENT ---
 const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onConnect: () => void }) => {
@@ -124,8 +123,10 @@ export const SettingsPage = () => {
 
   // Location Modal State
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [newLocationName, setNewLocationName] = useState('');
-  const [newLocationCity, setNewLocationCity] = useState('');
+  const [editLocationId, setEditLocationId] = useState<string | null>(null);
+  const [locationName, setLocationName] = useState('');
+  const [locationCity, setLocationCity] = useState('');
+  const [locationGoogleUrl, setLocationGoogleUrl] = useState('');
 
   // Google Connect State
   const [showGoogleWizard, setShowGoogleWizard] = useState(false);
@@ -190,13 +191,10 @@ export const SettingsPage = () => {
       
       try {
           await api.organization.update({ brand: updatedBrand });
-          
           setOrg(prev => prev ? ({ ...prev, brand: updatedBrand }) : null);
-          
-          toast.success("Identité de marque et Base de Connaissance sauvegardées !");
+          toast.success("Identité de marque sauvegardée !");
       } catch (e) {
-          console.error(e);
-          toast.error("Erreur lors de la sauvegarde de la marque.");
+          toast.error("Erreur lors de la sauvegarde.");
       }
   };
 
@@ -218,17 +216,43 @@ export const SettingsPage = () => {
       }
   };
 
-  const handleAddLocation = async () => {
-      if (!newLocationName || !newLocationCity) return;
+  const openAddLocation = () => {
+      setEditLocationId(null);
+      setLocationName('');
+      setLocationCity('');
+      setLocationGoogleUrl('');
+      setShowLocationModal(true);
+  };
+
+  const openEditLocation = (loc: Location) => {
+      setEditLocationId(loc.id);
+      setLocationName(loc.name);
+      setLocationCity(loc.city);
+      setLocationGoogleUrl(loc.google_review_url || '');
+      setShowLocationModal(true);
+  };
+
+  const handleSaveLocation = async () => {
+      if (!locationName || !locationCity) return;
+      
       try {
-          await api.locations.create({ name: newLocationName, city: newLocationCity, address: 'À compléter', country: 'France' });
+          if (editLocationId) {
+             // Update logic (Not implemented in API mock, assuming similar to create for UI)
+             // In real app: await api.locations.update(editLocationId, ...)
+             toast.success("Établissement mis à jour (Simulé)");
+             // Update local state for immediate feedback
+             if (org) {
+                 const updatedLocs = org.locations.map(l => l.id === editLocationId ? { ...l, name: locationName, city: locationCity, google_review_url: locationGoogleUrl } : l);
+                 setOrg({ ...org, locations: updatedLocs });
+             }
+          } else {
+             await api.locations.create({ name: locationName, city: locationCity, address: 'À compléter', country: 'France', google_review_url: locationGoogleUrl });
+             toast.success("Établissement ajouté");
+             loadOrg();
+          }
           setShowLocationModal(false);
-          setNewLocationName('');
-          setNewLocationCity('');
-          toast.success("Établissement ajouté");
-          loadOrg();
       } catch (e) {
-          toast.error("Erreur lors de l'ajout");
+          toast.error("Erreur lors de la sauvegarde");
       }
   };
 
@@ -633,7 +657,7 @@ export const SettingsPage = () => {
       {activeTab === 'locations' && (
           <div className="space-y-6 animate-in fade-in">
               <div className="flex justify-end">
-                  <Button icon={Plus} onClick={() => setShowLocationModal(true)}>Ajouter un établissement</Button>
+                  <Button icon={Plus} onClick={openAddLocation}>Ajouter un établissement</Button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {org.locations.map(loc => (
@@ -648,9 +672,12 @@ export const SettingsPage = () => {
                                       <p className="text-xs text-slate-500">{loc.city}</p>
                                   </div>
                               </div>
-                              <Badge variant={loc.connection_status === 'connected' ? 'success' : 'neutral'}>
-                                  {loc.connection_status === 'connected' ? 'Connecté' : 'Déconnecté'}
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                  <Badge variant={loc.connection_status === 'connected' ? 'success' : 'neutral'}>
+                                      {loc.connection_status === 'connected' ? 'Connecté' : 'Déconnecté'}
+                                  </Badge>
+                                  <Button size="xs" variant="ghost" icon={Edit} onClick={() => openEditLocation(loc)}>Modifier</Button>
+                              </div>
                           </CardContent>
                       </Card>
                   ))}
@@ -834,19 +861,33 @@ export const SettingsPage = () => {
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <Card className="w-full max-w-md animate-in zoom-in-95">
                   <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 pb-4">
-                      <CardTitle>Nouvel Établissement</CardTitle>
+                      <CardTitle>{editLocationId ? 'Modifier Établissement' : 'Nouvel Établissement'}</CardTitle>
                       <button onClick={() => setShowLocationModal(false)}><X className="h-5 w-5 text-slate-400" /></button>
                   </CardHeader>
                   <CardContent className="pt-6 space-y-4">
                       <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Nom</label>
-                          <Input placeholder="ex: Restaurant Le Gourmet" value={newLocationName} onChange={e => setNewLocationName(e.target.value)} />
+                          <Input placeholder="ex: Restaurant Le Gourmet" value={locationName} onChange={e => setLocationName(e.target.value)} />
                       </div>
                       <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Ville</label>
-                          <Input placeholder="ex: Paris" value={newLocationCity} onChange={e => setNewLocationCity(e.target.value)} />
+                          <Input placeholder="ex: Paris" value={locationCity} onChange={e => setLocationCity(e.target.value)} />
                       </div>
-                      <Button className="w-full mt-2" onClick={handleAddLocation}>Ajouter</Button>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-2">
+                              <Link className="h-4 w-4 text-indigo-600"/>
+                              Lien Google Avis
+                          </label>
+                          <Input 
+                            placeholder="ex: https://g.page/r/YOUR_CODE/review" 
+                            value={locationGoogleUrl} 
+                            onChange={e => setLocationGoogleUrl(e.target.value)} 
+                          />
+                          <p className="text-xs text-slate-500 mt-1">Utilisé pour la redirection après 5 étoiles.</p>
+                      </div>
+                      <Button className="w-full mt-2" onClick={handleSaveLocation}>
+                          {editLocationId ? 'Enregistrer' : 'Ajouter'}
+                      </Button>
                   </CardContent>
               </Card>
           </div>

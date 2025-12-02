@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Star, ThumbsUp, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, ExternalLink, MessageSquare, ThumbsDown, Heart } from 'lucide-react';
-import { Button, Card, Input } from '../components/ui';
+import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle } from 'lucide-react';
+import { Button, Input } from '../components/ui';
 import { api } from '../lib/api';
 import { useParams } from 'react-router-dom';
 
@@ -9,24 +9,22 @@ const NEGATIVE_TAGS = ['Attente', 'Service', 'Prix', 'Bruit', 'Hygiène', 'Quali
 
 const Confetti = () => (
     <div className="confetti-container">
-        {[...Array(15)].map((_, i) => (
+        {[...Array(20)].map((_, i) => (
             <div key={i} className="confetti"></div>
         ))}
     </div>
 );
 
 export const ReviewFunnel = () => {
-    // Extract locationId from URL using useParams hook (v6)
     const { locationId } = useParams();
     
-    const [step, setStep] = useState<'rating' | 'details' | 'redirect' | 'success'>('rating');
+    const [step, setStep] = useState<'rating' | 'details' | 'redirecting' | 'success'>('rating');
     const [rating, setRating] = useState(0);
     const [feedback, setFeedback] = useState('');
     const [contact, setContact] = useState('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     
-    // Type checking for location info
     const [locationInfo, setLocationInfo] = useState<{name: string, city: string, googleUrl?: string} | null>(null);
 
     useEffect(() => {
@@ -39,10 +37,29 @@ export const ReviewFunnel = () => {
 
     const handleRatingSelect = (score: number) => {
         setRating(score);
-        // Step transition with slight delay for visual feedback
-        setTimeout(() => {
-            setStep('details');
-        }, 300);
+        
+        if (score >= 4) {
+            // FLUX POSITIF : Redirection directe Google
+            setStep('redirecting');
+            
+            // Délai pour l'animation confetti avant redirection
+            setTimeout(() => {
+                if (locationInfo?.googleUrl && locationInfo.googleUrl !== '#') {
+                    window.location.href = locationInfo.googleUrl;
+                } else {
+                    // Fallback si pas d'URL configurée
+                    alert("Lien Google non configuré dans les paramètres de l'établissement.");
+                }
+            }, 2500);
+
+            // On envoie quand même une notif "intent" au backend si besoin (optionnel)
+            // api.public.submitFeedback(...) 
+        } else {
+            // FLUX NÉGATIF : Formulaire interne
+            setTimeout(() => {
+                setStep('details');
+            }, 300);
+        }
     };
 
     const toggleTag = (tag: string) => {
@@ -57,39 +74,27 @@ export const ReviewFunnel = () => {
         setLoading(true);
         try {
             if (locationId) {
-                // Include tags in the submission
                 await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags);
             }
         } catch (error) {
-            console.warn("Feedback submission mock fallback", error);
+            console.warn("Feedback submission error", error);
         } finally {
             setLoading(false);
-            
-            if (rating >= 4) {
-                setStep('redirect');
-            } else {
-                setStep('success');
-            }
+            setStep('success');
         }
-    };
-
-    const handleCopyToClipboard = () => {
-        navigator.clipboard.writeText(feedback);
-        // Could show a small tooltip here
     };
 
     if (!locationInfo) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="h-10 w-10 animate-spin text-indigo-600"/></div>;
 
-    const isPositive = rating >= 4;
-    const currentTags = isPositive ? POSITIVE_TAGS : NEGATIVE_TAGS;
+    const currentTags = NEGATIVE_TAGS; // On n'affiche les tags que pour le flux négatif maintenant
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-            {step === 'redirect' && <Confetti />}
+            {step === 'redirecting' && <Confetti />}
             
-            <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden relative z-10">
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden relative z-10 min-h-[500px] flex flex-col">
                 {/* Header Image / Brand */}
-                <div className="bg-indigo-600 h-32 relative flex items-center justify-center">
+                <div className="bg-indigo-600 h-32 relative flex items-center justify-center shrink-0">
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
                      <div className="absolute -bottom-8 bg-white p-1 rounded-full shadow-lg">
                         <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-bold text-2xl border-4 border-white">
@@ -98,7 +103,7 @@ export const ReviewFunnel = () => {
                      </div>
                 </div>
 
-                <div className="pt-12 pb-8 px-8 text-center">
+                <div className="pt-12 pb-8 px-8 text-center flex-1 flex flex-col justify-center">
                     <h1 className="text-xl font-bold text-slate-900 mb-1">{locationInfo.name}</h1>
                     <p className="text-sm text-slate-500 flex items-center justify-center gap-1 mb-8">
                         <MapPin className="h-3 w-3" /> {locationInfo.city}
@@ -125,7 +130,26 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
-                    {/* STEP 2: DETAILS (Tags + Text) */}
+                    {/* STEP 2: REDIRECTING (Positive) */}
+                    {step === 'redirecting' && (
+                        <div className="animate-in zoom-in-95 duration-500 py-8">
+                             <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-6 animate-bounce">
+                                <Heart className="h-12 w-12 fill-current" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-4">Merci, c'est génial !</h2>
+                            <p className="text-slate-600 mb-8 text-lg">
+                                Nous vous redirigeons vers Google pour partager votre expérience...
+                            </p>
+                            <div className="flex justify-center">
+                                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                            </div>
+                            <p className="text-xs text-slate-400 mt-8">
+                                Si la redirection ne fonctionne pas, <a href={locationInfo.googleUrl || '#'} className="underline text-indigo-600">cliquez ici</a>.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* STEP 3: DETAILS (Negative Only) */}
                     {step === 'details' && (
                         <div className="animate-in slide-in-from-right-8 duration-300 text-left">
                             <div className="text-center mb-6">
@@ -134,7 +158,7 @@ export const ReviewFunnel = () => {
                                     <button onClick={() => setStep('rating')} className="ml-2 text-xs underline text-amber-400 font-normal">Modifier</button>
                                 </div>
                                 <h2 className="text-lg font-bold text-slate-800">
-                                    {isPositive ? "Qu'avez-vous le plus aimé ?" : "Que pouvons-nous améliorer ?"}
+                                    Que pouvons-nous améliorer ?
                                 </h2>
                             </div>
 
@@ -160,23 +184,21 @@ export const ReviewFunnel = () => {
                                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Message (Optionnel)</label>
                                     <textarea 
                                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[80px] transition-all"
-                                        placeholder={isPositive ? "Racontez-nous votre expérience..." : "Dites-nous en plus..."}
+                                        placeholder="Dites-nous en plus..."
                                         value={feedback}
                                         onChange={e => setFeedback(e.target.value)}
                                     />
                                 </div>
                                 
-                                {!isPositive && (
-                                    <div className="animate-in fade-in">
-                                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Email (pour vous répondre)</label>
-                                        <Input 
-                                            placeholder="votre@email.com"
-                                            value={contact}
-                                            onChange={e => setContact(e.target.value)}
-                                            className="rounded-xl"
-                                        />
-                                    </div>
-                                )}
+                                <div className="animate-in fade-in">
+                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Email (pour vous répondre)</label>
+                                    <Input 
+                                        placeholder="votre@email.com"
+                                        value={contact}
+                                        onChange={e => setContact(e.target.value)}
+                                        className="rounded-xl"
+                                    />
+                                </div>
 
                                 <Button 
                                     onClick={handleSubmitFeedback} 
@@ -190,48 +212,7 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
-                    {/* STEP 3: REDIRECT (High Rating) */}
-                    {step === 'redirect' && (
-                        <div className="animate-in zoom-in-95 duration-500 text-center">
-                            <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4 animate-bounce">
-                                <Heart className="h-8 w-8 fill-current" />
-                            </div>
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">Merci, c'est génial !</h2>
-                            <p className="text-slate-600 mb-8 leading-relaxed">
-                                Votre avis compte énormément pour nous. Pourriez-vous prendre 10 secondes pour le poster sur Google ? Cela nous aide beaucoup.
-                            </p>
-                            
-                            {feedback && (
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 text-left relative group">
-                                    <p className="text-sm text-slate-700 italic">"{feedback}"</p>
-                                    <button 
-                                        onClick={handleCopyToClipboard}
-                                        className="absolute top-2 right-2 p-1.5 bg-white shadow-sm border border-slate-200 rounded hover:bg-slate-50 text-slate-500 text-xs flex items-center gap-1"
-                                    >
-                                        <Copy className="h-3 w-3" /> Copier
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="space-y-3">
-                                <Button 
-                                    className="w-full h-14 text-lg rounded-xl shadow-xl shadow-indigo-200 bg-[#4285F4] hover:bg-[#3367D6] border-none"
-                                    onClick={() => window.location.href = locationInfo.googleUrl || '#'}
-                                >
-                                    <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
-                                    Poster sur Google
-                                </Button>
-                                <button 
-                                    onClick={() => setStep('success')}
-                                    className="text-sm text-slate-400 hover:text-slate-600 py-2"
-                                >
-                                    Non merci, j'ai terminé
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 4: SUCCESS (Low Rating / End) */}
+                    {/* STEP 4: SUCCESS (End of Negative Flow) */}
                     {step === 'success' && (
                         <div className="animate-in zoom-in-95 duration-300">
                              <div className="h-20 w-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-400">
@@ -239,7 +220,7 @@ export const ReviewFunnel = () => {
                             </div>
                             <h2 className="text-xl font-bold text-slate-900 mb-2">Merci pour votre retour</h2>
                             <p className="text-slate-600 mb-8">
-                                Votre message a bien été transmis à la direction. Nous faisons de notre mieux pour améliorer nos services.
+                                Votre message a bien été transmis à la direction. Nous prenons vos remarques très au sérieux pour nous améliorer.
                             </p>
                             <Button variant="outline" onClick={() => window.location.reload()}>Fermer</Button>
                         </div>
@@ -247,7 +228,7 @@ export const ReviewFunnel = () => {
                 </div>
                 
                 {/* Footer Branding */}
-                <div className="bg-slate-50 p-4 text-center border-t border-slate-100 flex items-center justify-center gap-2">
+                <div className="bg-slate-50 p-4 text-center border-t border-slate-100 flex items-center justify-center gap-2 mt-auto">
                     <span className="text-xs text-slate-400 font-medium">Powered by</span>
                     <span className="text-xs font-bold text-indigo-600">Reviewflow</span>
                 </div>
