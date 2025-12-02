@@ -462,25 +462,59 @@ const publicService = {
         return null;
     },
     submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[] = []) => {
-        // Utilisation de l'API serveur pour contourner le RLS (restrictions utilisateurs anonymes)
-        const response = await fetch('/api/submit-review', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                locationId,
-                rating,
-                feedback,
-                contact,
-                tags
-            })
-        });
+        // STRATÉGIE ROBUSTE :
+        // 1. Tenter via l'API Serverless (meilleur pour la sécurité, contourne RLS)
+        // 2. Si échoue (ex: environnement local sans API), tenter en direct Supabase (nécessite RLS ouvert)
+        
+        try {
+            const response = await fetch('/api/submit-review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ locationId, rating, feedback, contact, tags })
+            });
 
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || "Erreur serveur lors de l'enregistrement de l'avis");
+            // Si 404, l'API n'existe pas (dev local), on throw pour passer au catch
+            if (response.status === 404) throw new Error("API Route not found");
+
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || "Erreur API");
+            }
+            return true;
+
+        } catch (apiError) {
+            console.warn("API Submit failed, attempting direct DB insert...", apiError);
+            
+            // FALLBACK : Insertion directe
+            const db = requireSupabase();
+            const tagString = tags && tags.length > 0 ? `\n\n[Points clés: ${tags.join(', ')}]` : '';
+            const finalBody = `${feedback || ''}${tagString}`;
+
+            const newReview = {
+                location_id: locationId,
+                rating: rating,
+                text: finalBody,
+                body: finalBody,
+                author_name: contact || 'Client Anonyme',
+                source: 'direct',
+                status: 'pending',
+                received_at: new Date().toISOString(),
+                language: 'fr',
+                analysis: { 
+                    sentiment: rating >= 4 ? 'positive' : 'negative', 
+                    themes: tags || [], 
+                    keywords: [], 
+                    flags: {} 
+                }
+            };
+
+            const { error } = await db.from('reviews').insert(newReview);
+            if (error) {
+                console.error("DB Insert Error:", error);
+                throw new Error("Impossible d'enregistrer l'avis (Erreur API & Base de données).");
+            }
+            return true;
         }
-
-        return true;
     }
 };
 

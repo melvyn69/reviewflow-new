@@ -27,7 +27,17 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   try {
-    const { locationId, rating, feedback, contact, tags } = req.body;
+    // Parsing manuel du body si nécessaire (parfois req.body est une string sur certaines plateformes)
+    let body = req.body;
+    if (typeof body === 'string') {
+        try {
+            body = JSON.parse(body);
+        } catch (e) {
+            return res.status(400).json({ error: "Invalid JSON body" });
+        }
+    }
+
+    const { locationId, rating, feedback, contact, tags } = body || {};
 
     if (!locationId || !rating) {
         return res.status(400).json({ error: 'Données manquantes (locationId, rating)' });
