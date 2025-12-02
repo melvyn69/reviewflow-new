@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle } from 'lucide-react';
-import { Button, Input } from '../components/ui';
+import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Button, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { useParams } from 'react-router-dom';
 
@@ -17,6 +17,7 @@ const Confetti = () => (
 
 export const ReviewFunnel = () => {
     const { locationId } = useParams();
+    const toast = useToast();
     
     const [step, setStep] = useState<'rating' | 'details' | 'redirecting' | 'success'>('rating');
     const [rating, setRating] = useState(0);
@@ -30,8 +31,15 @@ export const ReviewFunnel = () => {
     useEffect(() => {
         if (locationId) {
             api.public.getLocationInfo(locationId)
-                .then((info) => setLocationInfo(info as any))
-                .catch(() => setLocationInfo({ name: "Notre Établissement", city: "Paris", googleUrl: "#" }));
+                .then((info) => {
+                    if (info) {
+                        setLocationInfo(info as any);
+                    } else {
+                        // Fallback si l'ID est introuvable (évite l'écran blanc)
+                        setLocationInfo({ name: "Établissement", city: "", googleUrl: "" });
+                    }
+                })
+                .catch(() => setLocationInfo({ name: "Établissement", city: "", googleUrl: "" }));
         }
     }, [locationId]);
 
@@ -39,22 +47,24 @@ export const ReviewFunnel = () => {
         setRating(score);
         
         if (score >= 4) {
-            // FLUX POSITIF : Redirection directe Google
+            // FLUX POSITIF
             setStep('redirecting');
             
-            // Enregistrement silencieux de la note positive pour les stats
+            // Enregistrement silencieux pour les stats
             if (locationId) {
-                api.public.submitFeedback(locationId, score, "", "", []);
+                api.public.submitFeedback(locationId, score, "Avis positif rapide (Stars only)", "", [])
+                    .catch(err => console.error("Erreur save stats:", err));
             }
             
-            // Délai pour l'animation confetti avant redirection
+            // Tentative de redirection
             setTimeout(() => {
-                if (locationInfo?.googleUrl && locationInfo.googleUrl !== '#') {
+                if (locationInfo?.googleUrl && locationInfo.googleUrl.startsWith('http')) {
                     window.location.href = locationInfo.googleUrl;
                 } else {
-                    alert("Lien Google non configuré. Veuillez le renseigner dans les paramètres.");
+                    // Si pas de lien, on reste sur l'écran de succès sans erreur
+                    console.log("Lien Google non configuré, redirection annulée.");
                 }
-            }, 2500);
+            }, 2000);
 
         } else {
             // FLUX NÉGATIF : Formulaire interne
@@ -73,20 +83,23 @@ export const ReviewFunnel = () => {
     };
 
     const handleSubmitFeedback = async () => {
+        if (!locationId) return;
         setLoading(true);
         try {
-            if (locationId) {
-                await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags);
-            }
-        } catch (error) {
-            console.warn("Feedback submission error", error);
+            await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags);
+            setStep('success');
+        } catch (error: any) {
+            console.error("Feedback submission error", error);
+            toast.error("Erreur lors de l'envoi. Réessayez.");
         } finally {
             setLoading(false);
-            setStep('success');
         }
     };
 
     if (!locationInfo) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="h-10 w-10 animate-spin text-indigo-600"/></div>;
+
+    // Vérification pour l'affichage conditionnel du message de redirection
+    const hasGoogleLink = locationInfo.googleUrl && locationInfo.googleUrl.length > 5;
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -98,16 +111,19 @@ export const ReviewFunnel = () => {
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
                      <div className="absolute -bottom-8 bg-white p-1 rounded-full shadow-lg">
                         <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-bold text-2xl border-4 border-white">
-                            {locationInfo.name.charAt(0)}
+                            {locationInfo.name ? locationInfo.name.charAt(0) : 'E'}
                         </div>
                      </div>
                 </div>
 
                 <div className="pt-12 pb-8 px-8 text-center flex-1 flex flex-col justify-center">
                     <h1 className="text-xl font-bold text-slate-900 mb-1">{locationInfo.name}</h1>
-                    <p className="text-sm text-slate-500 flex items-center justify-center gap-1 mb-8">
-                        <MapPin className="h-3 w-3" /> {locationInfo.city}
-                    </p>
+                    {locationInfo.city && (
+                        <p className="text-sm text-slate-500 flex items-center justify-center gap-1 mb-8">
+                            <MapPin className="h-3 w-3" /> {locationInfo.city}
+                        </p>
+                    )}
+                    {!locationInfo.city && <div className="mb-8"></div>}
 
                     {/* STEP 1: RATING */}
                     {step === 'rating' && (
@@ -137,15 +153,30 @@ export const ReviewFunnel = () => {
                                 <Heart className="h-12 w-12 fill-current" />
                             </div>
                             <h2 className="text-2xl font-bold text-slate-900 mb-4">Merci, c'est génial !</h2>
-                            <p className="text-slate-600 mb-8 text-lg">
-                                Nous vous redirigeons vers Google pour partager votre expérience...
-                            </p>
-                            <div className="flex justify-center">
-                                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-                            </div>
-                            <p className="text-xs text-slate-400 mt-8">
-                                Si la redirection ne fonctionne pas, <a href={locationInfo.googleUrl || '#'} className="underline text-indigo-600">cliquez ici</a>.
-                            </p>
+                            
+                            {hasGoogleLink ? (
+                                <>
+                                    <p className="text-slate-600 mb-8 text-lg">
+                                        Nous vous redirigeons vers Google pour partager votre expérience...
+                                    </p>
+                                    <div className="flex justify-center">
+                                        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-8">
+                                        Si la redirection ne fonctionne pas, <a href={locationInfo.googleUrl} target="_blank" rel="noreferrer" className="underline text-indigo-600">cliquez ici</a>.
+                                    </p>
+                                </>
+                            ) : (
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <p className="text-slate-600 mb-2">
+                                        Nous sommes ravis que vous ayez apprécié !
+                                    </p>
+                                    <p className="text-xs text-slate-400 italic">
+                                        (La redirection Google n'est pas encore configurée par l'établissement)
+                                    </p>
+                                    <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retour</Button>
+                                </div>
+                            )}
                         </div>
                     )}
 

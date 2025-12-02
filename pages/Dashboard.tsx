@@ -9,7 +9,7 @@ import {
   Star, 
   Clock, 
   AlertCircle, 
-  UploadCloud, // CORRECTION : Bon nom d'icône
+  UploadCloud, 
   Rocket, 
   ExternalLink,
   Activity, 
@@ -112,7 +112,7 @@ export const DashboardPage = () => {
   const [urgentReviews, setUrgentReviews] = useState<Review[]>([]);
   const [period, setPeriod] = useState('30j');
   const [seeding, setSeeding] = useState(false);
-  const [demoLocationId, setDemoLocationId] = useState<string>('');
+  const [realLocationId, setRealLocationId] = useState<string | null>(null);
   
   const toast = useToast();
   const navigate = useNavigate();
@@ -134,7 +134,8 @@ export const DashboardPage = () => {
       setSetupStatus(status);
       
       if (org && org.locations?.length > 0) {
-          setDemoLocationId(org.locations[0].id);
+          // IMPORTANT: On prend le vrai ID de la base de données
+          setRealLocationId(org.locations[0].id);
       }
       
       // Filter for "Urgent": Low rating + Pending/Draft
@@ -157,6 +158,15 @@ export const DashboardPage = () => {
           toast.error("Erreur: " + error.message);
       } finally {
           setSeeding(false);
+      }
+  };
+
+  const openFunnel = () => {
+      if (realLocationId) {
+          window.open(`#/feedback/${realLocationId}`, '_blank');
+      } else {
+          toast.error("Aucun établissement configuré.");
+          navigate('/settings');
       }
   };
 
@@ -258,12 +268,12 @@ export const DashboardPage = () => {
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                             onClick={() => window.open(`#/feedback/${demoLocationId || 'loc1'}`, '_blank')}>
+                             onClick={openFunnel}>
                             <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-bold">Funnel Public</h4>
                                 <ExternalLink className="h-4 w-4 text-indigo-300" />
                             </div>
-                            <p className="text-xs text-indigo-200">Voir la page de collecte que voient vos clients.</p>
+                            <p className="text-xs text-indigo-200">Voir la page de collecte que voient vos clients (ID: {realLocationId ? realLocationId.substring(0,8) : '...'})</p>
                         </div>
                         <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
                              onClick={() => navigate('/admin')}>
