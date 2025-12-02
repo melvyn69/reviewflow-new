@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^0.0.12",
+    "@google/genai": "^0.2.0",
     "@supabase/supabase-js": "^2.39.0",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
