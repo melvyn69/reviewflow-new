@@ -20,7 +20,7 @@ import {
   BrandSettings,
   Customer
 } from '../types';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 const evaluateCondition = (review: Review, condition: any): boolean => {
   const { field, operator, value } = condition;
@@ -234,7 +234,7 @@ const aiService = {
                   throw new Error("Limite d'utilisation atteinte. Passez au plan supérieur.");
               }
 
-              const genAI = new GoogleGenerativeAI(apiKey);
+              const ai = new GoogleGenAI({ apiKey });
               const brand: BrandSettings = org?.brand || { tone: 'professionnel', description: '', knowledge_base: '', use_emojis: false, language_style: 'formal', signature: '' };
               const industry = org?.industry || 'other';
               const knowledgeBaseContext = brand.knowledge_base ? `\n\n[BASE DE CONNAISSANCE]:\n${brand.knowledge_base}` : '';
@@ -252,26 +252,24 @@ const aiService = {
                 Réponse (texte seul, pas de guillemets):
               `;
 
-              // Stratégie de modèle : 2.5 Flash -> 3 Pro -> 1.5 Flash -> Pro
+              // Using gemini-2.5-flash as the primary model
               try {
-                  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
-                  const result = await model.generateContent(prompt);
-                  return result.response.text();
+                  const response = await ai.models.generateContent({
+                      model: "gemini-2.5-flash",
+                      contents: prompt,
+                  });
+                  return response.text || "";
               } catch (e) {
+                  // Fallback if needed
+                  console.warn("Gemini 2.5 Flash failed, trying fallback", e);
                   try {
-                      const model = genAI.getGenerativeModel({ model: "gemini-3-pro"});
-                      const result = await model.generateContent(prompt);
-                      return result.response.text();
-                  } catch (e2) {
-                      try {
-                          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-                          const result = await model.generateContent(prompt);
-                          return result.response.text();
-                      } catch (e3) {
-                          const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-                          const result = await model.generateContent(prompt);
-                          return result.response.text();
-                      }
+                       const response = await ai.models.generateContent({
+                          model: "gemini-3-pro-preview",
+                          contents: prompt
+                       });
+                       return response.text || "";
+                  } catch (e2: any) {
+                       throw new Error("AI Service Unavailable: " + e2.message);
                   }
               }
           } catch (e: any) {
@@ -281,25 +279,33 @@ const aiService = {
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
           const apiKey = import.meta.env.VITE_API_KEY;
           if (!apiKey) return "Clé manquante";
-          const genAI = new GoogleGenerativeAI(apiKey);
+          const ai = new GoogleGenAI({ apiKey });
           
           try {
-              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-              const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
-              return result.response.text();
+              const response = await ai.models.generateContent({
+                  model: "gemini-2.5-flash",
+                  contents: `Post ${platform} pour avis: "${review.body}"`
+              });
+              return response.text || "";
           } catch (e) {
-              const model = genAI.getGenerativeModel({ model: "gemini-pro"});
-              const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
-              return result.response.text();
+              return "Erreur génération post social.";
           }
       },
       runCustomTask: async (payload: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
           if (!apiKey) return { error: "Clé manquante" };
-          const genAI = new GoogleGenerativeAI(apiKey);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
-          const result = await model.generateContent(JSON.stringify(payload));
-          return JSON.parse(result.response.text());
+          const ai = new GoogleGenAI({ apiKey });
+          
+          const response = await ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: JSON.stringify(payload)
+          });
+          
+          try {
+             return JSON.parse(response.text || "{}");
+          } catch(e) {
+             return { text: response.text };
+          }
       }
 };
 

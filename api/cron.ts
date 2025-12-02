@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 export default async function handler(request: any, response: any) {
   console.log("🤖 Robot Reviewflow : Démarrage...");
@@ -25,7 +25,7 @@ export default async function handler(request: any, response: any) {
   try {
     // On utilise la clé (idéalement Service Role pour contourner RLS, sinon Anon)
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY);
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
     // Récupération des avis en attente
     const { data: reviewsData, error } = await supabaseAdmin
@@ -71,7 +71,7 @@ export default async function handler(request: any, response: any) {
 
       const brand = org?.brand || { tone: 'professionnel', language_style: 'formal' };
       
-      // CORRECTION : Injection de la Base de Connaissance (Knowledge Base)
+      // Injection de la Base de Connaissance (Knowledge Base)
       const context = brand.knowledge_base ? `\n[INFORMATIONS CLÉS ENTREPRISE]:\n${brand.knowledge_base}\nUtilise ces informations pour répondre aux questions spécifiques.` : '';
 
       const prompt = `
@@ -95,34 +95,27 @@ export default async function handler(request: any, response: any) {
         let replyText = '';
         let usedModel = '';
 
-        // 🎯 STRATÉGIE DE CASCADE GEMINI (2.5 -> 3 -> 1.5 -> pro)
+        // 🎯 STRATÉGIE GEMINI: Priorité à 2.5 Flash
         try {
           console.log('Essai 2.5 Flash...');
-          const m = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-          const res = await m.generateContent(prompt);
-          replyText = res.response.text();
+          const res = await ai.models.generateContent({
+             model: 'gemini-2.5-flash',
+             contents: prompt
+          });
+          replyText = res.text || "";
           usedModel = '2.5-flash';
         } catch (e1: any) {
           console.warn(`Échec 2.5 (${e1.message}), essai 3 Pro...`);
           try {
-            const m = genAI.getGenerativeModel({ model: 'gemini-3-pro' });
-            const res = await m.generateContent(prompt);
-            replyText = res.response.text();
+            const res = await ai.models.generateContent({
+                model: 'gemini-3-pro-preview',
+                contents: prompt
+            });
+            replyText = res.text || "";
             usedModel = '3-pro';
           } catch (e2: any) {
-            console.warn(`Échec 3 Pro (${e2.message}), essai 1.5 Flash...`);
-            try {
-              const m = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-              const res = await m.generateContent(prompt);
-              replyText = res.response.text();
-              usedModel = '1.5-flash';
-            } catch (e3: any) {
-              console.warn(`Échec 1.5 Flash (${e3.message}), dernier recours gemini-pro...`);
-              const m = genAI.getGenerativeModel({ model: 'gemini-pro' });
-              const res = await m.generateContent(prompt);
-              replyText = res.response.text();
-              usedModel = 'pro';
-            }
+            console.warn(`Échec 3 Pro (${e2.message}), abandon.`);
+            throw e2;
           }
         }
 
@@ -153,3 +146,6 @@ export default async function handler(request: any, response: any) {
 
     return response.status(200).json({ success: true, processed: results });
   } catch (err: any) {
+    return response.status(500).json({ error: err.message });
+  }
+}
