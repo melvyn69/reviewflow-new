@@ -3,7 +3,117 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, MessageSquare, Instagram, Facebook, Share2, Trash2, Save, Send } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send } from 'lucide-react';
+
+// --- GOOGLE CONNECT WIZARD COMPONENT ---
+const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onConnect: () => void }) => {
+    const [step, setStep] = useState(1);
+    const [loading, setLoading] = useState(false);
+    const [locations, setLocations] = useState<{id: string, name: string, address: string}[]>([]);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+
+    const handleAuth = () => {
+        setLoading(true);
+        // Simulation délai OAuth Google
+        setTimeout(() => {
+            setLoading(false);
+            setLocations([
+                { id: 'g1', name: 'Mon Entreprise (Siège)', address: '12 Rue de la Paix, Paris' },
+                { id: 'g2', name: 'Mon Entreprise (Annexe)', address: '45 Avenue Jean Jaurès, Lyon' }
+            ]);
+            setStep(2);
+        }, 1500);
+    };
+
+    const handleSync = () => {
+        if(!selectedId) return;
+        setLoading(true);
+        // Simulation import avis
+        setTimeout(() => {
+            setLoading(false);
+            setStep(3);
+        }, 2000);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <Card className="w-full max-w-lg shadow-2xl">
+                <CardHeader className="border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-xl">
+                    <CardTitle className="flex items-center gap-2">
+                        <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="h-5 w-5" alt="G" />
+                        Connexion Google Business
+                    </CardTitle>
+                    <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>
+                </CardHeader>
+                <CardContent className="p-8">
+                    {step === 1 && (
+                        <div className="text-center space-y-6">
+                            <div className="h-16 w-16 bg-white rounded-full shadow-sm border border-slate-100 flex items-center justify-center mx-auto">
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="h-8 w-8" alt="G" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Associer votre compte Google</h3>
+                                <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto">
+                                    Nous avons besoin de votre autorisation pour lire vos avis et publier vos réponses.
+                                </p>
+                            </div>
+                            <Button size="lg" className="w-full bg-white text-slate-700 border border-slate-300 hover:bg-slate-50" onClick={handleAuth} isLoading={loading}>
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="h-4 w-4 mr-2" alt="G" />
+                                Continuer avec Google
+                            </Button>
+                            <p className="text-xs text-slate-400">Reviewflow utilise l'API officielle Google Business Profile.</p>
+                        </div>
+                    )}
+
+                    {step === 2 && (
+                        <div className="space-y-6 animate-in slide-in-from-right-8">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Sélectionnez l'établissement</h3>
+                                <p className="text-sm text-slate-500 mt-1">Quel établissement souhaitez-vous gérer ?</p>
+                            </div>
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                {locations.map(loc => (
+                                    <div 
+                                        key={loc.id}
+                                        onClick={() => setSelectedId(loc.id)}
+                                        className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${selectedId === loc.id ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:border-slate-300'}`}
+                                    >
+                                        <Building2 className={`h-5 w-5 ${selectedId === loc.id ? 'text-indigo-600' : 'text-slate-400'}`} />
+                                        <div>
+                                            <div className="font-medium text-slate-900">{loc.name}</div>
+                                            <div className="text-xs text-slate-500">{loc.address}</div>
+                                        </div>
+                                        {selectedId === loc.id && <CheckCircle2 className="h-5 w-5 text-indigo-600 ml-auto" />}
+                                    </div>
+                                ))}
+                            </div>
+                            <Button className="w-full" disabled={!selectedId} onClick={handleSync} isLoading={loading}>
+                                Confirmer et Synchroniser
+                            </Button>
+                        </div>
+                    )}
+
+                    {step === 3 && (
+                        <div className="text-center space-y-6 animate-in zoom-in-95">
+                            <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
+                                <CheckCircle2 className="h-8 w-8" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Connexion réussie !</h3>
+                                <p className="text-sm text-slate-500 mt-2">
+                                    Vos avis sont en cours d'importation. Cela peut prendre quelques minutes.
+                                </p>
+                            </div>
+                            <Button className="w-full" onClick={onConnect}>
+                                Accéder aux paramètres
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
 
 export const SettingsPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -16,6 +126,9 @@ export const SettingsPage = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [newLocationName, setNewLocationName] = useState('');
   const [newLocationCity, setNewLocationCity] = useState('');
+
+  // Google Connect State
+  const [showGoogleWizard, setShowGoogleWizard] = useState(false);
 
   // CSV Import State
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -194,10 +307,27 @@ export const SettingsPage = () => {
 
   const handleToggleIntegration = async (key: string, current: boolean) => {
       if (!org) return;
+      
+      // Special handler for Google to show Wizard if enabling
+      if (key === 'google' && !current) {
+          setShowGoogleWizard(true);
+          return;
+      }
+
       const updatedIntegrations = { ...org.integrations, [key]: !current };
       setOrg({ ...org, integrations: updatedIntegrations });
       await api.organization.update({ integrations: updatedIntegrations });
       toast.success(current ? "Intégration désactivée" : "Intégration activée");
+  };
+  
+  const handleGoogleConnected = async () => {
+      setShowGoogleWizard(false);
+      if (org) {
+          const updatedIntegrations = { ...org.integrations, google: true };
+          setOrg({ ...org, integrations: updatedIntegrations });
+          await api.organization.update({ integrations: updatedIntegrations });
+          toast.success("Compte Google associé avec succès !");
+      }
   };
 
   if (loading) return <div className="p-8 text-center text-slate-500">Chargement des paramètres...</div>;
@@ -575,17 +705,34 @@ export const SettingsPage = () => {
                       <CardTitle>Sources d'Avis</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
+                      <div className={`flex items-center justify-between p-4 border rounded-lg transition-all ${org.integrations.google ? 'border-green-200 bg-green-50' : 'border-slate-200'}`}>
                           <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center border border-slate-100 shadow-sm">
+                              <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center border border-slate-100 shadow-sm relative">
                                   <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="h-5 w-5" alt="Google" />
+                                  {org.integrations.google && <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-0.5 border-2 border-white"><CheckCircle2 className="h-3 w-3 text-white" /></div>}
                               </div>
                               <div>
                                   <h4 className="font-bold text-slate-900">Google Business Profile</h4>
-                                  <p className="text-xs text-slate-500">Synchronisation des avis et réponses.</p>
+                                  <p className="text-xs text-slate-500">
+                                      {org.integrations.google 
+                                        ? 'Compte associé. Les avis sont synchronisés.' 
+                                        : 'Synchronisation des avis et réponses.'}
+                                  </p>
                               </div>
                           </div>
-                          <Toggle checked={org.integrations.google} onChange={(c) => handleToggleIntegration('google', org.integrations.google)} />
+                          
+                          {org.integrations.google ? (
+                              <div className="flex items-center gap-2">
+                                  <Button variant="ghost" size="xs" onClick={() => handleToggleIntegration('google', true)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
+                                      Déconnecter
+                                  </Button>
+                                  <Badge variant="success">Connecté</Badge>
+                              </div>
+                          ) : (
+                              <Button size="sm" variant="outline" onClick={() => handleToggleIntegration('google', false)}>
+                                  Connecter
+                              </Button>
+                          )}
                       </div>
 
                       <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
@@ -703,6 +850,11 @@ export const SettingsPage = () => {
                   </CardContent>
               </Card>
           </div>
+      )}
+
+      {/* Google Wizard Modal */}
+      {showGoogleWizard && (
+          <GoogleConnectWizard onClose={() => setShowGoogleWizard(false)} onConnect={handleGoogleConnected} />
       )}
     </div>
   );

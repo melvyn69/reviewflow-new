@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Review } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
-// CORRECTION ICI : Import depuis le dossier components
 import { SocialShareModal } from '../components/SocialShareModal';
 
 export const CollectPage = () => {
@@ -17,6 +17,10 @@ export const CollectPage = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [topReviews, setTopReviews] = useState<Review[]>([]);
   const [selectedReviewForPost, setSelectedReviewForPost] = useState<Review | null>(null);
+  
+  // QR Customization
+  const [qrColor, setQrColor] = useState('#000000');
+  const [qrBgColor, setQrBgColor] = useState('#ffffff');
   
   // Widget State
   const [widgetType, setWidgetType] = useState<'carousel' | 'list' | 'badge'>('carousel');
@@ -83,8 +87,11 @@ export const CollectPage = () => {
   };
 
   const handleDownloadQr = () => {
+    // Clean hex codes for URL
+    const cleanColor = qrColor.replace('#', '');
+    const cleanBg = qrBgColor.replace('#', '');
     const link = document.createElement('a');
-    link.href = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(reviewLink)}`;
+    link.href = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(reviewLink)}&color=${cleanColor}&bgcolor=${cleanBg}&margin=10`;
     link.download = 'qrcode.png';
     link.target = '_blank';
     link.click();
@@ -98,6 +105,13 @@ export const CollectPage = () => {
     setIsSending(false);
     toast.success(`Campagne ${campaignType === 'sms' ? 'SMS' : 'Email'} envoyée à ${recipient}`);
     setRecipient('');
+  };
+  
+  // Helper to generate dynamic QR URL based on state
+  const getQrUrl = () => {
+      const cleanColor = qrColor.replace('#', '');
+      const cleanBg = qrBgColor.replace('#', '');
+      return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(reviewLink)}&color=${cleanColor}&bgcolor=${cleanBg}&margin=10`;
   };
 
   if (!org) {
@@ -166,28 +180,46 @@ export const CollectPage = () => {
       </div>
 
       {activeTab === 'qr' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
               <Card>
                   <CardHeader>
-                      <CardTitle>QR Code Numérique</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                          <QrCode className="h-5 w-5 text-indigo-600" />
+                          Générateur QR Code
+                      </CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col items-center">
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
+                      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm mb-6 w-full flex justify-center items-center min-h-[250px] relative transition-colors duration-300">
                           <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(reviewLink)}`} 
+                            src={getQrUrl()} 
                             alt="QR Code" 
-                            className="w-48 h-48"
+                            className="rounded shadow-md bg-white p-2"
                           />
                       </div>
+                      
+                      <div className="w-full space-y-4 mb-6">
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Palette className="h-3 w-3"/> Couleur QR</label>
+                                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 focus-within:ring-2 ring-indigo-500/20">
+                                      <input type="color" value={qrColor} onChange={e => setQrColor(e.target.value)} className="h-6 w-6 rounded border-none cursor-pointer p-0 bg-transparent" />
+                                      <span className="text-xs font-mono text-slate-600">{qrColor}</span>
+                                  </div>
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Layout className="h-3 w-3"/> Couleur Fond</label>
+                                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 focus-within:ring-2 ring-indigo-500/20">
+                                      <input type="color" value={qrBgColor} onChange={e => setQrBgColor(e.target.value)} className="h-6 w-6 rounded border-none cursor-pointer p-0 bg-transparent" />
+                                      <span className="text-xs font-mono text-slate-600">{qrBgColor}</span>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+
                       <div className="flex gap-3 w-full">
                           <Button variant="outline" className="flex-1" icon={Copy} onClick={handleCopyLink}>Copier le lien</Button>
-                          <Button variant="primary" className="flex-1" icon={Download} onClick={handleDownloadQr}>Télécharger PNG</Button>
+                          <Button variant="primary" className="flex-1 shadow-lg shadow-indigo-100" icon={Download} onClick={handleDownloadQr}>Télécharger PNG</Button>
                       </div>
-                      <p className="text-xs text-slate-400 mt-4 text-center">
-                          Ce QR Code redirige vers votre entonnoir de satisfaction.
-                          <br/>
-                          <span className="text-indigo-400 text-[10px] break-all">{reviewLink}</span>
-                      </p>
                   </CardContent>
               </Card>
 
@@ -196,17 +228,40 @@ export const CollectPage = () => {
                       <CardTitle>Supports Imprimables</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                      <div className="p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer">
-                          <div className="h-12 w-12 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+                      <p className="text-sm text-slate-500 mb-2">Des visuels prêts à l'emploi pour votre établissement.</p>
+                      
+                      <div className="p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+                          <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
                               <Printer className="h-6 w-6" />
                           </div>
                           <div className="flex-1">
-                              <h4 className="font-bold text-slate-900">Affiche Comptoir A4</h4>
-                              <p className="text-sm text-slate-500">Idéal pour la réception ou la caisse.</p>
+                              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Affiche Comptoir A4</h4>
+                              <p className="text-xs text-slate-500">Idéal pour la réception ou la caisse.</p>
                           </div>
-                          <Download className="h-5 w-5 text-slate-400" />
+                          <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
                       </div>
-                      {/* ... other items ... */}
+
+                      <div className="p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+                          <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
+                              <Layout className="h-6 w-6" />
+                          </div>
+                          <div className="flex-1">
+                              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Sticker Vitrine</h4>
+                              <p className="text-xs text-slate-500">Format rond 15cm pour votre porte d'entrée.</p>
+                          </div>
+                          <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
+                      </div>
+                      
+                      <div className="p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+                          <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
+                              <Smartphone className="h-6 w-6" />
+                          </div>
+                          <div className="flex-1">
+                              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Carte de Visite</h4>
+                              <p className="text-xs text-slate-500">À glisser dans les sacs de commande.</p>
+                          </div>
+                          <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
+                      </div>
                   </CardContent>
               </Card>
           </div>
