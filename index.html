@@ -24,6 +24,40 @@
         background-color: #f8fafc;
         overscroll-behavior-y: none;
       }
+      
+      /* Confetti Animation */
+      .confetti-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 9999;
+        overflow: hidden;
+      }
+      .confetti {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background-color: #f2d74e;
+        opacity: 0;
+      }
+      .confetti:nth-child(1) { left: 10%; animation: fall 2.5s linear infinite; background: #ef2964; }
+      .confetti:nth-child(2) { left: 20%; animation: fall 2.3s linear infinite 0.2s; background: #00c09d; }
+      .confetti:nth-child(3) { left: 30%; animation: fall 2.4s linear infinite 0.4s; background: #2d87b0; }
+      .confetti:nth-child(4) { left: 40%; animation: fall 2.6s linear infinite 0.1s; background: #48485e; }
+      .confetti:nth-child(5) { left: 50%; animation: fall 2.4s linear infinite 0.8s; background: #ef2964; }
+      .confetti:nth-child(6) { left: 60%; animation: fall 2.2s linear infinite 0.4s; background: #fff; }
+      .confetti:nth-child(7) { left: 70%; animation: fall 2.5s linear infinite 1.2s; background: #00c09d; }
+      .confetti:nth-child(8) { left: 80%; animation: fall 2.1s linear infinite 0.3s; background: #2d87b0; }
+      .confetti:nth-child(9) { left: 90%; animation: fall 2.3s linear infinite 0.5s; background: #f2d74e; }
+      .confetti:nth-child(10) { left: 95%; animation: fall 2.4s linear infinite 1.1s; background: #ef2964; }
+
+      @keyframes fall {
+        0% { opacity: 1; top: -10%; transform: translateX(0) rotate(0deg); }
+        100% { opacity: 0; top: 100%; transform: translateX(20px) rotate(360deg); }
+      }
     </style>
     
     <!-- Calendly Widget CSS/JS -->

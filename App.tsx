@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { HashRouter, Switch, Route, Redirect, useHistory, useLocation } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
 import { AnalyticsPage } from './pages/Analytics';
@@ -62,42 +61,49 @@ function AppRoutes() {
   return (
     <>
       <ScrollToTop />
-      <Routes>
+      <Switch>
         {/* Public Routes */}
-        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="login" onLoginSuccess={checkUser} />} />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />} />
+        <Route exact path="/">
+            {user ? <Redirect to="/dashboard" /> : <LandingPage />}
+        </Route>
+        <Route path="/login">
+            {user ? <Redirect to="/dashboard" /> : <AuthPage initialMode="login" onLoginSuccess={checkUser} />}
+        </Route>
+        <Route path="/register">
+            {user ? <Redirect to="/dashboard" /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />}
+        </Route>
         
-        {/* Static Pages */}
-        <Route path="/legal" element={<LegalPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        
-        {/* Public Feedback Funnel */}
-        <Route path="/feedback/:locationId" element={<ReviewFunnel />} />
+        <Route path="/legal" component={LegalPage} />
+        <Route path="/privacy" component={PrivacyPage} />
+        <Route path="/contact" component={ContactPage} />
+        <Route path="/feedback/:locationId" component={ReviewFunnel} />
         
         {/* Protected Routes */}
-        {user ? (
-          <Route path="/" element={<AppLayout />}>
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="inbox" element={<InboxPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="automation" element={<AutomationPage />} />
-            <Route path="collect" element={<CollectPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="billing" element={<BillingPage />} />
-            <Route path="help" element={<HelpPage />} />
-            <Route path="playground" element={<PlaygroundPage />} />
-            {/* Admin Route - Simple protection check in component or layout, here open for demo user */}
-            <Route path="admin" element={<SuperAdminPage />} />
-          </Route>
-        ) : (
-          // Redirect any deep link to Landing if not authenticated
-          <Route path="*" element={<Navigate to="/" replace />} />
-        )}
-      </Routes>
+        <Route path="/">
+            {user ? (
+                <AppLayout>
+                    <Switch>
+                        <Route path="/dashboard" component={DashboardPage} />
+                        <Route path="/inbox" component={InboxPage} />
+                        <Route path="/analytics" component={AnalyticsPage} />
+                        <Route path="/automation" component={AutomationPage} />
+                        <Route path="/collect" component={CollectPage} />
+                        <Route path="/customers" component={CustomersPage} />
+                        <Route path="/reports" component={ReportsPage} />
+                        <Route path="/settings" component={SettingsPage} />
+                        <Route path="/billing" component={BillingPage} />
+                        <Route path="/help" component={HelpPage} />
+                        <Route path="/playground" component={PlaygroundPage} />
+                        <Route path="/admin" component={SuperAdminPage} />
+                        {/* Fallback for protected routes */}
+                        <Redirect to="/dashboard" />
+                    </Switch>
+                </AppLayout>
+            ) : (
+                <Redirect to="/" />
+            )}
+        </Route>
+      </Switch>
     </>
   );
 }

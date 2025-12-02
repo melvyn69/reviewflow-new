@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useHistory } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Inbox, 
@@ -22,23 +22,25 @@ import {
 import { api } from '../lib/api';
 import { AppNotification } from '../types';
 
-const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => (
-  <NavLink
-    to={to}
-    end={exact}
-    onClick={onClick}
-    className={({ isActive }) =>
-      `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => {
+  const location = useLocation();
+  const isActive = exact ? location.pathname === to : location.pathname.startsWith(to);
+
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
         isActive 
           ? 'bg-indigo-50 text-indigo-700' 
           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-      }`
-    }
-  >
-    <Icon className="h-5 w-5 shrink-0" />
-    {label}
-  </NavLink>
-);
+      }`}
+    >
+      <Icon className="h-5 w-5 shrink-0" />
+      {label}
+    </Link>
+  );
+};
 
 interface SidebarProps {
   isOpen: boolean;
@@ -157,7 +159,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
+  const history = useHistory();
 
   useEffect(() => {
     api.auth.getUser().then(setUser);
@@ -184,7 +186,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
 
   const handleSearch = (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
-          navigate(`/inbox?search=${encodeURIComponent(searchTerm)}`);
+          history.push(`/inbox?search=${encodeURIComponent(searchTerm)}`);
       }
   }
 
@@ -246,7 +248,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
                                     className={`p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3 ${!notif.read ? 'bg-indigo-50/30' : ''}`}
                                     onClick={() => {
                                         if (notif.link) {
-                                            navigate(notif.link);
+                                            history.push(notif.link);
                                             setShowNotifications(false);
                                         }
                                     }}
@@ -282,7 +284,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   );
 };
 
-export const AppLayout = () => {
+export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
   const location = useLocation();
@@ -298,7 +300,7 @@ export const AppLayout = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar onMenuClick={() => setIsSidebarOpen(true)} />
         <main className="flex-1 overflow-auto p-4 md:p-8">
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>

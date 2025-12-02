@@ -1,4 +1,5 @@
 
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -452,21 +453,26 @@ const publicService = {
         }
         return null;
     },
-    submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
+    submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[] = []) => {
         if (isSupabaseConfigured()) {
             try {
+                // Formatage du corps du message avec les tags pour donner plus de contexte
+                const tagString = tags.length > 0 ? `\n\n[Points clés: ${tags.join(', ')}]` : '';
+                const finalBody = `${feedback}${tagString}`;
+
                 // 1. Sauvegarder l'avis en base
                 const newReview = {
                     location_id: locationId,
                     rating: rating,
-                    text: feedback,
-                    body: feedback,
+                    text: finalBody,
+                    body: finalBody,
                     author_name: contact || 'Client Anonyme (Funnel)',
                     source: 'direct',
                     status: 'pending',
                     received_at: new Date().toISOString(),
                     language: 'fr',
-                    analysis: { sentiment: 'neutral', themes: [], keywords: [], flags: {} },
+                    // On injecte les tags dans les thèmes de l'analyse pour que l'IA puisse les utiliser
+                    analysis: { sentiment: rating >= 4 ? 'positive' : 'negative', themes: tags, keywords: [], flags: {} },
                     ai_reply: null
                 };
                 const { error } = await supabase!.from('reviews').insert(newReview);
@@ -474,7 +480,6 @@ const publicService = {
 
                 // 2. [LOGIQUE TRANSACTIONNELLE] Envoyer une alerte immédiate si avis négatif ou neutre (<=3)
                 if (rating <= 3) {
-                    // On récupère l'organisation pour trouver l'email de l'admin
                     const { data: loc } = await supabase!
                         .from('locations')
                         .select('name, organization:organizations(users(email))')
@@ -495,6 +500,7 @@ const publicService = {
                                         <h2>Nouvel avis reçu via QR Code</h2>
                                         <p><strong>Note :</strong> ${rating}/5</p>
                                         <p><strong>Message :</strong> "${feedback}"</p>
+                                        <p><strong>Points négatifs :</strong> ${tags.join(', ') || 'Aucun'}</p>
                                         <p><strong>Contact :</strong> ${contact || 'Non renseigné'}</p>
                                         <br/>
                                         <a href="${window.location.origin}/#/inbox" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Répondre maintenant</a>

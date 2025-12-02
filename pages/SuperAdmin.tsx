@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { Users, CreditCard, Activity, TrendingUp, Search, LogIn, ShieldAlert, DollarSign, Building } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useHistory } from 'react-router-dom';
 
 const AdminKPI = ({ title, value, subtext, icon: Icon, color }: any) => (
     <Card>
@@ -26,7 +25,7 @@ export const SuperAdminPage = () => {
     const [stats, setStats] = useState<any>(null);
     const [tenants, setTenants] = useState<any[]>([]);
     const [search, setSearch] = useState('');
-    const navigate = useNavigate();
+    const history = useHistory();
     const toast = useToast();
 
     useEffect(() => {
@@ -44,7 +43,7 @@ export const SuperAdminPage = () => {
         toast.success(`Connexion en tant que admin de ${tenantId}...`);
         // Simulate switch
         setTimeout(() => {
-            navigate('/dashboard');
+            history.push('/dashboard');
             toast.info("Mode 'Impersonation' actif. Vous voyez ce que le client voit.");
         }, 1000);
     };

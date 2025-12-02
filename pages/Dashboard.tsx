@@ -17,7 +17,7 @@ import {
   CheckCircle2, 
   ShieldAlert
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useHistory } from 'react-router-dom';
 
 const KPI = ({ title, value, change, icon: Icon, trend }: any) => (
   <Card>
@@ -69,7 +69,7 @@ const ActivityFeed = () => {
 }
 
 const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
-    const navigate = useNavigate();
+    const history = useHistory();
     if (!status) return null;
     if (status.completionPercentage === 100) return null;
 
@@ -91,12 +91,12 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                     {!status.googleConnected && (
-                        <Button size="sm" variant="outline" className="bg-white border-indigo-200 text-indigo-700" onClick={() => navigate('/settings')}>
+                        <Button size="sm" variant="outline" className="bg-white border-indigo-200 text-indigo-700" onClick={() => history.push('/settings')}>
                             Connecter Google
                         </Button>
                     )}
                     {!status.brandVoiceConfigured && (
-                        <Button size="sm" variant="outline" className="bg-white border-indigo-200 text-indigo-700" onClick={() => navigate('/settings')}>
+                        <Button size="sm" variant="outline" className="bg-white border-indigo-200 text-indigo-700" onClick={() => history.push('/settings')}>
                             Définir Voix de Marque
                         </Button>
                     )}
@@ -115,7 +115,7 @@ export const DashboardPage = () => {
   const [demoLocationId, setDemoLocationId] = useState<string>('');
   
   const toast = useToast();
-  const navigate = useNavigate();
+  const history = useHistory();
 
   useEffect(() => {
     loadData();
@@ -224,7 +224,7 @@ export const DashboardPage = () => {
                         {urgentReviews.length > 0 ? (
                             <div className="divide-y divide-slate-100">
                                 {urgentReviews.map(review => (
-                                    <div key={review.id} className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer" onClick={() => navigate('/inbox')}>
+                                    <div key={review.id} className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer" onClick={() => history.push('/inbox')}>
                                         <div className="h-10 w-10 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0">
                                             {review.rating}★
                                         </div>
@@ -266,7 +266,7 @@ export const DashboardPage = () => {
                             <p className="text-xs text-indigo-200">Voir la page de collecte que voient vos clients.</p>
                         </div>
                         <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                             onClick={() => navigate('/admin')}>
+                             onClick={() => history.push('/admin')}>
                             <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-bold">Super Admin</h4>
                                 <ShieldAlert className="h-4 w-4 text-red-300" />

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useHistory } from 'react-router-dom';
 import { Button, Card, CardContent } from '../components/ui';
 import { CheckCircle2, Star, Zap, MessageSquare, ShieldCheck, ArrowRight, BarChart3, Globe, Sparkles, HelpCircle, ChevronDown, QrCode, Workflow, Users, FileText, Smartphone, Mail, Layout, Video } from 'lucide-react';
 
@@ -85,7 +85,7 @@ const Step = ({ number, title, description }: any) => (
 )
 
 export const LandingPage = () => {
-  const navigate = useNavigate();
+  const history = useHistory();
 
   useEffect(() => {
       // Load Calendly script dynamically
@@ -124,10 +124,10 @@ export const LandingPage = () => {
             </button>
           </div>
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/login')} className="text-sm font-medium text-slate-600 hover:text-indigo-600">
+            <button onClick={() => history.push('/login')} className="text-sm font-medium text-slate-600 hover:text-indigo-600">
               Connexion
             </button>
-            <Button onClick={() => navigate('/register')} className="shadow-lg shadow-indigo-200">
+            <Button onClick={() => history.push('/register')} className="shadow-lg shadow-indigo-200">
               Essai Gratuit
             </Button>
           </div>
@@ -149,7 +149,7 @@ export const LandingPage = () => {
             Idéal pour les restaurants, artisans et commerces locaux.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-in fade-in slide-in-from-bottom-10 duration-700">
-            <Button size="lg" className="h-14 px-8 text-lg shadow-xl shadow-indigo-200" onClick={() => navigate('/register')}>
+            <Button size="lg" className="h-14 px-8 text-lg shadow-xl shadow-indigo-200" onClick={() => history.push('/register')}>
               Commencer l'essai gratuit
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
@@ -341,7 +341,7 @@ export const LandingPage = () => {
                 features={['1 Établissement', 'Connexion Google & Facebook', 'Réponses manuelles illimitées', 'Tableau de bord basique']}
                 cta="Commencer Gratuitement"
                 variant="light"
-                onClick={() => navigate('/register')}
+                onClick={() => history.push('/register')}
             />
             <PricingCard 
                 title="Starter"
@@ -350,7 +350,7 @@ export const LandingPage = () => {
                 cta="Choisir Starter"
                 highlighted
                 variant="light"
-                onClick={() => navigate('/register')}
+                onClick={() => history.push('/register')}
             />
             <PricingCard 
                 title="Pro"
@@ -358,7 +358,7 @@ export const LandingPage = () => {
                 features={['Établissements Illimités', '300 Réponses IA / mois', 'Automatisation (Workflows)', 'Rapports PDF & Excel', 'Notes Internes & Équipe']}
                 cta="Choisir Pro"
                 variant="light"
-                onClick={() => navigate('/register')}
+                onClick={() => history.push('/register')}
             />
           </div>
         </div>
@@ -406,9 +406,9 @@ export const LandingPage = () => {
                   © 2025 Reviewflow SAS. Tous droits réservés.
               </div>
               <div className="flex gap-6 text-sm text-slate-500">
-                  <button onClick={() => navigate('/legal')} className="hover:text-slate-900">Mentions Légales</button>
-                  <button onClick={() => navigate('/privacy')} className="hover:text-slate-900">Confidentialité</button>
-                  <button onClick={() => navigate('/contact')} className="hover:text-slate-900">Contact</button>
+                  <button onClick={() => history.push('/legal')} className="hover:text-slate-900">Mentions Légales</button>
+                  <button onClick={() => history.push('/privacy')} className="hover:text-slate-900">Confidentialité</button>
+                  <button onClick={() => history.push('/contact')} className="hover:text-slate-900">Contact</button>
               </div>
           </div>
       </footer>
