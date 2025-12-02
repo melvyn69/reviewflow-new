@@ -192,13 +192,23 @@ const reviewsService = {
                 
                 const { data, error } = await query;
                 if (!error && data) {
-                    result = data.map((r: any) => ({
-                        ...r, 
-                        // MAPPING CRITIQUE : Supabase 'text' -> Frontend 'body'
-                        body: r.text || r.body || '',
-                        internal_notes: r.internal_notes || [], 
-                        analysis: r.analysis || { sentiment: 'neutral', themes: [], keywords: [], flags: {} }
-                    }));
+                    result = data.map((r: any) => {
+                        // Assurer que le texte est visible même si colonne 'text' ou 'body'
+                        const bodyContent = r.text || r.body || '';
+                        
+                        // Assurer que les mots-clés sont visibles s'ils existent dans les thèmes
+                        const analysis = r.analysis || { sentiment: 'neutral', themes: [], keywords: [], flags: {} };
+                        if ((!analysis.keywords || analysis.keywords.length === 0) && analysis.themes && analysis.themes.length > 0) {
+                            analysis.keywords = analysis.themes;
+                        }
+
+                        return {
+                            ...r, 
+                            body: bodyContent,
+                            internal_notes: r.internal_notes || [], 
+                            analysis: analysis
+                        };
+                    });
                 }
             } catch (e) {
                 console.warn("DB Fetch Error", e);
@@ -505,8 +515,8 @@ const publicService = {
             
             // FALLBACK : Insertion directe
             const db = requireSupabase();
-            const tagString = tags && tags.length > 0 ? `\n\n[Points clés: ${tags.join(', ')}]` : '';
-            const finalBody = `${feedback || ''}${tagString}`;
+            // On ne modifie plus le texte, on garde les tags dans l'analyse seulement
+            const finalBody = feedback || '';
 
             const newReview = {
                 location_id: locationId,
@@ -521,7 +531,7 @@ const publicService = {
                 analysis: { 
                     sentiment: rating >= 4 ? 'positive' : 'negative', 
                     themes: tags || [], 
-                    keywords: [], 
+                    keywords: tags || [], // Duplication pour visibilité UI
                     flags: { hygiene: false, security: false } 
                 }
             };

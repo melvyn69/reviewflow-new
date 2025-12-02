@@ -51,16 +51,13 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'Données manquantes (locationId, rating)' });
     }
 
-    // Construction de l'objet Review
-    const tagString = tags && tags.length > 0 ? `\n\n[Points clés: ${tags.join(', ')}]` : '';
-    const finalBody = `${feedback || ''}${tagString}`;
+    // On garde le feedback pur, sans ajouter les tags dans le texte visible
+    const finalBody = feedback || '';
 
-    // CORRECTION MAJEURE: On utilise uniquement 'text' qui est la colonne standard Supabase.
-    // On ne passe PAS 'body' ici car la colonne n'existe pas en base.
     const newReview = {
         location_id: locationId,
         rating: rating,
-        text: finalBody,
+        text: finalBody, // Texte pur
         author_name: contact || 'Client Anonyme (Funnel)',
         source: 'direct',
         status: 'pending',
@@ -69,7 +66,8 @@ export default async function handler(req: any, res: any) {
         analysis: { 
             sentiment: rating >= 4 ? 'positive' : 'negative', 
             themes: tags || [], 
-            keywords: [], 
+            // IMPORTANT : On duplique les tags dans keywords pour qu'ils soient visibles dans l'UI
+            keywords: tags || [], 
             flags: { hygiene: false, security: false } 
         },
     };
