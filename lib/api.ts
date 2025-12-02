@@ -280,37 +280,26 @@ const aiService = {
       },
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante");
-
+          if (!apiKey) return "Clé manquante";
           const genAI = new GoogleGenerativeAI(apiKey);
-          const prompt = `Crée un post ${platform} pour cet avis : "${review.body}" (${review.rating}/5). Ajoute emojis et hashtags.`;
           
-          const models = ["gemini-2.5-flash", "gemini-3-pro", "gemini-1.5-flash"];
-          for (const modelName of models) {
-              try {
-                  const model = genAI.getGenerativeModel({ model: modelName });
-                  const result = await model.generateContent(prompt);
-                  return result.response.text();
-              } catch (e) { continue; }
+          try {
+              const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+              const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
+              return result.response.text();
+          } catch (e) {
+              const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+              const result = await model.generateContent(`Post ${platform} pour avis: "${review.body}"`);
+              return result.response.text();
           }
-          return "Erreur génération post.";
       },
       runCustomTask: async (payload: any) => {
           const apiKey = import.meta.env.VITE_API_KEY;
-          if (!apiKey) throw new Error("Clé API manquante");
-
+          if (!apiKey) return { error: "Clé manquante" };
           const genAI = new GoogleGenerativeAI(apiKey);
-          const prompt = JSON.stringify(payload);
-
-          const models = ["gemini-2.5-flash", "gemini-3-pro", "gemini-1.5-flash"];
-          for (const modelName of models) {
-              try {
-                  const model = genAI.getGenerativeModel({ model: modelName });
-                  const result = await model.generateContent(prompt);
-                  return JSON.parse(result.response.text());
-              } catch (e) { continue; }
-          }
-          throw new Error("Erreur Custom Task");
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+          const result = await model.generateContent(JSON.stringify(payload));
+          return JSON.parse(result.response.text());
       }
 };
 
@@ -365,12 +354,11 @@ const automationService = {
                        for (const action of rule.actions) {
                            if (action.type === 'generate_ai_reply' || action.type === 'auto_reply') {
                                
-                               // CORRECTION FINALE : Appel réel IA
                                let replyText = "";
                                try {
                                    replyText = await aiService.generateReply(review as Review, { tone: 'professional', length: 'medium' });
                                } catch (e) {
-                                   replyText = "Erreur génération IA. Veuillez vérifier manuellement.";
+                                   replyText = "Erreur génération IA.";
                                }
 
                                await supabase!.from('reviews').update({ 
@@ -394,6 +382,26 @@ const automationService = {
           }
           return { processed: pendingReviews.length, actions: actionCount, alerts: alertCount };
       }
+};
+
+const notificationsService = {
+    list: async () => [],
+    markAllRead: async () => true,
+    sendAlert: async (email: string, message: string) => {
+          try {
+              await fetch('/api/send-alert', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      to: email,
+                      subject: '🚨 Nouvelle Alerte Reviewflow',
+                      html: `<p>Bonjour,</p><p>${message}</p><p><a href="https://reviewflow.vercel.app">Voir l'avis</a></p>`
+                  })
+              });
+          } catch (e) {
+              console.error("Erreur envoi mail:", e);
+          }
+    }
 };
 
 const seedCloudDatabase = async () => {
@@ -462,26 +470,6 @@ const publicService = {
             }
         }
         return true;
-    }
-};
-
-const notificationsService = {
-    list: async () => [],
-    markAllRead: async () => true,
-    sendAlert: async (email: string, message: string) => {
-          try {
-              await fetch('/api/send-alert', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      to: email,
-                      subject: '🚨 Nouvelle Alerte Reviewflow',
-                      html: `<p>Bonjour,</p><p>${message}</p><p><a href="https://reviewflow.vercel.app">Voir l'avis</a></p>`
-                  })
-              });
-          } catch (e) {
-              console.error("Erreur envoi mail:", e);
-          }
     }
 };
 
