@@ -9,13 +9,6 @@ export default async function handler(request: any, response: any) {
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_API_KEY;
 
-  // Debug log
-  console.log("Env Check:", {
-    url: !!SUPABASE_URL,
-    key: !!SUPABASE_KEY,
-    ai: !!GEMINI_API_KEY,
-  });
-
   if (!SUPABASE_URL || !SUPABASE_KEY || !GEMINI_API_KEY) {
     return response.status(500).json({
       error: 'Variables manquantes. Ajoutez SUPABASE_SERVICE_ROLE_KEY et API_KEY dans Vercel.',
@@ -23,8 +16,8 @@ export default async function handler(request: any, response: any) {
   }
 
   try {
-    // On utilise la clé (idéalement Service Role pour contourner RLS, sinon Anon)
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Initialisation avec le nouveau SDK @google/genai
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
     // Récupération des avis en attente
@@ -55,7 +48,7 @@ export default async function handler(request: any, response: any) {
     const reviews: any[] = reviewsData || [];
 
     if (reviews.length === 0) {
-      return response.status(200).json({ message: 'Tout est à jour (Connexion OK, aucun avis pending)' });
+      return response.status(200).json({ message: 'Tout est à jour (Aucun avis pending)' });
     }
 
     console.log(`🚀 ${reviews.length} avis trouvés. Traitement IA en cours...`);
@@ -70,8 +63,6 @@ export default async function handler(request: any, response: any) {
       }
 
       const brand = org?.brand || { tone: 'professionnel', language_style: 'formal' };
-      
-      // Injection de la Base de Connaissance (Knowledge Base)
       const context = brand.knowledge_base ? `\n[INFORMATIONS CLÉS ENTREPRISE]:\n${brand.knowledge_base}\nUtilise ces informations pour répondre aux questions spécifiques.` : '';
 
       const prompt = `
@@ -93,31 +84,15 @@ export default async function handler(request: any, response: any) {
 
       try {
         let replyText = '';
-        let usedModel = '';
+        const usedModel = 'gemini-2.5-flash';
 
-        // 🎯 STRATÉGIE GEMINI: Priorité à 2.5 Flash
-        try {
-          console.log('Essai 2.5 Flash...');
-          const res = await ai.models.generateContent({
-             model: 'gemini-2.5-flash',
+        // Utilisation de gemini-2.5-flash avec la nouvelle méthode
+        const res = await ai.models.generateContent({
+             model: usedModel,
              contents: prompt
-          });
-          replyText = res.text || "";
-          usedModel = '2.5-flash';
-        } catch (e1: any) {
-          console.warn(`Échec 2.5 (${e1.message}), essai 3 Pro...`);
-          try {
-            const res = await ai.models.generateContent({
-                model: 'gemini-3-pro-preview',
-                contents: prompt
-            });
-            replyText = res.text || "";
-            usedModel = '3-pro';
-          } catch (e2: any) {
-            console.warn(`Échec 3 Pro (${e2.message}), abandon.`);
-            throw e2;
-          }
-        }
+        });
+        
+        replyText = res.text || "";
 
         if (!replyText) throw new Error("Réponse vide de l'IA");
 
@@ -137,7 +112,6 @@ export default async function handler(request: any, response: any) {
         if (updateError) throw updateError;
 
         results.push({ id: review.id, status: 'success', model: usedModel });
-        console.log(`✅ Avis ${review.id} traité avec succès (${usedModel}).`);
       } catch (e: any) {
         console.error(`❌ Erreur sur l'avis ${review.id}:`, e.message);
         results.push({ id: review.id, status: 'error', error: e.message });

@@ -222,7 +222,7 @@ const aiService = {
           const apiKey = import.meta.env.VITE_API_KEY;
           
           if (!apiKey) {
-             throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel.");
+             throw new Error("ERREUR CONFIG: Clé API manquante. Ajoutez VITE_API_KEY dans Vercel/Env.");
           }
 
           try {
@@ -252,7 +252,7 @@ const aiService = {
                 Réponse (texte seul, pas de guillemets):
               `;
 
-              // Using gemini-2.5-flash as the primary model
+              // Using gemini-2.5-flash as recommended for text tasks
               try {
                   const response = await ai.models.generateContent({
                       model: "gemini-2.5-flash",
@@ -260,8 +260,8 @@ const aiService = {
                   });
                   return response.text || "";
               } catch (e) {
-                  // Fallback if needed
-                  console.warn("Gemini 2.5 Flash failed, trying fallback", e);
+                  // Fallback strategy to 3-pro if flash fails or for complex reasoning (simulated here for robustness)
+                  console.warn("Gemini 2.5 Flash failed or rate limited, trying fallback to 3-pro...", e);
                   try {
                        const response = await ai.models.generateContent({
                           model: "gemini-3-pro-preview",
@@ -284,7 +284,7 @@ const aiService = {
           try {
               const response = await ai.models.generateContent({
                   model: "gemini-2.5-flash",
-                  contents: `Post ${platform} pour avis: "${review.body}"`
+                  contents: `Rédige un post engageant pour ${platform} mettant en avant cet avis client positif : "${review.body}". Ajoute des hashtags pertinents.`
               });
               return response.text || "";
           } catch (e) {
@@ -296,15 +296,19 @@ const aiService = {
           if (!apiKey) return { error: "Clé manquante" };
           const ai = new GoogleGenAI({ apiKey });
           
-          const response = await ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents: JSON.stringify(payload)
-          });
-          
           try {
-             return JSON.parse(response.text || "{}");
-          } catch(e) {
-             return { text: response.text };
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: JSON.stringify(payload)
+            });
+            
+            try {
+                return JSON.parse(response.text || "{}");
+            } catch(e) {
+                return { text: response.text };
+            }
+          } catch (e: any) {
+             return { error: e.message };
           }
       }
 };
