@@ -1,7 +1,5 @@
-
 import Stripe from 'stripe';
 
-// Initialisation de Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 });
@@ -12,14 +10,23 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { plan, successUrl, cancelUrl } = JSON.parse(req.body);
+    let body = req.body;
+    // Vercel parse parfois le body automatiquement, parfois non.
+    if (typeof body === 'string') {
+        try {
+            body = JSON.parse(body);
+        } catch (e) {
+            console.error("JSON Parse Error:", e);
+            return res.status(400).json({ error: "Invalid JSON body" });
+        }
+    }
 
-    // --- IMPORTANT : CONFIGURATION DES PRIX ---
-    // Vous devez définir ces variables dans Vercel (Settings > Environment Variables)
-    // STRIPE_PRICE_ID_STARTER = price_xxxxxx
-    // STRIPE_PRICE_ID_PRO = price_yyyyyy
-    // Si vous ne les avez pas encore, remplacez les valeurs par défaut ci-dessous par vos IDs en dur temporairement (ex: 'price_1P...')
-    
+    const { plan, successUrl, cancelUrl } = body || {};
+
+    if (!plan) {
+        return res.status(400).json({ error: "Plan parameter is required" });
+    }
+
     const prices: Record<string, string | undefined> = {
       'starter': process.env.STRIPE_PRICE_ID_STARTER, 
       'pro': process.env.STRIPE_PRICE_ID_PRO
@@ -28,11 +35,12 @@ export default async function handler(req: any, res: any) {
     const priceId = prices[plan];
 
     if (!priceId) {
-      console.error(`Erreur: Aucun ID de prix trouvé pour le plan '${plan}'. Vérifiez vos variables d'environnement.`);
-      return res.status(400).json({ error: "Configuration du plan invalide coté serveur." });
+      console.error(`Erreur Configuration: ID manquant pour le plan '${plan}'.`);
+      return res.status(400).json({ 
+          error: "Erreur de configuration serveur (Price ID manquant)." 
+      });
     }
 
-    // Création de la session de paiement
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
@@ -42,15 +50,13 @@ export default async function handler(req: any, res: any) {
         },
       ],
       mode: 'subscription',
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      // Metadata optionnelles pour le webhook
-      // metadata: { plan: plan }
+      success_url: successUrl || 'https://example.com',
+      cancel_url: cancelUrl || 'https://example.com',
     });
 
     return res.status(200).json({ url: session.url });
   } catch (error: any) {
     console.error('Stripe Checkout Error:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message || "Erreur interne Stripe" });
   }
 }

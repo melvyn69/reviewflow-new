@@ -3,7 +3,6 @@ import {
   INITIAL_ORG, 
   INITIAL_REVIEWS, 
   INITIAL_ANALYTICS, 
-  INITIAL_WORKFLOWS,
   INITIAL_COMPETITORS
 } from './db';
 import { 
@@ -14,16 +13,17 @@ import {
   ReviewStatus,
   BrandSettings,
   Customer,
-  AppNotification
+  AppNotification,
+  Competitor,
+  SetupStatus
 } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 // --- SERVICE HELPER ---
 
-// Helper to ensure Supabase is ready or throw descriptive error
 const requireSupabase = () => {
   if (!isSupabaseConfigured()) {
-    throw new Error("La base de données n'est pas connectée. Veuillez configurer les variables d'environnement Vercel (SUPABASE_URL).");
+    throw new Error("La base de données n'est pas connectée. Veuillez configurer les variables d'environnement Vercel.");
   }
   return supabase!;
 };
@@ -57,34 +57,12 @@ const authService = {
     register: async (name: string, email: string, password: string) => {
         const db = requireSupabase();
         
-        // 1. SignUp (Creates auth.users -> triggers public.handle_new_user -> creates public.users)
         const { data: authData, error: authError } = await db.auth.signUp({ 
             email, 
             password, 
             options: { data: { full_name: name } } 
         });
         if (authError) throw authError;
-
-        if (authData.user) {
-            // 2. Create Organization
-            const { data: org, error: orgError } = await db.from('organizations').insert({
-                name: `${name}'s Organization`,
-                subscription_plan: 'free'
-            }).select().single();
-
-            if (orgError) {
-                console.error("Error creating org:", orgError);
-                return;
-            }
-
-            // 3. Link User to Organization
-            const { error: linkError } = await db.from('users').update({
-                role: 'admin',
-                organization_id: org.id
-            }).eq('id', authData.user.id);
-
-            if (linkError) console.error("Error linking user:", linkError);
-        }
     },
     logout: async () => {
         if (isSupabaseConfigured()) { await supabase!.auth.signOut(); }
@@ -110,7 +88,6 @@ const authService = {
 
 const organizationService = {
       get: async (): Promise<Organization | null> => {
-          // PROD: Fail silenty or return null if not configured, do NOT return mock data to avoid confusion
           if (!isSupabaseConfigured()) return null;
 
           try {
@@ -126,7 +103,7 @@ const organizationService = {
               const { data: locations } = await supabase!.from('locations').select('*').eq('organization_id', profile.organization_id);
 
               return { 
-                  ...INITIAL_ORG, // Safe defaults for missing fields
+                  ...INITIAL_ORG, 
                   ...org, 
                   brand: org.brand || INITIAL_ORG.brand,
                   integrations: org.integrations || INITIAL_ORG.integrations,
@@ -145,7 +122,7 @@ const organizationService = {
               const { error } = await requireSupabase().from('organizations').update(data).eq('id', user.organization_id);
               if (error) throw error;
           }
-          return INITIAL_ORG; // fallback return type match
+          return INITIAL_ORG;
       },
       initiateGoogleAuth: async (clientId: string) => { 
           alert("Nécessite une App Google Cloud vérifiée avec scope 'business.manage'.");
@@ -245,7 +222,6 @@ const reviewsService = {
 
 const aiService = {
       generateReply: async (review: Review, options: any) => {
-          // Utilisation directe de la clé API pour le client side, ou proxy via server side si besoin de sécurité accrue
           const apiKey = process.env.API_KEY; 
           
           if (!apiKey) {
@@ -350,7 +326,6 @@ const automationService = {
       },
       run: async () => {
           try {
-             // Trigger the Serverless function
              const res = await fetch('/api/cron', { method: 'GET' });
              const data = await res.json();
              return { processed: data.processed?.length || 0, actions: 0, alerts: 0 };
@@ -367,34 +342,26 @@ const seedCloudDatabase = async () => {
       
       try {
           const { data: existingUser } = await db.from('users').select('organization_id').eq('id', user.id).single();
-          
           let orgId = existingUser?.organization_id;
 
           if (!orgId) {
-              // 1. Create Org
               const { data: org, error: orgError } = await db.from('organizations').insert({ 
                   name: 'Organisation Démo', 
                   subscription_plan: 'pro',
                   workflows: [] 
               }).select().single();
-              
               if (orgError) throw orgError;
               orgId = org.id;
-              
-              // 2. Link User
               await db.from('users').update({ role: 'admin', organization_id: orgId }).eq('id', user.id);
           }
           
-          // 3. Create Location
           const { data: locs, error: locError } = await db.from('locations').insert([{ 
               organization_id: orgId, 
               name: "Boutique Paris Centre", 
               city: "Paris" 
           }]).select();
-          
           if (locError) throw locError;
 
-          // 4. Inject Reviews
           if (locs) {
               const reviewsPayload = INITIAL_REVIEWS.map(r => ({ 
                   ...r, 
@@ -466,7 +433,12 @@ const publicService = {
     }
 };
 
-// --- MOCK SERVICES FOR NON-CRITICAL FEATURES (ANALYTICS) ---
+const analyticsService = {
+    getOverview: async (period?: string) => {
+        return INITIAL_ANALYTICS;
+    }
+};
+
 const customersService = {
     list: async (): Promise<Customer[]> => {
         return Array(20).fill(null).map((_, i) => ({
@@ -477,7 +449,7 @@ const customersService = {
             total_reviews: Math.floor(Math.random() * 5) + 1,
             average_rating: 4 + Math.random(),
             status: i % 3 === 0 ? 'promoter' : 'passive'
-        }));
+        })) as Customer[];
     }
 };
 
@@ -488,49 +460,100 @@ const adminService = {
         total_reviews_processed: 1540, 
         tenants: [
             { id: '1', name: 'Demo Corp', admin_email: 'ceo@demo.com', plan: 'pro', usage: 120, mrr: '79€' },
-            { id: '2', name: 'Boulangerie Paul', admin_email: 'paul@pain.fr', plan: 'starter', usage: 45, mrr: '49€' }
+            { id: '2', name: 'Boulangerie Paul', admin_email: 'paul@boulangerie.com', plan: 'starter', usage: 45, mrr: '49€' }
         ] 
     })
 };
 
-export const api = {
-  auth: authService,
-  reviews: reviewsService,
-  organization: organizationService,
-  ai: aiService,
-  social: { connect: async () => true, publish: async (platform: string, caption: string) => true },
-  automation: automationService,
-  seedCloudDatabase,
-  analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS }, 
-  competitors: { list: async () => INITIAL_COMPETITORS, add: async () => INITIAL_COMPETITORS[0] },
-  notifications: { list: async () => [], markAllRead: async () => true, sendAlert: async () => {} },
-  locations: locationsService,
-  team: { list: async () => [], invite: async (email: string, role: string) => true, remove: async (id: string) => true },
-  billing: { 
-      getInvoices: async () => [{id: 'INV-001', date: '2023-10-01', amount: '79.00€', status: 'Paid'}], 
-      downloadInvoice: () => {}, 
-      createCheckoutSession: async (plan: string) => {
-          try {
-             const res = await fetch('/api/create_checkout', {
-                 method: 'POST',
-                 body: JSON.stringify({ 
+const socialService = {
+    publish: async (platform: string, content: string) => {
+        console.log(`Publishing to ${platform}: ${content}`);
+        return true;
+    }
+};
+
+const notificationsService = {
+    list: async (): Promise<AppNotification[]> => [],
+    markAllRead: async () => true
+};
+
+const onboardingService = {
+    checkStatus: async (): Promise<SetupStatus> => ({
+        googleConnected: false,
+        brandVoiceConfigured: true,
+        firstReviewReplied: false,
+        completionPercentage: 35
+    })
+};
+
+const activityService = {
+    getRecent: async () => [
+        { id: 1, type: 'review', text: 'Nouvel avis 5 étoiles reçu', location: 'Paris', time: 'Il y a 2h' },
+        { id: 2, type: 'alert', text: 'Réponse IA en attente de validation', location: 'Lyon', time: 'Il y a 4h' }
+    ]
+};
+
+const teamService = {
+    list: async (): Promise<User[]> => [],
+    invite: async (email: string, role: string) => {
+        console.log(`Inviting ${email} as ${role}`);
+        return true;
+    }
+};
+
+const competitorsService = {
+    list: async (): Promise<Competitor[]> => INITIAL_COMPETITORS
+};
+
+const billingService = {
+    createCheckoutSession: async (plan: 'starter' | 'pro') => {
+        try {
+            const res = await fetch('/api/create_checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     plan,
-                    successUrl: window.location.origin + '/#dashboard?payment=success',
-                    cancelUrl: window.location.origin + '/#billing?payment=cancelled'
-                 })
-             });
-             const data = await res.json();
-             return data.url;
-          } catch(e) {
-             console.error(e);
-             return null;
-          }
-      },
-      createPortalSession: async () => "https://billing.stripe.com" 
-  },
-  onboarding: { checkStatus: async () => ({ googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 25 }) },
-  activity: { getRecent: async () => [] },
-  public: publicService,
-  customers: customersService,
-  admin: adminService
+                    successUrl: window.location.origin + '/#billing?success=true',
+                    cancelUrl: window.location.origin + '/#billing?canceled=true'
+                })
+            });
+            const data = await res.json();
+            if (data.url) return data.url;
+            throw new Error(data.error || 'Erreur inconnue');
+        } catch (e: any) {
+            throw new Error(e.message);
+        }
+    },
+    createPortalSession: async () => {
+        return "https://billing.stripe.com/p/login/test"; 
+    },
+    getInvoices: async () => {
+        return [
+            { id: 'INV-001', date: '01/10/2023', amount: '49.00 €', status: 'Payé' },
+            { id: 'INV-002', date: '01/11/2023', amount: '49.00 €', status: 'Payé' }
+        ];
+    }
+};
+
+// --- EXPORT GLOBAL API ---
+
+export const api = {
+    auth: authService,
+    organization: organizationService,
+    reviews: reviewsService,
+    ai: aiService,
+    automation: automationService,
+    locations: locationsService,
+    public: publicService,
+    analytics: analyticsService,
+    customers: customersService,
+    admin: adminService,
+    social: socialService,
+    notifications: notificationsService,
+    onboarding: onboardingService,
+    activity: activityService,
+    team: teamService,
+    competitors: competitorsService,
+    billing: billingService,
+    seedCloudDatabase
 };
