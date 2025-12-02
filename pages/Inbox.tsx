@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Review, ReviewStatus, InternalNote, SavedReply } from '../types';
@@ -148,6 +149,7 @@ export const InboxPage = () => {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const searchQuery = searchParams.get('search') || '';
+  const targetReviewId = searchParams.get('reviewId');
   const toast = useToast();
 
   const [statusFilter, setStatusFilter] = useState('Tout');
@@ -183,6 +185,16 @@ export const InboxPage = () => {
       long: 'Long'
   };
 
+  // On mount: check for deep link
+  useEffect(() => {
+    if (targetReviewId) {
+        // Reset filters to ensure the target review is found
+        setStatusFilter('Tout');
+        setSourceFilter('Tout');
+        setRatingFilter('Tout');
+    }
+  }, [targetReviewId]);
+
   useEffect(() => {
     loadReviews();
     loadTemplates();
@@ -197,6 +209,17 @@ export const InboxPage = () => {
         search: searchQuery
     });
     setReviews(data);
+    
+    // Deep Link Logic: Find and select the review
+    if (targetReviewId && !selectedReview) {
+        const target = data.find(r => r.id === targetReviewId);
+        if (target) {
+            onSelectReview(target);
+            // Clean URL without reloading
+            window.history.replaceState({}, '', '#/inbox');
+        }
+    }
+    
     setLoading(false);
   };
 

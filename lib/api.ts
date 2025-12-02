@@ -338,6 +338,43 @@ const aiService = {
               throw new Error(e.message || "Erreur lors de la génération IA.");
           }
       },
+      // --- NEW FUNCTION FOR SIMULATOR ---
+      previewBrandVoice: async (brand: BrandSettings, mockReview: any) => {
+          const apiKey = process.env.API_KEY; 
+          if (!apiKey) throw new Error("Clé API Google Gemini manquante.");
+
+          try {
+              const knowledgeBaseContext = brand.knowledge_base ? `\n\n[INFO CONTEXTE ENTREPRISE]:\n${brand.knowledge_base}` : '';
+              
+              const prompt = `
+                Tu es le gestionnaire des avis client.
+                
+                [PARAMÈTRES DE MARQUE À TESTER]
+                - Ton: ${brand.tone || 'Neutre'}
+                - Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
+                - Emojis: ${brand.use_emojis ? 'Oui, modérément' : 'Non'}
+                ${knowledgeBaseContext}
+
+                [TÂCHE]
+                Rédige une réponse TEST à cet avis fictif pour montrer ton style.
+                Ne mets PAS de guillemets.
+                
+                [AVIS FICTIF]
+                Note: ${mockReview.rating}/5
+                Commentaire: "${mockReview.body}"
+              `;
+
+              const ai = new GoogleGenAI({ apiKey });
+              const response = await ai.models.generateContent({
+                  model: "gemini-2.5-flash",
+                  contents: prompt,
+              });
+
+              return response.text || "";
+          } catch (e: any) {
+              throw new Error(e.message || "Erreur simulation IA");
+          }
+      },
       generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin' | 'facebook') => {
           const apiKey = process.env.API_KEY;
           if (!apiKey) return "Clé manquante";

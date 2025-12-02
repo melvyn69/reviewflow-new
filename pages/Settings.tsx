@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link, Play, MessageSquare } from 'lucide-react';
 
 // --- GOOGLE CONNECT WIZARD COMPONENT ---
 const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onConnect: () => void }) => {
@@ -146,6 +147,12 @@ export const SettingsPage = () => {
   // Email Test State
   const [sendingTest, setSendingTest] = useState(false);
 
+  // Simulator State
+  const [simRating, setSimRating] = useState(1);
+  const [simReview, setSimReview] = useState('Service très lent et personnel désagréable.');
+  const [simResponse, setSimResponse] = useState('');
+  const [simLoading, setSimLoading] = useState(false);
+
   useEffect(() => {
     const timer = setTimeout(() => {
         if (!org) setLoading(false);
@@ -213,6 +220,24 @@ export const SettingsPage = () => {
           toast.error("Erreur: " + e.message);
       } finally {
           setSendingTest(false);
+      }
+  };
+
+  const handleSimulateAI = async () => {
+      if (!org || !org.brand) return;
+      setSimLoading(true);
+      setSimResponse('');
+      try {
+          // On passe les paramètres actuels (même non sauvegardés)
+          const response = await api.ai.previewBrandVoice(org.brand, {
+              rating: simRating,
+              body: simReview
+          });
+          setSimResponse(response);
+      } catch (e: any) {
+          toast.error(e.message);
+      } finally {
+          setSimLoading(false);
       }
   };
 
@@ -362,7 +387,7 @@ export const SettingsPage = () => {
   if (!org) return <div className="p-8 text-center text-slate-500">Impossible de charger les paramètres. <Button onClick={loadOrg} variant="ghost" className="ml-2">Réessayer</Button></div>;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-slate-900">Paramètres</h1>
       
       <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
@@ -460,13 +485,14 @@ export const SettingsPage = () => {
       )}
 
       {activeTab === 'brand' && org.brand && (
-          <div className="space-y-6 animate-in fade-in">
-              <Card>
-                  <CardHeader>
-                      <CardTitle>Personnalité de l'IA</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
+              {/* Colonne Gauche : Configuration */}
+              <div className="space-y-6">
+                  <Card>
+                      <CardHeader>
+                          <CardTitle>Configuration de la Personnalité</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
                           <div>
                               <label className="block text-sm font-medium text-slate-700 mb-1">Ton de voix</label>
                               <Input 
@@ -478,7 +504,7 @@ export const SettingsPage = () => {
                           <div>
                               <label className="block text-sm font-medium text-slate-700 mb-1">Style de langage</label>
                               <div className="flex gap-4 mt-2">
-                                  <label className="flex items-center gap-2 cursor-pointer">
+                                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 p-2 rounded-lg flex-1 border border-slate-200">
                                       <input 
                                         type="radio" 
                                         name="style" 
@@ -486,9 +512,9 @@ export const SettingsPage = () => {
                                         onChange={() => setOrg({...org, brand: {...org.brand!, language_style: 'formal'}})}
                                         className="text-indigo-600 focus:ring-indigo-500"
                                       />
-                                      <span className="text-sm">Vouvoiement</span>
+                                      <span className="text-sm font-medium">Vouvoiement</span>
                                   </label>
-                                  <label className="flex items-center gap-2 cursor-pointer">
+                                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 p-2 rounded-lg flex-1 border border-slate-200">
                                       <input 
                                         type="radio" 
                                         name="style" 
@@ -496,45 +522,113 @@ export const SettingsPage = () => {
                                         onChange={() => setOrg({...org, brand: {...org.brand!, language_style: 'casual'}})}
                                         className="text-indigo-600 focus:ring-indigo-500"
                                       />
-                                      <span className="text-sm">Tutoiement</span>
+                                      <span className="text-sm font-medium">Tutoiement</span>
                                   </label>
                               </div>
                           </div>
-                      </div>
 
-                      <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                          <Toggle 
-                            checked={org.brand.use_emojis} 
-                            onChange={(checked) => setOrg({...org, brand: {...org.brand!, use_emojis: checked}})}
-                          />
-                          <div>
-                              <span className="block text-sm font-medium text-indigo-900">Utiliser des Emojis</span>
-                              <span className="block text-xs text-indigo-700">L'IA ajoutera des 😊, 🙏, ⭐ dans ses réponses.</span>
+                          <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                              <Toggle 
+                                checked={org.brand.use_emojis} 
+                                onChange={(checked) => setOrg({...org, brand: {...org.brand!, use_emojis: checked}})}
+                              />
+                              <div>
+                                  <span className="block text-sm font-medium text-indigo-900">Utiliser des Emojis</span>
+                                  <span className="block text-xs text-indigo-700">L'IA ajoutera des 😊, 🙏, ⭐ dans ses réponses.</span>
+                              </div>
                           </div>
-                      </div>
 
-                      <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Base de Connaissance (Context)</label>
-                          <textarea 
-                            className="w-full p-3 border border-slate-200 rounded-lg text-sm h-32 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                            placeholder="Entrez ici les faits que l'IA doit connaître : 'Nous sommes fermés le lundi', 'Le Wifi est gratuit', 'Menu enfant à 12€'..."
-                            value={org.brand.knowledge_base || ''}
-                            onChange={(e) => setOrg(prev => {
-                                if (!prev) return null;
-                                return { 
-                                    ...prev, 
-                                    brand: { ...prev.brand!, knowledge_base: e.target.value } 
-                                };
-                            })}
-                          />
-                          <p className="text-xs text-slate-500 mt-1">Ces informations seront utilisées par l'IA pour répondre aux questions spécifiques.</p>
-                      </div>
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Base de Connaissance (Contexte)</label>
+                              <textarea 
+                                className="w-full p-3 border border-slate-200 rounded-lg text-sm h-32 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                placeholder="Entrez ici les faits que l'IA doit connaître : 'Nous sommes fermés le lundi', 'Le Wifi est gratuit', 'Menu enfant à 12€'..."
+                                value={org.brand.knowledge_base || ''}
+                                onChange={(e) => setOrg(prev => {
+                                    if (!prev) return null;
+                                    return { 
+                                        ...prev, 
+                                        brand: { ...prev.brand!, knowledge_base: e.target.value } 
+                                    };
+                                })}
+                              />
+                              <p className="text-xs text-slate-500 mt-1">Ces informations seront utilisées par l'IA pour répondre aux questions spécifiques.</p>
+                          </div>
 
-                      <div className="flex justify-end">
-                          <Button onClick={handleSaveBrand}>Enregistrer</Button>
-                      </div>
-                  </CardContent>
-              </Card>
+                          <div className="flex justify-end border-t border-slate-100 pt-4">
+                              <Button onClick={handleSaveBrand}>Sauvegarder les réglages</Button>
+                          </div>
+                      </CardContent>
+                  </Card>
+              </div>
+
+              {/* Colonne Droite : Simulateur */}
+              <div className="space-y-6">
+                  <Card className="bg-slate-50 border-slate-200 h-full">
+                      <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                              <Play className="h-5 w-5 text-indigo-600" />
+                              Simulateur en direct
+                          </CardTitle>
+                          <p className="text-sm text-slate-500">Testez vos réglages avant de les appliquer aux vrais clients.</p>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                          {/* Mock Review Card */}
+                          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                              <div className="flex justify-between items-start mb-2">
+                                  <div className="flex items-center gap-2">
+                                      <div className="h-8 w-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center font-bold text-xs">J</div>
+                                      <span className="text-sm font-bold text-slate-900">Jean Testeur</span>
+                                  </div>
+                                  <div className="flex gap-1">
+                                    {[1,2,3,4,5].map(s => (
+                                        <button key={s} onClick={() => setSimRating(s)}>
+                                            <Sparkles className={`h-4 w-4 ${s <= simRating ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}`} />
+                                        </button>
+                                    ))}
+                                  </div>
+                              </div>
+                              <textarea 
+                                className="w-full text-sm text-slate-600 p-2 bg-slate-50 rounded border border-slate-100 focus:ring-1 focus:ring-indigo-200"
+                                value={simReview}
+                                onChange={e => setSimReview(e.target.value)}
+                              />
+                          </div>
+
+                          {/* Action */}
+                          <div className="flex justify-center">
+                              <Button 
+                                variant="secondary" 
+                                size="sm" 
+                                icon={Sparkles} 
+                                onClick={handleSimulateAI}
+                                isLoading={simLoading}
+                                className="bg-white shadow-sm text-indigo-600 border-indigo-100 hover:bg-indigo-50"
+                              >
+                                  Générer une réponse test
+                              </Button>
+                          </div>
+
+                          {/* AI Response Area */}
+                          {simResponse && (
+                              <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 relative animate-in fade-in slide-in-from-top-2">
+                                  <div className="absolute -top-2 left-4 bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
+                                      IA
+                                  </div>
+                                  <p className="text-sm text-indigo-900 leading-relaxed pt-2">
+                                      {simResponse}
+                                  </p>
+                              </div>
+                          )}
+                          
+                          {!simResponse && !simLoading && (
+                              <div className="text-center py-8 text-slate-400 text-sm italic">
+                                  La réponse de l'IA apparaîtra ici...
+                              </div>
+                          )}
+                      </CardContent>
+                  </Card>
+              </div>
           </div>
       )}
 

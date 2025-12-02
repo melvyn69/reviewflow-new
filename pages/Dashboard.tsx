@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { AnalyticsSummary, Review, SetupStatus } from '../types';
@@ -134,7 +135,6 @@ export const DashboardPage = () => {
       setSetupStatus(status);
       
       if (org && org.locations?.length > 0) {
-          // IMPORTANT: On prend le vrai ID de la base de données
           setRealLocationId(org.locations[0].id);
       }
       
@@ -234,7 +234,11 @@ export const DashboardPage = () => {
                         {urgentReviews.length > 0 ? (
                             <div className="divide-y divide-slate-100">
                                 {urgentReviews.map(review => (
-                                    <div key={review.id} className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer" onClick={() => navigate('/inbox')}>
+                                    <div 
+                                        key={review.id} 
+                                        className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer" 
+                                        onClick={() => navigate(`/inbox?reviewId=${review.id}`)}
+                                    >
                                         <div className="h-10 w-10 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0">
                                             {review.rating}★
                                         </div>
