@@ -194,6 +194,8 @@ const reviewsService = {
                 if (!error && data) {
                     result = data.map((r: any) => ({
                         ...r, 
+                        // MAPPING CRITIQUE : Supabase 'text' -> Frontend 'body'
+                        body: r.text || r.body || '',
                         internal_notes: r.internal_notes || [], 
                         analysis: r.analysis || { sentiment: 'neutral', themes: [], keywords: [], flags: {} }
                     }));
@@ -253,7 +255,8 @@ const reviewsService = {
               source: r.source?.toLowerCase() || 'google',
               rating: parseInt(r.rating) || 5,
               author_name: r.author_name || 'Anonyme',
-              body: r.text || '',
+              // Use text for DB insertion
+              text: r.text || r.body || '',
               language: 'fr',
               received_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
               status: 'pending',
@@ -414,9 +417,14 @@ const seedCloudDatabase = async () => {
 
           if (locs) {
               const reviewsPayload = INITIAL_REVIEWS.map(r => ({ 
-                  ...r, 
-                  id: undefined, 
                   location_id: locs[0].id, 
+                  source: r.source,
+                  rating: r.rating,
+                  text: r.body,
+                  author_name: r.author_name,
+                  received_at: r.received_at,
+                  status: r.status,
+                  language: r.language,
                   internal_notes: [], 
                   analysis: r.analysis || {} 
               }));
@@ -504,7 +512,7 @@ const publicService = {
                 location_id: locationId,
                 rating: rating,
                 text: finalBody,
-                body: finalBody, // Doublon pour compatibilité
+                // On n'envoie PAS 'body' car la colonne n'existe pas
                 author_name: contact || 'Client Anonyme (Funnel)',
                 source: 'direct',
                 status: 'pending',

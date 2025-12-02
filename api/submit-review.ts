@@ -18,7 +18,6 @@ export default async function handler(req: any, res: any) {
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   // Utilisation de la clé SERVICE_ROLE pour avoir les droits d'écriture
-  // NOTE: Assurez-vous que SUPABASE_SERVICE_ROLE_KEY est défini dans vos variables d'environnement Vercel
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -56,11 +55,12 @@ export default async function handler(req: any, res: any) {
     const tagString = tags && tags.length > 0 ? `\n\n[Points clés: ${tags.join(', ')}]` : '';
     const finalBody = `${feedback || ''}${tagString}`;
 
+    // CORRECTION MAJEURE: On utilise uniquement 'text' qui est la colonne standard Supabase.
+    // On ne passe PAS 'body' ici car la colonne n'existe pas en base.
     const newReview = {
         location_id: locationId,
         rating: rating,
         text: finalBody,
-        body: finalBody, 
         author_name: contact || 'Client Anonyme (Funnel)',
         source: 'direct',
         status: 'pending',
@@ -78,7 +78,6 @@ export default async function handler(req: any, res: any) {
 
     if (error) {
         console.error("Supabase Insert Error:", error);
-        // On retourne l'erreur exacte pour le débogage client
         return res.status(500).json({ error: `Erreur Base de données: ${error.message}` });
     }
 
