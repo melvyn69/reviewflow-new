@@ -55,16 +55,21 @@ export const ReviewFunnel = () => {
 
     const handleSubmitFeedback = async () => {
         setLoading(true);
-        if (locationId) {
-            // Include tags in the submission
-            await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags);
-        }
-        setLoading(false);
-        
-        if (rating >= 4) {
-            setStep('redirect');
-        } else {
-            setStep('success');
+        try {
+            if (locationId) {
+                // Include tags in the submission
+                await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags);
+            }
+        } catch (error) {
+            console.warn("Feedback submission mock fallback", error);
+        } finally {
+            setLoading(false);
+            
+            if (rating >= 4) {
+                setStep('redirect');
+            } else {
+                setStep('success');
+            }
         }
     };
 

@@ -514,8 +514,8 @@ const publicService = {
                 }
 
             } catch (e) {
-                console.error("Erreur Supabase Feedback:", e);
-                throw e;
+                console.error("Erreur Supabase Feedback (Non bloquant):", e);
+                // On ne throw pas l'erreur pour ne pas bloquer l'interface utilisateur en mode démo/instable
             }
         }
         return true;
