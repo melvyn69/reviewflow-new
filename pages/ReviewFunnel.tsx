@@ -42,18 +42,20 @@ export const ReviewFunnel = () => {
             // FLUX POSITIF : Redirection directe Google
             setStep('redirecting');
             
+            // Enregistrement silencieux de la note positive pour les stats
+            if (locationId) {
+                api.public.submitFeedback(locationId, score, "", "", []);
+            }
+            
             // Délai pour l'animation confetti avant redirection
             setTimeout(() => {
                 if (locationInfo?.googleUrl && locationInfo.googleUrl !== '#') {
                     window.location.href = locationInfo.googleUrl;
                 } else {
-                    // Fallback si pas d'URL configurée
-                    alert("Lien Google non configuré dans les paramètres de l'établissement.");
+                    alert("Lien Google non configuré. Veuillez le renseigner dans les paramètres.");
                 }
             }, 2500);
 
-            // On envoie quand même une notif "intent" au backend si besoin (optionnel)
-            // api.public.submitFeedback(...) 
         } else {
             // FLUX NÉGATIF : Formulaire interne
             setTimeout(() => {
@@ -85,8 +87,6 @@ export const ReviewFunnel = () => {
     };
 
     if (!locationInfo) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="h-10 w-10 animate-spin text-indigo-600"/></div>;
-
-    const currentTags = NEGATIVE_TAGS; // On n'affiche les tags que pour le flux négatif maintenant
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -164,7 +164,7 @@ export const ReviewFunnel = () => {
 
                             {/* Tags Selection */}
                             <div className="flex flex-wrap gap-2 justify-center mb-6">
-                                {currentTags.map(tag => (
+                                {NEGATIVE_TAGS.map(tag => (
                                     <button
                                         key={tag}
                                         onClick={() => toggleTag(tag)}

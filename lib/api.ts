@@ -1,5 +1,3 @@
-
-
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -21,9 +19,6 @@ import {
   Location
 } from '../types';
 import { GoogleGenAI } from '@google/genai';
-
-// --- LOCAL STORAGE MOCK (For instant feedback in Demo/Offline) ---
-let localReviews: Review[] = [];
 
 // --- SERVICE HELPER ---
 
@@ -204,20 +199,11 @@ const reviewsService = {
                     }));
                 }
             } catch (e) {
-                console.warn("DB Fetch Error, falling back to local memory", e);
+                console.warn("DB Fetch Error", e);
             }
           }
 
-          // Merge with Local Memory (important for instant demo feedback)
-          if (localReviews.length > 0) {
-              result = [...localReviews, ...result];
-              // De-duplicate just in case
-              result = Array.from(new Map(result.map(item => [item.id, item])).values());
-              // Re-sort
-              result.sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
-          }
-
-          // Filter on combined results if needed (in case local reviews need filtering)
+          // Filter on combined results if needed
           if (filters.search) {
               const q = filters.search.toLowerCase();
               result = result.filter(r => r.body?.toLowerCase().includes(q) || r.author_name?.toLowerCase().includes(q));
@@ -457,6 +443,11 @@ const locationsService = {
             return true;
         }
         throw new Error("Utilisateur sans organisation.");
+    },
+    update: async (id: string, data: Partial<Location>) => {
+        const { error } = await requireSupabase().from('locations').update(data).eq('id', id);
+        if (error) throw error;
+        return true;
     }
 };
 
@@ -471,12 +462,10 @@ const publicService = {
         return null;
     },
     submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[] = []) => {
-        // Prepare Review Object
         const tagString = tags.length > 0 ? `\n\n[Points clés: ${tags.join(', ')}]` : '';
         const finalBody = `${feedback}${tagString}`;
 
-        const newReview: Review = {
-            id: `new-${Date.now()}`,
+        const newReview = {
             location_id: locationId,
             rating: rating,
             text: finalBody,
@@ -488,34 +477,11 @@ const publicService = {
             language: 'fr',
             analysis: { sentiment: rating >= 4 ? 'positive' : 'negative', themes: tags, keywords: [], flags: { hygiene: false, security: false } },
             ai_reply: undefined
-        } as any;
+        };
 
-        // 1. Try Supabase Insert
-        if (isSupabaseConfigured()) {
-            try {
-                const { error } = await supabase!.from('reviews').insert({
-                    ...newReview,
-                    id: undefined, // Let DB generate ID
-                    text: finalBody // Ensure text field matches DB schema
-                });
-                
-                if (error) throw error;
+        const { error } = await requireSupabase().from('reviews').insert(newReview);
+        if (error) throw error;
 
-                // [ALERT SYSTEM]
-                if (rating <= 3) {
-                    // Logic to fetch email and send alert via backend...
-                }
-
-            } catch (e) {
-                console.warn("Supabase insert failed, using local fallback", e);
-                // Fallback to local memory so user sees it in inbox
-                localReviews.push(newReview);
-            }
-        } else {
-            // No DB configured? Just push to memory
-            localReviews.push(newReview);
-        }
-        
         return true;
     }
 };

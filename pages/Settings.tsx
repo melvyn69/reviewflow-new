@@ -237,19 +237,23 @@ export const SettingsPage = () => {
       
       try {
           if (editLocationId) {
-             // Update logic (Not implemented in API mock, assuming similar to create for UI)
-             // In real app: await api.locations.update(editLocationId, ...)
-             toast.success("Établissement mis à jour (Simulé)");
-             // Update local state for immediate feedback
-             if (org) {
-                 const updatedLocs = org.locations.map(l => l.id === editLocationId ? { ...l, name: locationName, city: locationCity, google_review_url: locationGoogleUrl } : l);
-                 setOrg({ ...org, locations: updatedLocs });
-             }
+             await api.locations.update(editLocationId, { 
+                 name: locationName, 
+                 city: locationCity, 
+                 google_review_url: locationGoogleUrl 
+             });
+             toast.success("Établissement mis à jour");
           } else {
-             await api.locations.create({ name: locationName, city: locationCity, address: 'À compléter', country: 'France', google_review_url: locationGoogleUrl });
+             await api.locations.create({ 
+                 name: locationName, 
+                 city: locationCity, 
+                 address: 'À compléter', 
+                 country: 'France', 
+                 google_review_url: locationGoogleUrl 
+             });
              toast.success("Établissement ajouté");
-             loadOrg();
           }
+          await loadOrg(); // Reload data
           setShowLocationModal(false);
       } catch (e) {
           toast.error("Erreur lors de la sauvegarde");
@@ -883,7 +887,7 @@ export const SettingsPage = () => {
                             value={locationGoogleUrl} 
                             onChange={e => setLocationGoogleUrl(e.target.value)} 
                           />
-                          <p className="text-xs text-slate-500 mt-1">Utilisé pour la redirection après 5 étoiles.</p>
+                          <p className="text-xs text-slate-500 mt-1">Utilisé pour la redirection après 4 ou 5 étoiles.</p>
                       </div>
                       <Button className="w-full mt-2" onClick={handleSaveLocation}>
                           {editLocationId ? 'Enregistrer' : 'Ajouter'}
