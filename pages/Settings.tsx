@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link, Play, MessageSquare } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link, Play, MessageSquare, User as UserIcon, Lock } from 'lucide-react';
 
 // --- GOOGLE CONNECT WIZARD COMPONENT ---
 const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onConnect: () => void }) => {
@@ -122,6 +122,13 @@ export const SettingsPage = () => {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
+  // Profile State
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+
   // Location Modal State
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [editLocationId, setEditLocationId] = useState<string | null>(null);
@@ -160,6 +167,7 @@ export const SettingsPage = () => {
 
     loadOrg();
     loadTeam();
+    loadUserProfile();
     return () => clearTimeout(timer);
   }, []);
 
@@ -177,6 +185,36 @@ export const SettingsPage = () => {
   const loadTeam = async () => {
       const data = await api.team.list();
       setTeam(data);
+  };
+
+  const loadUserProfile = async () => {
+      const user = await api.auth.getUser();
+      if (user) {
+          setProfileName(user.name);
+          setProfileEmail(user.email);
+      }
+  };
+
+  const handleSaveUserProfile = async () => {
+      if (profilePassword && profilePassword !== confirmPassword) {
+          toast.error("Les mots de passe ne correspondent pas.");
+          return;
+      }
+      setSavingProfile(true);
+      try {
+          await api.auth.updateProfile({
+              name: profileName,
+              email: profileEmail,
+              password: profilePassword || undefined
+          });
+          toast.success("Profil mis à jour avec succès !");
+          setProfilePassword('');
+          setConfirmPassword('');
+      } catch (e: any) {
+          toast.error("Erreur: " + e.message);
+      } finally {
+          setSavingProfile(false);
+      }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -391,16 +429,90 @@ export const SettingsPage = () => {
       <h1 className="text-2xl font-bold text-slate-900">Paramètres</h1>
       
       <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
-        {['general', 'brand', 'templates', 'notifications', 'locations', 'team', 'integrations', 'data'].map((tab) => (
+        {['general', 'profile', 'brand', 'templates', 'notifications', 'locations', 'team', 'integrations', 'data'].map((tab) => (
             <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap capitalize ${activeTab === tab ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
-                {tab === 'general' ? 'Général' : tab === 'brand' ? 'IA & Identité' : tab === 'templates' ? 'Modèles' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'data' ? 'Données' : tab}
+                {tab === 'general' ? 'Général' : tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'IA & Identité' : tab === 'templates' ? 'Modèles' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'data' ? 'Données' : tab}
             </button>
         ))}
       </div>
+
+      {activeTab === 'profile' && (
+          <div className="space-y-6 animate-in fade-in">
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Mes Informations</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                      <div className="space-y-4 max-w-lg">
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
+                              <div className="relative">
+                                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                  <Input 
+                                    className="pl-10" 
+                                    value={profileName} 
+                                    onChange={(e) => setProfileName(e.target.value)} 
+                                  />
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                              <div className="relative">
+                                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                  <Input 
+                                    className="pl-10" 
+                                    value={profileEmail} 
+                                    onChange={(e) => setProfileEmail(e.target.value)} 
+                                  />
+                              </div>
+                          </div>
+                          
+                          <div className="pt-4 border-t border-slate-100">
+                              <h4 className="text-sm font-bold text-slate-900 mb-3">Changer le mot de passe</h4>
+                              <div className="space-y-3">
+                                  <div>
+                                      <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe</label>
+                                      <div className="relative">
+                                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                          <Input 
+                                            type="password" 
+                                            className="pl-10" 
+                                            placeholder="••••••••"
+                                            value={profilePassword}
+                                            onChange={(e) => setProfilePassword(e.target.value)}
+                                          />
+                                      </div>
+                                  </div>
+                                  <div>
+                                      <label className="block text-sm font-medium text-slate-700 mb-1">Confirmer mot de passe</label>
+                                      <div className="relative">
+                                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                          <Input 
+                                            type="password" 
+                                            className="pl-10" 
+                                            placeholder="••••••••"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                          />
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="flex justify-end pt-2">
+                              <Button onClick={handleSaveUserProfile} isLoading={savingProfile}>
+                                  Mettre à jour mon profil
+                              </Button>
+                          </div>
+                      </div>
+                  </CardContent>
+              </Card>
+          </div>
+      )}
 
       {activeTab === 'general' && (
           <div className="space-y-6 animate-in fade-in">

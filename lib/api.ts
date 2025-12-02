@@ -67,6 +67,18 @@ const authService = {
         });
         if (authError) throw authError;
     },
+    updateProfile: async (data: { name?: string, email?: string, password?: string }) => {
+        const db = requireSupabase();
+        const updates: any = {};
+        
+        if (data.email) updates.email = data.email;
+        if (data.password) updates.password = data.password;
+        if (data.name) updates.data = { full_name: data.name };
+
+        const { error } = await db.auth.updateUser(updates);
+        if (error) throw error;
+        return true;
+    },
     logout: async () => {
         if (isSupabaseConfigured()) { await supabase!.auth.signOut(); }
     },

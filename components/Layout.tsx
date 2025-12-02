@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -17,7 +18,9 @@ import {
   HelpCircle,
   Download,
   Users,
-  ShieldAlert
+  ShieldAlert,
+  Home,
+  PlusCircle
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification } from '../types';
@@ -40,6 +43,46 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: st
       {label}
     </Link>
   );
+};
+
+const BottomNav = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    
+    const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+
+    return (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 lg:hidden z-50 flex justify-around items-center px-2 py-2 pb-safe">
+            <button 
+                onClick={() => navigate('/dashboard')}
+                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/dashboard') ? 'text-indigo-600' : 'text-slate-400'}`}
+            >
+                <LayoutDashboard className="h-6 w-6" />
+                <span className="text-[10px] mt-1 font-medium">Accueil</span>
+            </button>
+            <button 
+                onClick={() => navigate('/inbox')}
+                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/inbox') ? 'text-indigo-600' : 'text-slate-400'}`}
+            >
+                <Inbox className="h-6 w-6" />
+                <span className="text-[10px] mt-1 font-medium">Avis</span>
+            </button>
+            <button 
+                onClick={() => navigate('/collect')}
+                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/collect') ? 'text-indigo-600' : 'text-slate-400'}`}
+            >
+                <QrCode className="h-6 w-6" />
+                <span className="text-[10px] mt-1 font-medium">Collecte</span>
+            </button>
+            <button 
+                onClick={() => navigate('/settings')}
+                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/settings') ? 'text-indigo-600' : 'text-slate-400'}`}
+            >
+                <Settings className="h-6 w-6" />
+                <span className="text-[10px] mt-1 font-medium">Réglages</span>
+            </button>
+        </div>
+    );
 };
 
 interface SidebarProps {
@@ -299,9 +342,10 @@ export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} userEmail={userEmail} />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar onMenuClick={() => setIsSidebarOpen(true)} />
-        <main className="flex-1 overflow-auto p-4 md:p-8">
+        <main className="flex-1 overflow-auto p-4 md:p-8 pb-24 lg:pb-8">
           {children}
         </main>
+        <BottomNav />
       </div>
     </div>
   );
