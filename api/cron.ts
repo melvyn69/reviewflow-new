@@ -5,20 +5,21 @@ export default async function handler(request: any, response: any) {
   console.log("🤖 Robot Reviewflow : Démarrage...");
 
   // 🔐 BACKEND UNIQUEMENT
+  // Conformément aux directives, on utilise exclusivement process.env.API_KEY pour Google GenAI
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY || process.env.VITE_API_KEY;
+  const API_KEY = process.env.API_KEY;
 
-  if (!SUPABASE_URL || !SUPABASE_KEY || !GEMINI_API_KEY) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !API_KEY) {
     return response.status(500).json({
-      error: 'Variables manquantes. Ajoutez SUPABASE_SERVICE_ROLE_KEY et API_KEY dans Vercel.',
+      error: 'Variables manquantes. Assurez-vous que SUPABASE_SERVICE_ROLE_KEY et API_KEY sont définies.',
     });
   }
 
   try {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY);
-    // Initialisation avec le nouveau SDK @google/genai
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    // Initialisation avec le nouveau SDK @google/genai en utilisant la clé nommée
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
 
     // Récupération des avis en attente
     const { data: reviewsData, error } = await supabaseAdmin

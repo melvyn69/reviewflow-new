@@ -1,3 +1,4 @@
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -454,6 +455,7 @@ const publicService = {
     submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string) => {
         if (isSupabaseConfigured()) {
             try {
+                // 1. Sauvegarder l'avis en base
                 const newReview = {
                     location_id: locationId,
                     rating: rating,
@@ -469,6 +471,42 @@ const publicService = {
                 };
                 const { error } = await supabase!.from('reviews').insert(newReview);
                 if (error) throw error;
+
+                // 2. [LOGIQUE TRANSACTIONNELLE] Envoyer une alerte immédiate si avis négatif ou neutre (<=3)
+                if (rating <= 3) {
+                    // On récupère l'organisation pour trouver l'email de l'admin
+                    const { data: loc } = await supabase!
+                        .from('locations')
+                        .select('name, organization:organizations(users(email))')
+                        .eq('id', locationId)
+                        .single();
+
+                    const adminEmail = (loc as any)?.organization?.users?.[0]?.email;
+                    
+                    if (adminEmail) {
+                        try {
+                            await fetch('/api/send-alert', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    to: adminEmail,
+                                    subject: `⚠️ Alerte Avis: ${rating}/5 chez ${loc?.name}`,
+                                    html: `
+                                        <h2>Nouvel avis reçu via QR Code</h2>
+                                        <p><strong>Note :</strong> ${rating}/5</p>
+                                        <p><strong>Message :</strong> "${feedback}"</p>
+                                        <p><strong>Contact :</strong> ${contact || 'Non renseigné'}</p>
+                                        <br/>
+                                        <a href="${window.location.origin}/#/inbox" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Répondre maintenant</a>
+                                    `
+                                })
+                            });
+                        } catch (err) {
+                            console.error("Erreur envoi alerte email:", err);
+                        }
+                    }
+                }
+
             } catch (e) {
                 console.error("Erreur Supabase Feedback:", e);
                 throw e;
@@ -519,7 +557,27 @@ const socialService = {
 
 const notificationsService = {
     list: async (): Promise<AppNotification[]> => [],
-    markAllRead: async () => true
+    markAllRead: async () => true,
+    sendTestEmail: async () => {
+        const user = await authService.getUser();
+        if (!user || !user.email) throw new Error("Utilisateur non identifié");
+
+        const response = await fetch('/api/send-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                to: user.email,
+                subject: '🔔 Test Notification Reviewflow',
+                html: '<h1>Ceci est un test</h1><p>Si vous lisez ceci, votre configuration Resend fonctionne parfaitement !</p>'
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || "Erreur lors de l'envoi");
+        }
+        return true;
+    }
 };
 
 const onboardingService = {

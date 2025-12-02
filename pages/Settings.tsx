@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, MessageSquare, Instagram, Facebook, Share2, Trash2, Save } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, MessageSquare, Instagram, Facebook, Share2, Trash2, Save, Send } from 'lucide-react';
 
 export const SettingsPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -27,6 +28,9 @@ export const SettingsPage = () => {
 
   // Team Invite State
   const [inviteEmail, setInviteEmail] = useState('');
+  
+  // Email Test State
+  const [sendingTest, setSendingTest] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -64,8 +68,6 @@ export const SettingsPage = () => {
   const handleSaveBrand = async () => {
       if (!org) return;
       
-      // CORRECTION CRITIQUE : On s'assure que l'objet brand est complet avec la knowledge base
-      // Si knowledge_base est undefined, on met une chaine vide pour éviter les soucis
       const currentKnowledgeBase = org.brand?.knowledge_base || '';
       
       const updatedBrand: BrandSettings = { 
@@ -76,7 +78,6 @@ export const SettingsPage = () => {
       try {
           await api.organization.update({ brand: updatedBrand });
           
-          // Mise à jour de l'état local pour refléter la sauvegarde
           setOrg(prev => prev ? ({ ...prev, brand: updatedBrand }) : null);
           
           toast.success("Identité de marque et Base de Connaissance sauvegardées !");
@@ -90,6 +91,18 @@ export const SettingsPage = () => {
       if (!org) return;
       await api.organization.update({ notification_settings: org.notification_settings });
       toast.success("Préférences de notification sauvegardées");
+  };
+  
+  const handleTestEmail = async () => {
+      setSendingTest(true);
+      try {
+          await api.notifications.sendTestEmail();
+          toast.success("Email de test envoyé ! Vérifiez votre boîte mail.");
+      } catch (e: any) {
+          toast.error("Erreur: " + e.message);
+      } finally {
+          setSendingTest(false);
+      }
   };
 
   const handleAddLocation = async () => {
@@ -454,6 +467,12 @@ export const SettingsPage = () => {
                                       <option value="5">Tous les avis</option>
                                   </Select>
                                   <span className="text-xs text-slate-500">M'alerter uniquement si la note est inférieure ou égale à ce seuil.</span>
+                              </div>
+                              <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                                  <p className="text-xs text-indigo-800 mb-2">Vérifiez que votre configuration email (Resend) fonctionne :</p>
+                                  <Button size="sm" variant="secondary" icon={Send} onClick={handleTestEmail} isLoading={sendingTest} className="bg-white">
+                                      Envoyer un email de test
+                                  </Button>
                               </div>
                           </div>
                       )}
