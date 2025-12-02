@@ -1,3 +1,4 @@
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -625,15 +626,67 @@ const analyticsService = {
 
 const customersService = {
     list: async (): Promise<Customer[]> => {
-        return Array(20).fill(null).map((_, i) => ({
-            id: `cust-${i}`,
-            name: `Client ${i + 1}`,
-            source: i % 2 === 0 ? 'Google' : 'Facebook',
-            last_interaction: new Date().toISOString(),
-            total_reviews: Math.floor(Math.random() * 5) + 1,
-            average_rating: 4 + Math.random(),
-            status: i % 3 === 0 ? 'promoter' : 'passive'
-        })) as Customer[];
+        if (!isSupabaseConfigured()) {
+             // Fallback to mock if no DB
+             return Array(20).fill(null).map((_, i) => ({
+                id: `cust-${i}`,
+                name: `Client ${i + 1}`,
+                source: i % 2 === 0 ? 'Google' : 'Facebook',
+                last_interaction: new Date().toISOString(),
+                total_reviews: Math.floor(Math.random() * 5) + 1,
+                average_rating: 4 + Math.random(),
+                status: i % 3 === 0 ? 'promoter' : 'passive'
+            })) as Customer[];
+        }
+
+        try {
+            const { data: reviews, error } = await supabase!
+                .from('reviews')
+                .select('author_name, rating, source, received_at')
+                .order('received_at', { ascending: false });
+
+            if (error) throw error;
+
+            const customerMap = new Map<string, Customer>();
+
+            reviews?.forEach((r) => {
+                const name = r.author_name || 'Anonyme';
+                if (!customerMap.has(name)) {
+                    customerMap.set(name, {
+                        id: `cust-${name.replace(/\s+/g, '-').toLowerCase()}`,
+                        name: name,
+                        source: r.source, // Derniere source vue car trié par date desc
+                        last_interaction: r.received_at,
+                        total_reviews: 0,
+                        average_rating: 0,
+                        status: 'passive'
+                    } as any); // temporary type for calculation
+                }
+                
+                const cust = customerMap.get(name)!;
+                // We store sum in average_rating temporarily
+                cust.average_rating += r.rating;
+                cust.total_reviews += 1;
+            });
+
+            // Finalize calculations
+            return Array.from(customerMap.values()).map(c => {
+                const avg = c.average_rating / c.total_reviews;
+                let status: Customer['status'] = 'passive';
+                if (avg >= 4.5) status = 'promoter';
+                if (avg <= 3) status = 'detractor';
+
+                return {
+                    ...c,
+                    average_rating: avg,
+                    status
+                };
+            });
+
+        } catch (e) {
+            console.error("Error fetching customers:", e);
+            return [];
+        }
     }
 };
 
@@ -682,19 +735,85 @@ const notificationsService = {
 };
 
 const onboardingService = {
-    checkStatus: async (): Promise<SetupStatus> => ({
-        googleConnected: false,
-        brandVoiceConfigured: true,
-        firstReviewReplied: false,
-        completionPercentage: 35
-    })
+    checkStatus: async (): Promise<SetupStatus> => {
+        if (!isSupabaseConfigured()) {
+             return {
+                googleConnected: false,
+                brandVoiceConfigured: true,
+                firstReviewReplied: false,
+                completionPercentage: 35
+            };
+        }
+
+        try {
+            // 1. Check Org Settings
+            const org = await organizationService.get();
+            const googleConnected = !!org?.integrations?.google;
+            const brandVoiceConfigured = !!(org?.brand?.tone && org?.brand?.tone.length > 0);
+
+            // 2. Check Activity (Replies)
+            // We use count from DB to be faster
+            const { count } = await supabase!
+                .from('reviews')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'sent');
+            
+            const firstReviewReplied = (count || 0) > 0;
+
+            // Calculate Percentage
+            const steps = [googleConnected, brandVoiceConfigured, firstReviewReplied];
+            const completed = steps.filter(Boolean).length;
+            const completionPercentage = Math.round((completed / 3) * 100);
+
+            return {
+                googleConnected,
+                brandVoiceConfigured,
+                firstReviewReplied,
+                completionPercentage
+            };
+        } catch (e) {
+            console.warn("Onboarding check failed", e);
+             return {
+                googleConnected: false,
+                brandVoiceConfigured: false,
+                firstReviewReplied: false,
+                completionPercentage: 0
+            };
+        }
+    }
 };
 
 const activityService = {
-    getRecent: async () => [
-        { id: 1, type: 'review', text: 'Nouvel avis 5 étoiles reçu', location: 'Paris', time: 'Il y a 2h' },
-        { id: 2, type: 'alert', text: 'Réponse IA en attente de validation', location: 'Lyon', time: 'Il y a 4h' }
-    ]
+    getRecent: async () => {
+        if (!isSupabaseConfigured()) {
+            return [
+                { id: 1, type: 'review', text: 'Mode Démo: Nouvel avis 5 étoiles', location: 'Démo', time: 'Il y a 2h' },
+            ];
+        }
+
+        try {
+            // Récupérer les 5 derniers avis
+            const { data: reviews } = await supabase!
+                .from('reviews')
+                .select('id, rating, author_name, received_at, status')
+                .order('received_at', { ascending: false })
+                .limit(5);
+
+            if (!reviews) return [];
+
+            return reviews.map((r: any) => ({
+                id: r.id,
+                type: 'review',
+                text: `${r.author_name} a laissé une note de ${r.rating}/5`,
+                location: r.status === 'pending' ? 'À traiter' : 'Traité',
+                time: new Date(r.received_at).toLocaleDateString()
+            }));
+
+        } catch (e) {
+            console.error("Erreur Activity Feed", e);
+            return [];
+        }
+    }
 };
 
 const teamService = {
