@@ -530,6 +530,31 @@ const publicService = {
         }
         return null;
     },
+    getWidgetReviews: async (locationId: string) => {
+        if (!isSupabaseConfigured()) return [];
+        try {
+            // Uniquement les avis positifs pour le widget (marketing)
+            const { data, error } = await supabase!
+                .from('reviews')
+                .select('author_name, rating, text, received_at')
+                .eq('location_id', locationId)
+                .gte('rating', 4)
+                .order('received_at', { ascending: false })
+                .limit(10);
+            
+            if (error) throw error;
+            
+            return data.map((r: any) => ({
+                author_name: r.author_name,
+                rating: r.rating,
+                body: r.text || '', // Mapping text -> body
+                received_at: r.received_at
+            }));
+        } catch (e) {
+            console.error("Widget fetch error", e);
+            return [];
+        }
+    },
     submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[] = []) => {
         // STRATÉGIE ROBUSTE :
         // 1. Tenter via l'API Serverless (meilleur pour la sécurité, contourne RLS)

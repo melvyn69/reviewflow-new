@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
@@ -14,6 +15,7 @@ import { AuthPage } from './pages/Auth';
 import { LandingPage } from './pages/Landing';
 import { LegalPage, PrivacyPage, ContactPage } from './pages/Legal';
 import { ReviewFunnel } from './pages/ReviewFunnel';
+import { WidgetPage } from './pages/Widget';
 import { HelpPage } from './pages/Help';
 import { CustomersPage } from './pages/Customers';
 import { SuperAdminPage } from './pages/SuperAdmin';
@@ -71,6 +73,7 @@ function AppRoutes() {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/feedback/:locationId" element={<ReviewFunnel />} />
+        <Route path="/widget/:locationId" element={<WidgetPage />} />
         
         {/* Protected Routes */}
         <Route path="/*" element={

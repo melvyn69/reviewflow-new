@@ -81,7 +81,14 @@ export const CollectPage = () => {
   };
 
   const handleCopyWidgetCode = () => {
-      const code = `<div class="reviewflow-widget" data-id="${selectedLocationId}" data-type="${widgetType}" data-theme="${widgetTheme}"></div>\n<script src="https://cdn.reviewflow.com/widget.js" async></script>`;
+      // Génère le code iframe réel qui pointe vers la nouvelle route WidgetPage
+      const appUrl = window.location.origin + window.location.pathname; // Base URL
+      const iframeSrc = `${appUrl}#/widget/${selectedLocationId}?theme=${widgetTheme}&type=${widgetType}`;
+      
+      const height = widgetType === 'badge' ? '60px' : widgetType === 'list' ? '600px' : '250px';
+      
+      const code = `<iframe src="${iframeSrc}" width="100%" height="${height}" frameborder="0" style="border:none; overflow:hidden; border-radius:12px;"></iframe>`;
+      
       navigator.clipboard.writeText(code);
       toast.success("Code HTML copié !");
   };
@@ -352,7 +359,20 @@ export const CollectPage = () => {
                                           <div className="text-xs text-slate-500">Défilement horizontal</div>
                                       </div>
                                   </div>
-                                  {/* ... other types ... */}
+                                  <div onClick={() => setWidgetType('list')} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${widgetType === 'list' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                      <Layout className="h-5 w-5 text-indigo-600 rotate-90" />
+                                      <div>
+                                          <div className="font-medium text-sm text-slate-900">Liste Verticale</div>
+                                          <div className="text-xs text-slate-500">Tous les avis</div>
+                                      </div>
+                                  </div>
+                                  <div onClick={() => setWidgetType('badge')} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${widgetType === 'badge' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                      <CheckCircle2 className="h-5 w-5 text-indigo-600" />
+                                      <div>
+                                          <div className="font-medium text-sm text-slate-900">Badge</div>
+                                          <div className="text-xs text-slate-500">Note globale compacte</div>
+                                      </div>
+                                  </div>
                               </div>
                           </div>
                           <div>
@@ -373,10 +393,10 @@ export const CollectPage = () => {
                           <CardTitle>Intégration</CardTitle>
                       </CardHeader>
                       <CardContent>
-                          <p className="text-xs text-slate-500 mb-3">Copiez ce code et collez-le dans le HTML de votre site web.</p>
+                          <p className="text-xs text-slate-500 mb-3">Copiez ce code et collez-le dans le HTML de votre site web (Wordpress, Wix, etc.).</p>
                           <div className="bg-slate-900 rounded-lg p-3 relative group">
                               <code className="text-xs font-mono text-green-400 block overflow-x-auto whitespace-pre-wrap">
-                                  {`<div class="reviewflow-widget" data-id="${selectedLocationId}" data-type="${widgetType}" data-theme="${widgetTheme}"></div>\n<script src="https://cdn.reviewflow.com/widget.js" async></script>`}
+                                  {`<iframe src="${window.location.origin + window.location.pathname}#/widget/${selectedLocationId}?theme=${widgetTheme}&type=${widgetType}" width="100%" height="${widgetType === 'badge' ? '60px' : widgetType === 'list' ? '600px' : '250px'}" frameborder="0" style="border:none; overflow:hidden; border-radius:12px;"></iframe>`}
                               </code>
                               <button 
                                 onClick={handleCopyWidgetCode}
@@ -399,21 +419,14 @@ export const CollectPage = () => {
                           <Badge variant="neutral">Mode: {widgetType}</Badge>
                       </CardHeader>
                       <CardContent className={`flex-1 flex items-center justify-center p-8 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] ${widgetTheme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
-                          {/* Widget Preview Mockup */}
-                          <div className={`w-full max-w-lg transition-all duration-500 ${widgetTheme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-                              <div className={`p-6 rounded-xl shadow-lg border ${widgetTheme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                                  <div className="flex items-center gap-2 mb-4">
-                                      <div className="flex text-yellow-400">
-                                          {[1,2,3,4,5].map(i => <Star key={i} className="h-4 w-4 fill-current" />)}
-                                      </div>
-                                      <span className="text-xs opacity-60">il y a 2 jours</span>
-                                  </div>
-                                  <p className="text-sm font-medium italic mb-4">"Excellent service, je recommande vivement cet établissement !"</p>
-                                  <div className="flex items-center gap-3">
-                                      <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs ${widgetTheme === 'dark' ? 'bg-slate-700 text-white' : 'bg-indigo-100 text-indigo-700'}`}>S</div>
-                                      <div className="text-xs font-bold">Sophie Martin</div>
-                                  </div>
-                              </div>
+                          {/* Live Iframe Preview */}
+                          <div className="w-full max-w-lg">
+                              <iframe 
+                                src={`${window.location.origin + window.location.pathname}#/widget/${selectedLocationId}?theme=${widgetTheme}&type=${widgetType}`}
+                                width="100%"
+                                height={widgetType === 'badge' ? '60px' : widgetType === 'list' ? '400px' : '250px'}
+                                style={{ border: 'none', overflow: 'hidden', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                              ></iframe>
                           </div>
                       </CardContent>
                   </Card>
