@@ -29,7 +29,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const stripe = new Stripe(stripeSecret, {
-    apiVersion: '2023-10-16',
+    apiVersion: '2023-10-16' as any,
   });
 
   try {

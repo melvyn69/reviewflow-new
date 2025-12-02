@@ -95,10 +95,19 @@ const organizationService = {
               if (!user) return null;
 
               const { data: profile } = await supabase!.from('users').select('organization_id').eq('id', user.id).single();
-              if (!profile?.organization_id) return null;
+              
+              // AUTO-REPAIR: Si l'utilisateur n'a pas d'organisation, on en crée une par défaut
+              if (!profile?.organization_id) {
+                  console.log("⚠️ Aucune organisation trouvée pour cet utilisateur. Création automatique...");
+                  return await organizationService.createDefault(user.id);
+              }
 
               const { data: org, error } = await supabase!.from('organizations').select('*').eq('id', profile.organization_id).single();
-              if (error || !org) return null;
+              
+              if (error || !org) {
+                  // Double check: si l'ID est dans le profil mais l'org n'existe pas en DB (cas rare de suppression)
+                   return await organizationService.createDefault(user.id);
+              }
 
               const { data: locations } = await supabase!.from('locations').select('*').eq('organization_id', profile.organization_id);
 
@@ -114,6 +123,42 @@ const organizationService = {
           } catch (e) { 
               console.error("Error fetching organization", e);
               return null; 
+          }
+      },
+      createDefault: async (userId: string): Promise<Organization | null> => {
+          try {
+              const db = requireSupabase();
+              
+              // 1. Créer l'organisation
+              const { data: org, error: orgError } = await db.from('organizations').insert({
+                  name: 'Ma Société',
+                  subscription_plan: 'free',
+                  industry: 'other'
+              }).select().single();
+              
+              if (orgError) throw orgError;
+
+              // 2. Créer un établissement par défaut
+              await db.from('locations').insert({
+                  organization_id: org.id,
+                  name: 'Siège Principal',
+                  city: 'Paris',
+                  country: 'France',
+                  connection_status: 'disconnected'
+              });
+
+              // 3. Lier l'utilisateur
+              await db.from('users').update({
+                  organization_id: org.id,
+                  role: 'admin'
+              }).eq('id', userId);
+
+              // 4. Recharger l'organisation complète (récursif mais safe car profile.organization_id est set)
+              return await organizationService.get();
+
+          } catch (e) {
+              console.error("Critical error creating default org:", e);
+              return null;
           }
       },
       update: async (data: Partial<Organization>) => {

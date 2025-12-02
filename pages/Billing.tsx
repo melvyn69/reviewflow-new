@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import jsPDF from 'jspdf';
@@ -173,6 +173,7 @@ const InvoiceTable = () => {
 export const BillingPage = () => {
     const [org, setOrg] = useState<Organization | null>(null);
     const [upgrading, setUpgrading] = useState<string | null>(null);
+    const [error, setError] = useState(false);
     const toast = useToast();
 
     useEffect(() => {
@@ -180,8 +181,19 @@ export const BillingPage = () => {
     }, []);
 
     const loadOrg = async () => {
-        const data = await api.organization.get();
-        setOrg(data);
+        setError(false);
+        setOrg(null);
+        try {
+            // Timeout safety pour éviter le chargement infini
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+            const dataPromise = api.organization.get();
+            
+            const data = await Promise.race([dataPromise, timeoutPromise]) as Organization;
+            setOrg(data);
+        } catch (e) {
+            console.error("Erreur chargement Billing:", e);
+            setError(true);
+        }
     };
 
     const handleUpgrade = async (plan: 'starter' | 'pro') => {
@@ -202,6 +214,17 @@ export const BillingPage = () => {
             setUpgrading(null);
         }
     };
+
+    if (error) {
+        return (
+            <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
+                <ShieldCheck className="h-12 w-12 text-slate-300 mb-4" />
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Information indisponible</h3>
+                <p className="text-slate-500 mb-6">Nous n'avons pas pu charger votre abonnement. Cela arrive si l'organisation est en cours de création.</p>
+                <Button onClick={loadOrg} icon={RefreshCw}>Réessayer</Button>
+            </div>
+        );
+    }
 
     if (!org) return <div className="p-8 text-center"><Skeleton className="h-96 w-full" /></div>;
 

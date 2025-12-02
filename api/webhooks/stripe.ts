@@ -8,11 +8,19 @@ export const config = {
   },
 };
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+// Gestion robuste des variables d'environnement
+const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY;
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+if (!STRIPE_SECRET || !WEBHOOK_SECRET || !SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("ERREUR CONFIG: Variables d'environnement manquantes pour le Webhook Stripe.");
+}
+
+const stripe = new Stripe(STRIPE_SECRET!, {
+  apiVersion: '2023-10-16' as any,
+});
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -26,21 +34,13 @@ export default async function handler(req: any, res: any) {
     const buf = await buffer(req);
     const sig = req.headers['stripe-signature'];
 
-    if (!webhookSecret) {
-        console.error("❌ STRIPE_WEBHOOK_SECRET manquant dans les variables d'environnement Vercel.");
-        return res.status(500).send("Server Configuration Error");
-    }
-
-    event = stripe.webhooks.constructEvent(buf, sig as string, webhookSecret);
+    event = stripe.webhooks.constructEvent(buf, sig as string, WEBHOOK_SECRET!);
   } catch (err: any) {
     console.error(`⚠️  Webhook signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = createClient(SUPABASE_URL!, SUPABASE_KEY!);
 
   try {
     console.log(`🔔 Événement Stripe reçu : ${event.type}`);
@@ -55,16 +55,23 @@ export default async function handler(req: any, res: any) {
         // 2. STRATÉGIE DE SECOURS (Payment Links) : 
         // Si pas d'ID, on cherche l'utilisateur par son EMAIL dans Supabase
         if (!userId) {
+            // Stripe peut mettre l'email à deux endroits selon le contexte
             const customerEmail = session.customer_details?.email || session.customer_email;
-            if (customerEmail) {
-                console.log(`🔎 Recherche utilisateur par email : ${customerEmail}`);
-                const { data: user } = await supabase.from('users').select('id, organization_id').eq('email', customerEmail).single();
+            
+            // On vérifie aussi si l'email a été pré-rempli via notre lien
+            const prefilledEmail = session.custom_fields?.find((f:any) => f.key === 'email')?.text?.value;
+
+            const emailToSearch = customerEmail || prefilledEmail;
+
+            if (emailToSearch) {
+                console.log(`🔎 Recherche utilisateur par email : ${emailToSearch}`);
+                const { data: user } = await supabase.from('users').select('id, organization_id').eq('email', emailToSearch).single();
                 
                 if (user) {
                     userId = user.id;
                     console.log(`✅ Utilisateur retrouvé : ${userId} (Org: ${user.organization_id})`);
                 } else {
-                    console.warn(`⚠️ Aucun utilisateur trouvé pour l'email ${customerEmail}`);
+                    console.warn(`⚠️ Aucun utilisateur trouvé pour l'email ${emailToSearch}`);
                 }
             }
         }
