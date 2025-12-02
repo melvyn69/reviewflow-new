@@ -462,25 +462,23 @@ const publicService = {
         return null;
     },
     submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[] = []) => {
-        const tagString = tags.length > 0 ? `\n\n[Points clés: ${tags.join(', ')}]` : '';
-        const finalBody = `${feedback}${tagString}`;
+        // Utilisation de l'API serveur pour contourner le RLS (restrictions utilisateurs anonymes)
+        const response = await fetch('/api/submit-review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                locationId,
+                rating,
+                feedback,
+                contact,
+                tags
+            })
+        });
 
-        const newReview = {
-            location_id: locationId,
-            rating: rating,
-            text: finalBody,
-            body: finalBody,
-            author_name: contact || 'Client Anonyme (Funnel)',
-            source: 'direct',
-            status: 'pending',
-            received_at: new Date().toISOString(),
-            language: 'fr',
-            analysis: { sentiment: rating >= 4 ? 'positive' : 'negative', themes: tags, keywords: [], flags: { hygiene: false, security: false } },
-            ai_reply: undefined
-        };
-
-        const { error } = await requireSupabase().from('reviews').insert(newReview);
-        if (error) throw error;
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || "Erreur serveur lors de l'enregistrement de l'avis");
+        }
 
         return true;
     }
