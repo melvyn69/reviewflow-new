@@ -137,187 +137,84 @@ const organizationService = {
 };
 
 const reviewsService = {
-  list: async (filters: any): Promise<Review[]> => {
-    if (isSupabaseConfigured()) {
-      let query = supabase!
-        .from('reviews')
-        .select('*')
-        .order('received_at', { ascending: false });
-
-      if (filters.status && filters.status !== 'Tout') {
-        query = query.eq('status', filters.status.toLowerCase());
+      list: async (filters: any): Promise<Review[]> => {
+          if (isSupabaseConfigured()) {
+              let query = supabase!.from('reviews').select('*').order('received_at', { ascending: false });
+              if (filters.status && filters.status !== 'Tout') query = query.eq('status', filters.status.toLowerCase());
+              if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
+              if (filters.rating && filters.rating !== 'Tout') query = query.eq('rating', parseInt(filters.rating));
+              
+              const { data, error } = await query;
+              if (error) return [];
+              let result = (data || []).map((r: any) => ({
+                  ...r, internal_notes: r.internal_notes || [], analysis: r.analysis || { sentiment: 'neutral', themes: [], keywords: [], flags: {} }
+              })) as Review[];
+              if (filters.search) {
+                  const q = filters.search.toLowerCase();
+                  result = result.filter(r => r.body?.toLowerCase().includes(q) || r.author_name?.toLowerCase().includes(q));
+              }
+              return result;
+          }
+          let data = [...INITIAL_REVIEWS];
+          if (filters.status && filters.status !== 'Tout') data = data.filter(r => r.status === filters.status.toLowerCase());
+          if (filters.source && filters.source !== 'Tout') data = data.filter(r => r.source === filters.source.toLowerCase());
+          if (filters.rating && filters.rating !== 'Tout') data = data.filter(r => r.rating === parseInt(filters.rating.toString()[0]));
+          if (filters.search) {
+              const q = filters.search.toLowerCase();
+              data = data.filter(r => r.body.toLowerCase().includes(q) || r.author_name.toLowerCase().includes(q));
+          }
+          return data;
+      },
+      reply: async (id: string, text: string) => {
+          if (isSupabaseConfigured()) {
+              await supabase!.from('reviews').update({ status: 'sent', posted_reply: text, replied_at: new Date().toISOString() }).eq('id', id);
+          }
+          return true;
+      },
+      saveDraft: async (id: string, text: string) => {
+          if (isSupabaseConfigured()) {
+              await supabase!.from('reviews').update({ status: 'draft', ai_reply: { text, needs_manual_validation: false, created_at: new Date().toISOString() } }).eq('id', id);
+          }
+          return true;
+      },
+      updateStatus: async (id: string, status: ReviewStatus) => {
+          if (isSupabaseConfigured()) {
+              await supabase!.from('reviews').update({ status }).eq('id', id);
+          }
+          return true; 
+      },
+      addNote: async (id: string, text: string) => {
+          const newNote = { id: `n-${Date.now()}`, text, author_name: 'Me', created_at: new Date().toISOString() };
+          if (isSupabaseConfigured()) {
+              const { data: review } = await supabase!.from('reviews').select('internal_notes').eq('id', id).single();
+              const notes = review?.internal_notes || [];
+              await supabase!.from('reviews').update({ internal_notes: [...notes, newNote] }).eq('id', id);
+          }
+          return newNote;
+      },
+      importBulk: async (data: any[], locationId: string) => {
+          if (isSupabaseConfigured()) {
+              const formattedData = data.map(r => ({
+                  location_id: locationId,
+                  source: r.source?.toLowerCase() || 'google',
+                  rating: parseInt(r.rating) || 5,
+                  author_name: r.author_name || 'Anonyme',
+                  body: r.text || '',
+                  language: 'fr',
+                  received_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
+                  status: 'pending',
+                  analysis: {
+                      sentiment: 'neutral',
+                      themes: [],
+                      keywords: [],
+                      flags: { hygiene: false, security: false }
+                  }
+              }));
+              const { error } = await supabase!.from('reviews').insert(formattedData);
+              if (error) throw error;
+          }
+          return data.length;
       }
-      if (filters.source && filters.source !== 'Tout') {
-        query = query.eq('source', filters.source.toLowerCase());
-      }
-      if (filters.rating && filters.rating !== 'Tout') {
-        query = query.eq('rating', parseInt(filters.rating, 10));
-      }
-
-      const { data, error } = await query;
-      if (error || !data) return [];
-
-      let result = (data || []).map((r: any) => ({
-        ...r,
-        internal_notes: r.internal_notes || [],
-        analysis:
-          r.analysis || {
-            sentiment: 'neutral',
-            themes: [],
-            keywords: [],
-            flags: {
-              hygiene: false,
-              discrimination: false,
-              security: false,
-              staff_conflict: false,
-              pricing_issue: false,
-            },
-          },
-      })) as Review[];
-
-      if (filters.search) {
-        const q = (filters.search as string).toLowerCase();
-        result = result.filter(
-          (r) =>
-            r.body?.toLowerCase().includes(q) ||
-            r.author_name?.toLowerCase().includes(q)
-        );
-      }
-
-      return result;
-    }
-
-    // ---- Fallback : données mock quand Supabase n'est pas configuré ----
-    let data = [...INITIAL_REVIEWS];
-
-    if (filters.status && filters.status !== 'Tout') {
-      data = data.filter(
-        (r) => r.status === filters.status.toLowerCase()
-      );
-    }
-    if (filters.source && filters.source !== 'Tout') {
-      data = data.filter(
-        (r) => r.source === filters.source.toLowerCase()
-      );
-    }
-    if (filters.rating && filters.rating !== 'Tout') {
-      const ratingInt = parseInt(filters.rating.toString(), 10);
-      data = data.filter((r) => r.rating === ratingInt);
-    }
-    if (filters.search) {
-      const q = (filters.search as string).toLowerCase();
-      data = data.filter(
-        (r) =>
-          r.body.toLowerCase().includes(q) ||
-          r.author_name.toLowerCase().includes(q)
-      );
-    }
-
-    return data;
-  },
-
-  reply: async (id: string, text: string) => {
-    if (isSupabaseConfigured()) {
-      await supabase!
-        .from('reviews')
-        .update({
-          status: 'sent',
-          posted_reply: text,
-          replied_at: new Date().toISOString(),
-        })
-        .eq('id', id);
-    }
-    return true;
-  },
-
-  saveDraft: async (id: string, text: string) => {
-    if (isSupabaseConfigured()) {
-      await supabase!
-        .from('reviews')
-        .update({
-          status: 'draft',
-          ai_reply: {
-            text,
-            needs_manual_validation: false,
-            created_at: new Date().toISOString(),
-          },
-        })
-        .eq('id', id);
-    }
-    return true;
-  },
-
-  updateStatus: async (id: string, status: ReviewStatus) => {
-    if (isSupabaseConfigured()) {
-      await supabase!
-        .from('reviews')
-        .update({ status })
-        .eq('id', id);
-    }
-    return true;
-  },
-
-  addNote: async (id: string, text: string) => {
-    const newNote = {
-      id: `n-${Date.now()}`,
-      text,
-      author_name: 'Me',
-      created_at: new Date().toISOString(),
-    };
-
-    if (isSupabaseConfigured()) {
-      const { data: review } = await supabase!
-        .from('reviews')
-        .select('internal_notes')
-        .eq('id', id)
-        .single();
-
-      const notes = review?.internal_notes || [];
-      await supabase!
-        .from('reviews')
-        .update({ internal_notes: [...notes, newNote] })
-        .eq('id', id);
-    }
-
-    return newNote;
-  },
-
-  importBulk: async (data: any[], locationId: string) => {
-    if (isSupabaseConfigured()) {
-      const formattedData = data.map((r) => ({
-        location_id: locationId,
-        source: r.source?.toLowerCase() || 'google',
-        rating: parseInt(r.rating, 10) || 5,
-        author_name: r.author_name || 'Anonyme',
-        body: r.text || '',
-        language: 'fr',
-        received_at: r.date
-          ? new Date(r.date).toISOString()
-          : new Date().toISOString(),
-        status: 'pending',
-        analysis: {
-          sentiment: 'neutral',
-          themes: [],
-          keywords: [],
-          flags: {
-            hygiene: false,
-            discrimination: false,
-            security: false,
-            staff_conflict: false,
-            pricing_issue: false,
-          },
-        },
-      }));
-
-      const { error } = await supabase!
-        .from('reviews')
-        .insert(formattedData);
-
-      if (error) throw error;
-    }
-
-    return data.length;
-  },
 };
 
 const aiService = {
@@ -355,28 +252,29 @@ const aiService = {
                 Réponse (texte seul, pas de guillemets):
               `;
 
-              // Stratégie de modèle : 2.5 Flash -> 3 Pro -> 1.5 Flash
-              const models = ["gemini-2.5-flash", "gemini-3-pro", "gemini-1.5-flash"];
-              
-              for (const modelName of models) {
+              // Stratégie de modèle : 2.5 Flash -> 3 Pro -> 1.5 Flash -> Pro
+              try {
+                  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
+                  const result = await model.generateContent(prompt);
+                  return result.response.text();
+              } catch (e) {
                   try {
-                      console.log(`Essai modèle: ${modelName}...`);
-                      const model = genAI.getGenerativeModel({ model: modelName });
+                      const model = genAI.getGenerativeModel({ model: "gemini-3-pro"});
                       const result = await model.generateContent(prompt);
-                      const text = result.response.text();
-                      if (text) return text;
-                  } catch (err: any) {
-                      console.warn(`Echec ${modelName}:`, err.message);
-                      if (modelName === models[models.length - 1]) throw err;
+                      return result.response.text();
+                  } catch (e2) {
+                      try {
+                          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash"});
+                          const result = await model.generateContent(prompt);
+                          return result.response.text();
+                      } catch (e3) {
+                          const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+                          const result = await model.generateContent(prompt);
+                          return result.response.text();
+                      }
                   }
               }
-              
-              throw new Error("Tous les modèles IA ont échoué.");
-
           } catch (e: any) {
-              console.error("ERREUR IA FINALE:", e);
-              if (e.message?.includes('403') || e.message?.includes('API key')) throw new Error("Clé API invalide.");
-              if (e.message?.includes('429')) throw new Error("Quota Google dépassé.");
               throw new Error(`Erreur IA: ${e.message}`);
           }
       },
@@ -467,11 +365,12 @@ const automationService = {
                        for (const action of rule.actions) {
                            if (action.type === 'generate_ai_reply' || action.type === 'auto_reply') {
                                
+                               // CORRECTION FINALE : Appel réel IA
                                let replyText = "";
                                try {
                                    replyText = await aiService.generateReply(review as Review, { tone: 'professional', length: 'medium' });
                                } catch (e) {
-                                   replyText = "Erreur génération IA.";
+                                   replyText = "Erreur génération IA. Veuillez vérifier manuellement.";
                                }
 
                                await supabase!.from('reviews').update({ 
@@ -499,99 +398,28 @@ const automationService = {
 
 const seedCloudDatabase = async () => {
       if (!isSupabaseConfigured()) throw new Error("Supabase non connecté");
-      
       const { data: { user } } = await supabase!.auth.getUser();
-      if (!user) throw new Error("Vous devez être connecté pour injecter les données.");
-
+      if (!user) throw new Error("Connectez-vous.");
       try {
-          console.log("1. Démarrage de l'injection...");
-
-          const { data: org, error: orgError } = await supabase!
-            .from('organizations')
-            .insert({ 
-                name: 'Mon Organisation Démo',
-                subscription_plan: 'pro',
-                ai_usage_count: 12,
-                industry: 'restaurant',
-                integrations: INITIAL_ORG.integrations,
-                brand: INITIAL_ORG.brand,
-                notification_settings: INITIAL_ORG.notification_settings,
-                saved_replies: INITIAL_ORG.saved_replies || [],
-                workflows: []
-            })
-            .select()
-            .single();
-            
-          if (orgError) {
-              console.error("Erreur Création Org:", JSON.stringify(orgError));
-              throw new Error(`Erreur SQL Org: ${orgError.message}.`);
+          const { data: org, error } = await supabase!.from('organizations').insert({ 
+              name: 'Démo Org', 
+              subscription_plan: 'pro',
+              workflows: [] 
+          }).select().single();
+          
+          if (error) throw error;
+          
+          await supabase!.from('users').upsert({ id: user.id, email: user.email, role: 'admin', organization_id: org.id });
+          const { data: locs } = await supabase!.from('locations').insert([{ organization_id: org.id, name: "Lieu Démo", address: "Paris" }]).select();
+          
+          if (locs) {
+              const reviewsPayload = INITIAL_REVIEWS.map(r => ({ ...r, location_id: locs[0].id, internal_notes: [], analysis: r.analysis || {} }));
+              await supabase!.from('reviews').insert(reviewsPayload);
           }
-          const orgId = org.id;
-          
-          const { error: userError } = await supabase!.from('users').upsert({
-              id: user.id,
-              email: user.email,
-              name: user.user_metadata?.full_name || 'Admin',
-              role: 'admin',
-              organization_id: orgId
-          });
-
-          if (userError) {
-              console.error("Erreur Liaison User:", JSON.stringify(userError));
-              throw new Error(`Impossible de lier votre utilisateur: ${userError.message}`);
-          }
-          
-          const { data: locs, error: locError } = await supabase!.from('locations').insert([
-              { organization_id: orgId, name: "Boutique Paris Centre", city: "Paris", country: "France", connection_status: "connected", platform_rating: 4.8 },
-              { organization_id: orgId, name: "Atelier Lyon", city: "Lyon", country: "France", connection_status: "disconnected", platform_rating: 4.2 }
-          ]).select();
-          
-          if (locError) {
-              console.error("Erreur Locations:", JSON.stringify(locError));
-              throw locError;
-          }
-          
-          const locId = locs[0].id;
-          const reviewsPayload = INITIAL_REVIEWS.map(r => ({
-              location_id: locId,
-              source: r.source,
-              rating: r.rating,
-              author_name: r.author_name,
-              text: r.body || "",
-              language: r.language || "fr",
-              received_at: r.received_at,
-              status: r.status,
-              analysis: r.analysis || null,
-              ai_reply: r.ai_reply || null,
-              internal_notes: r.internal_notes || [],
-              posted_reply: r.posted_reply || null,
-              replied_at: r.replied_at || null
-          }));
-          
-          const { error: revError } = await supabase!.from('reviews').insert(reviewsPayload);
-          if (revError) {
-              console.error("Erreur Reviews:", JSON.stringify(revError));
-              throw new Error(`Erreur Reviews: ${revError.message}`);
-          }
-
-          const competitorsPayload = INITIAL_COMPETITORS.map(c => ({
-              organization_id: orgId,
-              name: c.name,
-              address: c.address,
-              rating: c.rating,
-              review_count: c.review_count,
-              strengths: c.strengths || [],
-              weaknesses: c.weaknesses || []
-          }));
-          
-          await supabase!.from('competitors').insert(competitorsPayload);
-          
-          console.log("Injection terminée.");
           window.location.reload();
           return true;
-
       } catch (e: any) {
-          console.error("Erreur Fatale Injection:", e);
+          console.error(e);
           throw e;
       }
 };
@@ -637,6 +465,26 @@ const publicService = {
     }
 };
 
+const notificationsService = {
+    list: async () => [],
+    markAllRead: async () => true,
+    sendAlert: async (email: string, message: string) => {
+          try {
+              await fetch('/api/send-alert', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      to: email,
+                      subject: '🚨 Nouvelle Alerte Reviewflow',
+                      html: `<p>Bonjour,</p><p>${message}</p><p><a href="https://reviewflow.vercel.app">Voir l'avis</a></p>`
+                  })
+              });
+          } catch (e) {
+              console.error("Erreur envoi mail:", e);
+          }
+    }
+};
+
 const customersService = {
     list: async (): Promise<Customer[]> => {
         return [];
@@ -657,7 +505,7 @@ export const api = {
   seedCloudDatabase,
   analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS },
   competitors: { list: async () => INITIAL_COMPETITORS, add: async (data: any) => INITIAL_COMPETITORS[0] },
-  notifications: { list: async () => [], markAllRead: async () => true },
+  notifications: notificationsService,
   locations: locationsService,
   team: { list: async () => INITIAL_USERS, invite: async (email: string, role: string) => true, remove: async (id: string) => true },
   billing: { 
