@@ -16,7 +16,8 @@ import {
   AppNotification,
   Competitor,
   SetupStatus,
-  Location
+  Location,
+  AnalyticsSummary
 } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
@@ -515,14 +516,12 @@ const publicService = {
             
             // FALLBACK : Insertion directe
             const db = requireSupabase();
-            // On ne modifie plus le texte, on garde les tags dans l'analyse seulement
             const finalBody = feedback || '';
 
             const newReview = {
                 location_id: locationId,
                 rating: rating,
                 text: finalBody,
-                // On n'envoie PAS 'body' car la colonne n'existe pas
                 author_name: contact || 'Client Anonyme (Funnel)',
                 source: 'direct',
                 status: 'pending',
@@ -539,8 +538,6 @@ const publicService = {
             const { error } = await db.from('reviews').insert(newReview);
             if (error) {
                 console.error("DB Insert Error:", error);
-                // Si les deux échouent, on retourne une erreur explicite
-                // On peut mentionner l'erreur initiale API pour le contexte
                 const msg = apiError ? `${apiError.message}` : error.message;
                 throw new Error(`Échec de l'envoi. Cause: ${msg}`);
             }
@@ -550,8 +547,79 @@ const publicService = {
 };
 
 const analyticsService = {
-    getOverview: async (period?: string) => {
-        return INITIAL_ANALYTICS;
+    getOverview: async (period?: string): Promise<AnalyticsSummary> => {
+        if (!isSupabaseConfigured()) return INITIAL_ANALYTICS;
+
+        // Récupération des avis réels
+        const { data: reviews, error } = await supabase!
+            .from('reviews')
+            .select('*');
+
+        if (error || !reviews || reviews.length === 0) {
+            // S'il n'y a pas encore d'avis, on retourne une structure vide propre plutôt que les mocks statiques
+            return { ...INITIAL_ANALYTICS, total_reviews: 0, average_rating: 0, volume_by_date: [] };
+        }
+
+        // Calculs dynamiques
+        const total = reviews.length;
+        const sumRating = reviews.reduce((sum, r) => sum + (r.rating || 0), 0);
+        const avgRating = total > 0 ? parseFloat((sumRating / total).toFixed(1)) : 0;
+
+        // Sentiment Distribution
+        const positiveCount = reviews.filter(r => r.rating >= 4).length;
+        const neutralCount = reviews.filter(r => r.rating === 3).length;
+        const negativeCount = reviews.filter(r => r.rating <= 2).length;
+
+        // NPS Calculation (Simplified for Reviews)
+        // Promoters: 5 stars, Passives: 4 stars, Detractors: 1-3 stars (approx)
+        const promoters = reviews.filter(r => r.rating === 5).length;
+        const detractors = reviews.filter(r => r.rating <= 3).length;
+        const nps = total > 0 ? Math.round(((promoters - detractors) / total) * 100) : 0;
+
+        // Volume by Date (Last 7 days approx)
+        const volumeMap: Record<string, number> = {};
+        reviews.forEach(r => {
+            const date = new Date(r.received_at).toLocaleDateString('fr-FR', { weekday: 'short' });
+            volumeMap[date] = (volumeMap[date] || 0) + 1;
+        });
+        const volumeData = Object.entries(volumeMap).map(([date, count]) => ({ date, count }));
+
+        // Keywords Extraction (Basic Frequency)
+        const allText = reviews.map(r => r.text || r.body || "").join(" ").toLowerCase();
+        const words = allText.split(/\s+/).filter(w => w.length > 3); // Filter short words
+        const stopWords = ['pour', 'avec', 'très', 'mais', 'nous', 'vous', 'cette', 'était', 'sont'];
+        const freqMap: Record<string, number> = {};
+        
+        words.forEach(w => {
+            const cleanWord = w.replace(/[.,!?;:()]/g, "");
+            if (!stopWords.includes(cleanWord)) {
+                freqMap[cleanWord] = (freqMap[cleanWord] || 0) + 1;
+            }
+        });
+
+        const topKeywords = Object.entries(freqMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([keyword, count]) => ({ keyword, count }));
+
+        return {
+            period: period || 'all_time',
+            total_reviews: total,
+            average_rating: avgRating,
+            response_rate: 85, // Placeholder for now or calc based on 'status'
+            nps_score: nps,
+            sentiment_distribution: {
+                positive: total > 0 ? positiveCount / total : 0,
+                neutral: total > 0 ? neutralCount / total : 0,
+                negative: total > 0 ? negativeCount / total : 0
+            },
+            volume_by_date: volumeData.length > 0 ? volumeData : INITIAL_ANALYTICS.volume_by_date,
+            top_themes_positive: INITIAL_ANALYTICS.top_themes_positive, // Requires complex AI analysis, keep mock or simpler logic
+            top_themes_negative: INITIAL_ANALYTICS.top_themes_negative,
+            top_keywords: topKeywords.length > 0 ? topKeywords : INITIAL_ANALYTICS.top_keywords,
+            problems_summary: "Analyse en temps réel activée.",
+            strengths_summary: "Les données sont mises à jour dynamiquement."
+        };
     }
 };
 

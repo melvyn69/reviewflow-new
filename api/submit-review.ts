@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
 
 export default async function handler(req: any, res: any) {
   // Configuration CORS pour autoriser les requêtes depuis le frontend
@@ -17,8 +18,8 @@ export default async function handler(req: any, res: any) {
   }
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  // Utilisation de la clé SERVICE_ROLE pour avoir les droits d'écriture
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const RESEND_KEY = process.env.RESEND_API_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error("Configuration Supabase manquante sur le serveur.");
@@ -51,13 +52,12 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'Données manquantes (locationId, rating)' });
     }
 
-    // On garde le feedback pur, sans ajouter les tags dans le texte visible
     const finalBody = feedback || '';
 
     const newReview = {
         location_id: locationId,
         rating: rating,
-        text: finalBody, // Texte pur
+        text: finalBody, 
         author_name: contact || 'Client Anonyme (Funnel)',
         source: 'direct',
         status: 'pending',
@@ -66,7 +66,6 @@ export default async function handler(req: any, res: any) {
         analysis: { 
             sentiment: rating >= 4 ? 'positive' : 'negative', 
             themes: tags || [], 
-            // IMPORTANT : On duplique les tags dans keywords pour qu'ils soient visibles dans l'UI
             keywords: tags || [], 
             flags: { hygiene: false, security: false } 
         },
@@ -77,6 +76,40 @@ export default async function handler(req: any, res: any) {
     if (error) {
         console.error("Supabase Insert Error:", error);
         return res.status(500).json({ error: `Erreur Base de données: ${error.message}` });
+    }
+
+    // --- ALERTE EMAIL (Nouveau) ---
+    // Si la note est critique (<= 3), on envoie un email via Resend
+    if (rating <= 3 && RESEND_KEY) {
+        try {
+            // 1. Trouver l'email de l'admin de l'organisation
+            const { data: location } = await supabase.from('locations').select('organization_id, name').eq('id', locationId).single();
+            if (location?.organization_id) {
+                const { data: user } = await supabase.from('users').select('email').eq('organization_id', location.organization_id).single();
+                
+                if (user?.email) {
+                    const resend = new Resend(RESEND_KEY);
+                    await resend.emails.send({
+                        from: 'Reviewflow <alerts@resend.dev>',
+                        to: user.email,
+                        subject: `⚠️ Alerte Avis Négatif (${rating}/5) - ${location.name}`,
+                        html: `
+                            <h2>Nouvel avis critique reçu</h2>
+                            <p><strong>Note :</strong> ${rating}/5</p>
+                            <p><strong>Message :</strong> ${finalBody || "Aucun message"}</p>
+                            <p><strong>Contact client :</strong> ${contact || "Non renseigné"}</p>
+                            <p><strong>Tags :</strong> ${(tags || []).join(', ')}</p>
+                            <br/>
+                            <a href="https://reviewflow.vercel.app" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Répondre maintenant</a>
+                        `
+                    });
+                    console.log("Email d'alerte envoyé à", user.email);
+                }
+            }
+        } catch (emailErr) {
+            console.error("Erreur envoi email alerte:", emailErr);
+            // On ne bloque pas la réponse HTTP pour une erreur d'email secondaire
+        }
     }
 
     return res.status(200).json({ success: true, data });
