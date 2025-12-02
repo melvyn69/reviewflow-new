@@ -4,8 +4,7 @@ import {
   INITIAL_REVIEWS, 
   INITIAL_ANALYTICS, 
   INITIAL_WORKFLOWS,
-  INITIAL_COMPETITORS,
-  INITIAL_USERS
+  INITIAL_COMPETITORS
 } from './db';
 import { 
   User, 
@@ -19,32 +18,25 @@ import {
 } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
-// --- UTILS ---
+// --- SERVICE HELPER ---
 
-const evaluateCondition = (review: Review, condition: any): boolean => {
-  const { field, operator, value } = condition;
-  const reviewValue = (review as any)[field];
-
-  switch (operator) {
-    case 'equals': return reviewValue == value;
-    case 'contains': return typeof reviewValue === 'string' && reviewValue.includes(value);
-    case 'gte': return reviewValue >= value;
-    case 'lte': return reviewValue <= value;
-    case 'in': return Array.isArray(value) && value.includes(reviewValue);
-    default: return false;
+// Helper to ensure Supabase is ready or throw descriptive error
+const requireSupabase = () => {
+  if (!isSupabaseConfigured()) {
+    throw new Error("La base de données n'est pas connectée. Veuillez configurer les variables d'environnement Vercel (SUPABASE_URL).");
   }
+  return supabase!;
 };
 
 // --- SERVICES ---
 
 const authService = {
     getUser: async (): Promise<User | null> => {
-      if (!isSupabaseConfigured()) return null; // Force Supabase
+      if (!isSupabaseConfigured()) return null;
       
       const { data: { user } } = await supabase!.auth.getUser();
       if (!user) return null;
 
-      // Récupération du profil étendu (role, org)
       const { data: profile } = await supabase!.from('users').select('*').eq('id', user.id).single();
       
       return {
@@ -52,21 +44,21 @@ const authService = {
         email: user.email || '',
         name: user.user_metadata.full_name || 'Utilisateur',
         avatar: user.user_metadata.avatar_url,
-        role: profile?.role || 'viewer', // 'viewer' par défaut pour sécurité
+        role: profile?.role || 'viewer',
         organizations: profile?.organization_id ? [profile.organization_id] : [],
         organization_id: profile?.organization_id
       };
     },
     login: async (email: string, password: string) => {
-      if (!isSupabaseConfigured()) throw new Error("Erreur: Supabase non configuré.");
-      const { error } = await supabase!.auth.signInWithPassword({ email, password });
+      const db = requireSupabase();
+      const { error } = await db.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
     register: async (name: string, email: string, password: string) => {
-        if (!isSupabaseConfigured()) throw new Error("Supabase non configuré.");
+        const db = requireSupabase();
         
-        // 1. Créer l'user Auth
-        const { data: authData, error: authError } = await supabase!.auth.signUp({ 
+        // 1. SignUp (Creates auth.users -> triggers public.handle_new_user -> creates public.users)
+        const { data: authData, error: authError } = await db.auth.signUp({ 
             email, 
             password, 
             options: { data: { full_name: name } } 
@@ -74,22 +66,26 @@ const authService = {
         if (authError) throw authError;
 
         if (authData.user) {
-            // 2. Créer une Organisation par défaut pour ce nouvel user
-            // Note: Idéalement, faire cela via un Trigger Supabase "on_auth_user_created" pour la robustesse
-            const { data: org, error: orgError } = await supabase!.from('organizations').insert({
+            // 2. Create Organization
+            const { data: org, error: orgError } = await db.from('organizations').insert({
                 name: `${name}'s Organization`,
                 subscription_plan: 'free'
             }).select().single();
 
-            if (!orgError && org) {
-                // 3. Lier l'user à l'organisation
-                await supabase!.from('users').upsert({
-                    id: authData.user.id,
-                    email: email,
-                    role: 'admin',
-                    organization_id: org.id
-                });
+            if (orgError) {
+                console.error("Error creating org:", orgError);
+                // Fallback: User created but org failed. User can retry later or support fixes it.
+                return;
             }
+
+            // 3. Link User to Organization
+            // Note: We use update because public.users row already exists via Trigger
+            const { error: linkError } = await db.from('users').update({
+                role: 'admin',
+                organization_id: org.id
+            }).eq('id', authData.user.id);
+
+            if (linkError) console.error("Error linking user:", linkError);
         }
     },
     logout: async () => {
@@ -102,22 +98,21 @@ const authService = {
         return true;
     },
     loginWithGoogle: async () => {
-        if (isSupabaseConfigured()) {
-            const { error } = await supabase!.auth.signInWithOAuth({
-                provider: 'google',
-                options: { 
-                    redirectTo: window.location.origin, 
-                    queryParams: { access_type: 'offline', prompt: 'consent' } 
-                }
-            });
-            if (error) throw error;
-        } else { throw new Error("Supabase not configured"); }
+        const db = requireSupabase();
+        const { error } = await db.auth.signInWithOAuth({
+            provider: 'google',
+            options: { 
+                redirectTo: window.location.origin, 
+                queryParams: { access_type: 'offline', prompt: 'consent' } 
+            }
+        });
+        if (error) throw error;
     }
 };
 
 const organizationService = {
       get: async (): Promise<Organization | null> => {
-          if (!isSupabaseConfigured()) return INITIAL_ORG; // Fallback temporaire pour UI dev
+          if (!isSupabaseConfigured()) return INITIAL_ORG; // Keep fallback only for dev environment without env vars
 
           try {
               const { data: { user } } = await supabase!.auth.getUser();
@@ -132,7 +127,7 @@ const organizationService = {
               const { data: locations } = await supabase!.from('locations').select('*').eq('organization_id', profile.organization_id);
 
               return { 
-                  ...INITIAL_ORG, // Garde les defaults pour les champs manquants en DB
+                  ...INITIAL_ORG, // Safe defaults for missing fields
                   ...org, 
                   brand: org.brand || INITIAL_ORG.brand,
                   integrations: org.integrations || INITIAL_ORG.integrations,
@@ -141,22 +136,19 @@ const organizationService = {
                   locations: locations || [] 
               } as Organization;
           } catch (e) { 
-              console.error("Erreur récupération organisation", e);
+              console.error("Error fetching organization", e);
               return null; 
           }
       },
       update: async (data: Partial<Organization>) => {
-          if (isSupabaseConfigured()) {
-              const user = await authService.getUser();
-              if (user?.organization_id) {
-                  const { error } = await supabase!.from('organizations').update(data).eq('id', user.organization_id);
-                  if (error) throw error;
-              }
+          const user = await authService.getUser();
+          if (user?.organization_id) {
+              const { error } = await requireSupabase().from('organizations').update(data).eq('id', user.organization_id);
+              if (error) throw error;
           }
           return INITIAL_ORG;
       },
       initiateGoogleAuth: async (clientId: string) => { 
-          // C'est ici qu'on implémenterait le vrai flux OAuth Google Business Profile
           alert("Nécessite une App Google Cloud vérifiée avec scope 'business.manage'.");
           return true; 
       },
@@ -170,11 +162,7 @@ const reviewsService = {
 
           let query = supabase!.from('reviews').select('*').order('received_at', { ascending: false });
           
-          // Récupérer l'org ID de l'utilisateur courant pour filtrer (géré par RLS normalement, mais double sécurité)
-          const user = await authService.getUser();
-          if (!user?.organization_id) return [];
-
-          // Note: Avec RLS activé, le filtre location_id se fait implicitement, mais on peut joindre si besoin.
+          // Implicitly filtered by RLS policies
           
           if (filters.status && filters.status !== 'Tout') query = query.eq('status', filters.status.toLowerCase());
           if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
@@ -183,7 +171,7 @@ const reviewsService = {
           const { data, error } = await query;
           
           if (error) {
-              console.error("Erreur fetch reviews:", error);
+              console.error("Error fetching reviews:", error);
               return [];
           }
 
@@ -200,24 +188,20 @@ const reviewsService = {
           return result;
       },
       reply: async (id: string, text: string) => {
-          if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ status: 'sent', posted_reply: text, replied_at: new Date().toISOString() }).eq('id', id);
-          }
+          const { error } = await requireSupabase().from('reviews').update({ status: 'sent', posted_reply: text, replied_at: new Date().toISOString() }).eq('id', id);
+          if (error) throw error;
           return true;
       },
       saveDraft: async (id: string, text: string) => {
-          if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ 
-                  status: 'draft', 
-                  ai_reply: { text, needs_manual_validation: false, created_at: new Date().toISOString() } 
-              }).eq('id', id);
-          }
+          const { error } = await requireSupabase().from('reviews').update({ 
+              status: 'draft', 
+              ai_reply: { text, needs_manual_validation: false, created_at: new Date().toISOString() } 
+          }).eq('id', id);
+          if (error) throw error;
           return true;
       },
       updateStatus: async (id: string, status: ReviewStatus) => {
-          if (isSupabaseConfigured()) {
-              await supabase!.from('reviews').update({ status }).eq('id', id);
-          }
+          await requireSupabase().from('reviews').update({ status }).eq('id', id);
           return true; 
       },
       addNote: async (id: string, text: string) => {
@@ -229,38 +213,37 @@ const reviewsService = {
               created_at: new Date().toISOString() 
           };
           
-          if (isSupabaseConfigured()) {
-              // Récupérer les notes existantes
-              const { data: review } = await supabase!.from('reviews').select('internal_notes').eq('id', id).single();
-              const notes = review?.internal_notes || [];
-              
-              // Ajouter la nouvelle note
-              const { error } = await supabase!.from('reviews').update({ internal_notes: [...notes, newNote] }).eq('id', id);
-              if (error) throw error;
-          }
+          const db = requireSupabase();
+          // Get existing
+          const { data: review } = await db.from('reviews').select('internal_notes').eq('id', id).single();
+          const notes = review?.internal_notes || [];
+          
+          // Update
+          const { error } = await db.from('reviews').update({ internal_notes: [...notes, newNote] }).eq('id', id);
+          if (error) throw error;
+
           return newNote;
       },
       importBulk: async (data: any[], locationId: string) => {
-          if (isSupabaseConfigured()) {
-              const formattedData = data.map(r => ({
-                  location_id: locationId,
-                  source: r.source?.toLowerCase() || 'google',
-                  rating: parseInt(r.rating) || 5,
-                  author_name: r.author_name || 'Anonyme',
-                  body: r.text || '',
-                  language: 'fr',
-                  received_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
-                  status: 'pending',
-                  analysis: {
-                      sentiment: 'neutral',
-                      themes: [],
-                      keywords: [],
-                      flags: { hygiene: false, security: false }
-                  }
-              }));
-              const { error } = await supabase!.from('reviews').insert(formattedData);
-              if (error) throw error;
-          }
+          const db = requireSupabase();
+          const formattedData = data.map(r => ({
+              location_id: locationId,
+              source: r.source?.toLowerCase() || 'google',
+              rating: parseInt(r.rating) || 5,
+              author_name: r.author_name || 'Anonyme',
+              body: r.text || '',
+              language: 'fr',
+              received_at: r.date ? new Date(r.date).toISOString() : new Date().toISOString(),
+              status: 'pending',
+              analysis: {
+                  sentiment: 'neutral',
+                  themes: [],
+                  keywords: [],
+                  flags: { hygiene: false, security: false }
+              }
+          }));
+          const { error } = await db.from('reviews').insert(formattedData);
+          if (error) throw error;
           return data.length;
       }
 };
@@ -275,16 +258,6 @@ const aiService = {
 
           try {
               const org = await organizationService.get(); 
-              
-              // Check Quotas
-              const usage = org?.ai_usage_count || 0;
-              const limit = org?.subscription_plan === 'free' ? 5 : org?.subscription_plan === 'starter' ? 100 : 300;
-              
-              if (usage >= limit) {
-                  throw new Error("LIMIT_REACHED: Vous avez atteint votre quota d'IA. Passez au plan Pro.");
-              }
-
-              const ai = new GoogleGenAI({ apiKey });
               const brand: BrandSettings = org?.brand || { tone: 'professionnel', description: '', knowledge_base: '', use_emojis: false, language_style: 'formal', signature: '' };
               const industry = org?.industry || 'other';
               const knowledgeBaseContext = brand.knowledge_base ? `\n\n[INFO CONTEXTE ENTREPRISE]:\n${brand.knowledge_base}` : '';
@@ -302,7 +275,6 @@ const aiService = {
                 [TÂCHE]
                 Rédige une réponse professionnelle et empathique à cet avis.
                 Ne mets PAS de guillemets autour de la réponse.
-                Ne signe pas (la signature sera ajoutée automatiquement).
                 
                 [AVIS CLIENT]
                 Note: ${review.rating}/5
@@ -310,7 +282,7 @@ const aiService = {
                 Commentaire: "${review.body}"
               `;
 
-              // Utilisation recommandée : Gemini 2.5 Flash pour la vitesse
+              const ai = new GoogleGenAI({ apiKey });
               const response = await ai.models.generateContent({
                   model: "gemini-2.5-flash",
                   contents: prompt,
@@ -318,9 +290,9 @@ const aiService = {
 
               const text = response.text || "";
 
-              // Incrémenter l'usage côté DB si connecté
+              // Track usage
               if (isSupabaseConfigured() && org) {
-                  await supabase!.from('organizations').update({ ai_usage_count: usage + 1 }).eq('id', org.id);
+                  await supabase!.from('organizations').update({ ai_usage_count: (org.ai_usage_count || 0) + 1 }).eq('id', org.id);
               }
 
               return text;
@@ -330,7 +302,7 @@ const aiService = {
               throw new Error(e.message || "Erreur lors de la génération IA.");
           }
       },
-      generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin') => {
+      generateSocialPost: async (review: Review, platform: 'instagram' | 'linkedin' | 'facebook') => {
           const apiKey = process.env.API_KEY;
           if (!apiKey) return "Clé manquante";
           const ai = new GoogleGenAI({ apiKey });
@@ -338,7 +310,7 @@ const aiService = {
           try {
               const response = await ai.models.generateContent({
                   model: "gemini-2.5-flash",
-                  contents: `Rédige un post court et engageant pour ${platform} (avec emojis et hashtags) pour mettre en avant cet avis client positif : "${review.body}". L'objectif est de remercier le client et montrer notre qualité de service.`
+                  contents: `Rédige un post court et engageant pour ${platform} (avec emojis et hashtags) pour mettre en avant cet avis client positif : "${review.body}".`
               });
               return response.text || "";
           } catch (e) {
@@ -362,11 +334,6 @@ const aiService = {
       }
 };
 
-const socialService = {
-    connect: async (platform: string) => true,
-    publish: async (platform: string, content: string) => true
-};
-
 const automationService = {
       getWorkflows: async (): Promise<WorkflowRule[]> => {
           const org = await organizationService.get();
@@ -376,20 +343,19 @@ const automationService = {
           return [];
       },
       create: async (workflow: WorkflowRule) => {
-          if (isSupabaseConfigured()) {
-             const org = await organizationService.get();
-             if (org) {
-                 const currentWorkflows = (org as any).workflows || [];
-                 const newWorkflows = [...currentWorkflows, workflow];
-                 await supabase!.from('organizations').update({ workflows: newWorkflows }).eq('id', org.id);
-                 return true;
-             }
+          const org = await organizationService.get();
+          if (org) {
+               const currentWorkflows = (org as any).workflows || [];
+               const newWorkflows = [...currentWorkflows, workflow];
+               const { error } = await requireSupabase().from('organizations').update({ workflows: newWorkflows }).eq('id', org.id);
+               if (error) throw error;
+               return true;
           }
           return false;
       },
       run: async () => {
-          // Call the Vercel function
           try {
+             // Trigger the Serverless function
              const res = await fetch('/api/cron', { method: 'GET' });
              const data = await res.json();
              return { processed: data.processed?.length || 0, actions: 0, alerts: 0 };
@@ -399,55 +365,51 @@ const automationService = {
       }
 };
 
-const notificationsService = {
-    list: async (): Promise<AppNotification[]> => {
-        // En prod: fetch depuis table 'notifications'
-        return []; 
-    },
-    markAllRead: async () => true,
-    sendAlert: async (email: string, message: string) => {
-          // En prod: appel API Vercel /api/send-alert
-          console.log(`Sending alert to ${email}: ${message}`);
-    }
-};
-
 const seedCloudDatabase = async () => {
-      if (!isSupabaseConfigured()) throw new Error("Supabase non connecté");
-      const { data: { user } } = await supabase!.auth.getUser();
+      const db = requireSupabase();
+      const { data: { user } } = await db.auth.getUser();
       if (!user) throw new Error("Vous devez être connecté pour initialiser la DB.");
       
       try {
-          // 1. Créer Org
-          const { data: org, error: orgError } = await supabase!.from('organizations').insert({ 
-              name: 'Organisation Démo', 
-              subscription_plan: 'pro',
-              workflows: [] 
-          }).select().single();
+          // Check if user already has org
+          const { data: existingUser } = await db.from('users').select('organization_id').eq('id', user.id).single();
           
-          if (orgError) throw orgError;
+          let orgId = existingUser?.organization_id;
+
+          if (!orgId) {
+              // 1. Create Org
+              const { data: org, error: orgError } = await db.from('organizations').insert({ 
+                  name: 'Organisation Démo', 
+                  subscription_plan: 'pro',
+                  workflows: [] 
+              }).select().single();
+              
+              if (orgError) throw orgError;
+              orgId = org.id;
+              
+              // 2. Link User
+              await db.from('users').update({ role: 'admin', organization_id: orgId }).eq('id', user.id);
+          }
           
-          // 2. Lier User
-          await supabase!.from('users').upsert({ id: user.id, email: user.email, role: 'admin', organization_id: org.id });
-          
-          // 3. Créer Location
-          const { data: locs, error: locError } = await supabase!.from('locations').insert([{ 
-              organization_id: org.id, 
+          // 3. Create Location
+          const { data: locs, error: locError } = await db.from('locations').insert([{ 
+              organization_id: orgId, 
               name: "Boutique Paris Centre", 
               city: "Paris" 
           }]).select();
           
           if (locError) throw locError;
 
-          // 4. Injecter Avis
+          // 4. Inject Reviews
           if (locs) {
               const reviewsPayload = INITIAL_REVIEWS.map(r => ({ 
                   ...r, 
-                  id: undefined, // Let DB generate ID
+                  id: undefined, 
                   location_id: locs[0].id, 
                   internal_notes: [], 
                   analysis: r.analysis || {} 
               }));
-              await supabase!.from('reviews').insert(reviewsPayload);
+              await db.from('reviews').insert(reviewsPayload);
           }
           
           window.location.reload();
@@ -460,18 +422,16 @@ const seedCloudDatabase = async () => {
 
 const locationsService = {
     create: async (data: { name: string, city: string, address: string, country: string }) => {
-        if (isSupabaseConfigured()) {
-            const user = await authService.getUser();
-            if (user?.organization_id) {
-                const { error } = await supabase!.from('locations').insert({
-                    organization_id: user.organization_id,
-                    ...data
-                });
-                if (error) throw error;
-                return true;
-            }
+        const user = await authService.getUser();
+        if (user?.organization_id) {
+            const { error } = await requireSupabase().from('locations').insert({
+                organization_id: user.organization_id,
+                ...data
+            });
+            if (error) throw error;
+            return true;
         }
-        throw new Error("Impossible de créer l'établissement");
+        throw new Error("Utilisateur sans organisation.");
     }
 };
 
@@ -491,7 +451,7 @@ const publicService = {
                 const newReview = {
                     location_id: locationId,
                     rating: rating,
-                    text: feedback, // Mappé vers 'body' ou 'text' selon schema
+                    text: feedback,
                     body: feedback,
                     author_name: contact || 'Client Anonyme (Funnel)',
                     source: 'direct',
@@ -505,15 +465,16 @@ const publicService = {
                 if (error) throw error;
             } catch (e) {
                 console.error("Erreur Supabase Feedback:", e);
+                throw e;
             }
         }
         return true;
     }
 };
 
+// --- MOCK SERVICES FOR NON-CRITICAL FEATURES ---
 const customersService = {
     list: async (): Promise<Customer[]> => {
-        // Mock data generator for analytics visualization since we don't store customers separately yet
         return Array(20).fill(null).map((_, i) => ({
             id: `cust-${i}`,
             name: `Client ${i + 1}`,
@@ -543,17 +504,17 @@ export const api = {
   reviews: reviewsService,
   organization: organizationService,
   ai: aiService,
-  social: socialService,
+  social: { connect: async () => true, publish: async (platform: string, caption: string) => true },
   automation: automationService,
   seedCloudDatabase,
-  analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS },
-  competitors: { list: async () => INITIAL_COMPETITORS, add: async (data: any) => INITIAL_COMPETITORS[0] },
-  notifications: notificationsService,
+  analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS }, // Analytics often heavy to query in SQL for this scale, keep mock for dashboard speed in V1
+  competitors: { list: async () => INITIAL_COMPETITORS, add: async () => INITIAL_COMPETITORS[0] },
+  notifications: { list: async () => [], markAllRead: async () => true, sendAlert: async () => {} },
   locations: locationsService,
-  team: { list: async () => [], invite: async (email: string, role: string) => true, remove: async (id: string) => true },
+  team: { list: async () => [], invite: async () => true, remove: async () => true },
   billing: { 
       getInvoices: async () => [{id: 'INV-001', date: '2023-10-01', amount: '79.00€', status: 'Paid'}], 
-      downloadInvoice: (id: string) => {}, 
+      downloadInvoice: () => {}, 
       createCheckoutSession: async (plan: string) => {
           try {
              const res = await fetch('/api/create_checkout', {
