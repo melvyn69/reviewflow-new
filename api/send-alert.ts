@@ -1,8 +1,9 @@
 import { Resend } from 'resend';
 
-export default async function handler(req, res) {
+export default async function handler(req: any, res: any) {
   // Sécurité : On vérifie la clé API Resend
   const resendApiKey = process.env.RESEND_API_KEY;
+  
   if (!resendApiKey) {
     return res.status(500).json({ error: 'RESEND_API_KEY manquante dans Vercel' });
   }
@@ -16,14 +17,14 @@ export default async function handler(req, res) {
 
   try {
     const data = await resend.emails.send({
-      from: 'Reviewflow <onboarding@resend.dev>', // Utilisez votre domaine si configuré, sinon le domaine test Resend
-      to: [to], // En mode test Resend, seul votre email admin est autorisé
+      from: 'Reviewflow <onboarding@resend.dev>', 
+      to: [to],
       subject: subject,
       html: html,
     });
 
     return res.status(200).json({ success: true, data });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erreur Resend:', error);
     return res.status(500).json({ error: error.message });
   }
