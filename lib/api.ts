@@ -1015,6 +1015,31 @@ const competitorsService = {
             console.error("Auto-discover error", e);
             throw new Error("Erreur IA lors de la découverte: " + e.message);
         }
+    },
+    // Nouvelle fonction pour simuler le rapport d'analyse approfondie
+    getDeepAnalysis: async (): Promise<any> => {
+        const comps = await competitorsService.list();
+        
+        // Simulation des données d'un vrai "Smart Scrape" avec analyse IA
+        return {
+            trends: [
+                "Hausse générale des prix de 12% sur le secteur.",
+                "Les clients privilégient de plus en plus la réservation en ligne.",
+                "Forte demande pour les produits 'Eco-responsables' dans les avis récents."
+            ],
+            swot: {
+                strengths: ["Qualité de service supérieure à la moyenne", "Fidélisation client élevée"],
+                weaknesses: ["Présence digitale plus faible que le leader", "Horaires d'ouverture restreints"],
+                opportunities: ["Lancer une offre premium", "Capter la clientèle du concurrent X qui baisse en qualité"],
+                threats: ["Arrivée d'une franchise low-cost à proximité", "Inflation des coûts matières"]
+            },
+            competitors_detailed: comps.map(c => ({
+                ...c,
+                last_month_growth: Math.floor(Math.random() * 10) + "%",
+                sentiment_trend: Math.random() > 0.5 ? "Positif" : "Stable",
+                top_complaint: "Attente"
+            }))
+        };
     }
 };
 

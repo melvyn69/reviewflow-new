@@ -29,7 +29,7 @@ export const ReportsPage = () => {
       },
       {
         id: 'rep2',
-        name: 'Audit Concurrentiel Mensuel',
+        name: 'Audit Concurrentiel',
         format: 'pdf',
         frequency: 'monthly',
         time: '09:00',
@@ -77,99 +77,167 @@ export const ReportsPage = () => {
 
   const handleDownload = async (reportName: string) => {
       toast.info("Génération du rapport PDF...");
+      
       try {
-          const [analytics, reviews, competitors] = await Promise.all([
-              api.analytics.getOverview(),
-              api.reviews.list({ status: 'all' }),
-              api.competitors.list()
-          ]);
-
-          const doc = new jsPDF();
           const isCompetitiveReport = reportName.toLowerCase().includes('concurrentiel') || reportName.toLowerCase().includes('audit');
-          
-          doc.setFontSize(22);
-          doc.setTextColor(79, 70, 229); // Indigo
-          doc.text("Reviewflow", 20, 20);
-          
-          doc.setFontSize(16);
-          doc.setTextColor(30, 41, 59); // Slate-800
-          doc.text(isCompetitiveReport ? "Audit de Veille Concurrentielle" : "Rapport de Performance", 20, 30);
-          
+          const doc = new jsPDF();
+          const primaryColor = [79, 70, 229]; // Indigo
+
+          // Header Standard
+          doc.setFillColor(248, 250, 252);
+          doc.rect(0, 0, 210, 30, 'F');
+          doc.setFontSize(20);
+          doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+          doc.text("Reviewflow", 15, 20);
           doc.setFontSize(10);
           doc.setTextColor(100);
-          doc.text(`Généré le: ${new Date().toLocaleDateString('fr-FR')}`, 20, 40);
-          
-          if (isCompetitiveReport) {
-              // --- SECTION CONCURRENTIELLE ---
-              doc.setFontSize(14);
-              doc.setTextColor(0);
-              doc.text("1. Analyse du Marché", 20, 60);
-              
-              const compData = competitors.map(c => [
-                  c.name,
-                  c.rating + "/5",
-                  c.review_count,
-                  c.strengths.slice(0,2).join(', '),
-                  c.weaknesses.slice(0,2).join(', ')
-              ]);
+          doc.text("Intelligence Artificielle & Réputation", 15, 26);
+          doc.text(`Généré le ${new Date().toLocaleDateString()}`, 150, 20);
 
-              // Ajouter notre entreprise
-              compData.unshift([
-                  "VOUS", 
-                  analytics.average_rating + "/5", 
-                  analytics.total_reviews, 
-                  "Service, Qualité", 
-                  "-"
+          if (isCompetitiveReport) {
+              // --- CHARGEMENT DES DONNÉES DEEP DIVE ---
+              const deepData = await api.competitors.getDeepAnalysis();
+              const analytics = await api.analytics.getOverview();
+
+              // PAGE 1: VUE D'ENSEMBLE
+              doc.setFontSize(26);
+              doc.setTextColor(30);
+              doc.text("Audit de Veille Concurrentielle", 15, 50);
+              doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+              doc.line(15, 55, 80, 55);
+
+              doc.setFontSize(12);
+              doc.text("Résumé Exécutif du Marché", 15, 70);
+              
+              const trendText = deepData.trends.map((t: string) => `• ${t}`).join('\n');
+              doc.setFontSize(10);
+              doc.setTextColor(80);
+              doc.text(trendText, 15, 80);
+
+              // Tableau de Part de Voix
+              const marketData = deepData.competitors_detailed.map((c: any) => [
+                  c.name,
+                  c.rating + " ★",
+                  c.review_count,
+                  c.last_month_growth,
+                  c.sentiment_trend
               ]);
+              // Ajouter "Vous"
+              marketData.unshift(["VOUS", analytics.average_rating + " ★", analytics.total_reviews, "+5%", "Positif"]);
 
               autoTable(doc, {
-                  startY: 65,
-                  head: [['Établissement', 'Note', 'Avis', 'Forces', 'Faiblesses']],
-                  body: compData,
-                  theme: 'striped',
-                  headStyles: { fillColor: [79, 70, 229] },
+                  startY: 110,
+                  head: [['Acteur', 'Note', 'Volume Total', 'Croissance', 'Tendance']],
+                  body: marketData,
+                  theme: 'grid',
+                  headStyles: { fillColor: primaryColor as any },
                   styles: { fontSize: 10 }
               });
 
-              const finalY = (doc as any).lastAutoTable.finalY + 15;
-              doc.setFontSize(12);
-              doc.text("2. Insights Stratégiques", 20, finalY);
-              doc.setFontSize(10);
-              doc.setTextColor(80);
-              const rank = compData.sort((a:any, b:any) => parseFloat(b[1]) - parseFloat(a[1])).findIndex((c:any) => c[0] === 'VOUS') + 1;
-              doc.text(`Votre établissement est classé #${rank} sur ${compData.length} établissements analysés.`, 20, finalY + 10);
-              doc.text(`La note moyenne du secteur est de ${(compData.reduce((acc:number, val:any) => acc + parseFloat(val[1]), 0) / compData.length).toFixed(2)}/5.`, 20, finalY + 16);
+              // PAGE 2: SWOT
+              doc.addPage();
+              doc.setFontSize(16);
+              doc.setTextColor(30);
+              doc.text("Matrice SWOT Stratégique", 15, 20);
+              
+              const swotY = 30;
+              const boxW = 85;
+              const boxH = 60;
+              const gap = 10;
+
+              // Strengths
+              doc.setFillColor(220, 252, 231); // Green 100
+              doc.rect(15, swotY, boxW, boxH, 'F');
+              doc.setFontSize(12); doc.setTextColor(22, 101, 52);
+              doc.text("FORCES DU MARCHÉ", 20, swotY + 10);
+              doc.setFontSize(9);
+              deepData.swot.strengths.forEach((s:string, i:number) => doc.text(`+ ${s}`, 20, swotY + 20 + (i*6)));
+
+              // Weaknesses
+              doc.setFillColor(254, 226, 226); // Red 100
+              doc.rect(15 + boxW + gap, swotY, boxW, boxH, 'F');
+              doc.setFontSize(12); doc.setTextColor(153, 27, 27);
+              doc.text("FAIBLESSES", 20 + boxW + gap, swotY + 10);
+              doc.setFontSize(9);
+              deepData.swot.weaknesses.forEach((s:string, i:number) => doc.text(`- ${s}`, 20 + boxW + gap, swotY + 20 + (i*6)));
+
+              // Opportunities
+              doc.setFillColor(219, 234, 254); // Blue 100
+              doc.rect(15, swotY + boxH + gap, boxW, boxH, 'F');
+              doc.setFontSize(12); doc.setTextColor(30, 64, 175);
+              doc.text("OPPORTUNITÉS", 20, swotY + boxH + gap + 10);
+              doc.setFontSize(9);
+              deepData.swot.opportunities.forEach((s:string, i:number) => doc.text(`> ${s}`, 20, swotY + boxH + gap + 20 + (i*6)));
+
+              // Threats
+              doc.setFillColor(254, 243, 199); // Amber 100
+              doc.rect(15 + boxW + gap, swotY + boxH + gap, boxW, boxH, 'F');
+              doc.setFontSize(12); doc.setTextColor(146, 64, 14);
+              doc.text("MENACES", 20 + boxW + gap, swotY + boxH + gap + 10);
+              doc.setFontSize(9);
+              deepData.swot.threats.forEach((s:string, i:number) => doc.text(`! ${s}`, 20 + boxW + gap, swotY + boxH + gap + 20 + (i*6)));
+
+              // PAGE 3: DÉTAIL CONCURRENT
+              doc.addPage();
+              doc.setFontSize(16);
+              doc.setTextColor(30);
+              doc.text("Focus Concurrents", 15, 20);
+
+              let currentY = 30;
+              deepData.competitors_detailed.forEach((comp: any) => {
+                  if (currentY > 250) { doc.addPage(); currentY = 20; }
+                  
+                  doc.setFillColor(248, 250, 252);
+                  doc.rect(15, currentY, 180, 40, 'F');
+                  
+                  doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica", "bold");
+                  doc.text(comp.name, 20, currentY + 10);
+                  
+                  doc.setFontSize(10); doc.setFont("helvetica", "normal");
+                  doc.text(`Note: ${comp.rating}/5  |  Avis: ${comp.review_count}`, 20, currentY + 18);
+                  
+                  doc.setTextColor(22, 163, 74); // Green
+                  doc.text(`Points forts: ${comp.strengths.join(', ')}`, 20, currentY + 26);
+                  
+                  doc.setTextColor(220, 38, 38); // Red
+                  doc.text(`Points faibles: ${comp.weaknesses.join(', ')}`, 20, currentY + 34);
+                  
+                  currentY += 50;
+              });
 
           } else {
-              // --- SECTION PERFORMANCE CLASSIQUE ---
-              doc.setFontSize(14);
+              // --- RAPPORT PERFORMANCE STANDARD ---
+              const analytics = await api.analytics.getOverview();
+              const reviews = await api.reviews.list({ status: 'all' });
+
+              doc.setFontSize(22);
               doc.setTextColor(0);
-              doc.text("Résumé des KPI", 20, 60);
+              doc.text("Rapport de Performance", 15, 50);
               
               const statsData = [
-                  ["Total Avis", analytics.total_reviews.toString()],
+                  ["Volume d'avis", analytics.total_reviews.toString()],
                   ["Note Moyenne", `${analytics.average_rating}/5`],
                   ["Taux de Réponse", `${analytics.response_rate}%`],
-                  ["NPS Score", analytics.nps_score.toString()]
+                  ["Score NPS", analytics.nps_score.toString()]
               ];
               
               autoTable(doc, {
-                  startY: 65,
-                  head: [['Métrique', 'Valeur']],
+                  startY: 60,
+                  head: [['Indicateur Clé', 'Valeur']],
                   body: statsData,
                   theme: 'striped',
-                  headStyles: { fillColor: [79, 70, 229] },
-                  styles: { fontSize: 11 }
+                  headStyles: { fillColor: primaryColor as any },
+                  styles: { fontSize: 12, cellPadding: 5 }
               });
 
-              doc.text("Derniers Avis Traités", 20, (doc as any).lastAutoTable.finalY + 20);
+              doc.text("Derniers Avis", 15, (doc as any).lastAutoTable.finalY + 20);
               
               const reviewsData = reviews.slice(0, 15).map(r => [
-                  new Date(r.received_at).toLocaleDateString('fr-FR'),
+                  new Date(r.received_at).toLocaleDateString(),
                   r.source,
                   r.rating + "/5",
                   r.author_name,
-                  r.body.substring(0, 50) + (r.body.length > 50 ? '...' : '')
+                  r.body.substring(0, 60) + "..."
               ]);
 
               autoTable(doc, {
@@ -177,21 +245,22 @@ export const ReportsPage = () => {
                   head: [['Date', 'Source', 'Note', 'Client', 'Extrait']],
                   body: reviewsData,
                   styles: { fontSize: 9 },
-                  headStyles: { fillColor: [79, 70, 229] },
-                  columnStyles: { 4: { cellWidth: 80 } }
+                  headStyles: { fillColor: primaryColor as any }
               });
           }
 
+          // Footer Numérotation
           const pageCount = (doc as any).internal.getNumberOfPages();
           for(let i = 1; i <= pageCount; i++) {
               doc.setPage(i);
               doc.setFontSize(8);
               doc.setTextColor(150);
-              doc.text('Généré par Reviewflow - Page ' + i, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+              doc.text(`Page ${i} / ${pageCount}`, 190, 290);
           }
 
-          doc.save(`rapport_${reportName.toLowerCase().replace(/\s/g, '_')}.pdf`);
+          doc.save(`Reviewflow_${reportName.replace(/\s/g, '_')}.pdf`);
           toast.success("Téléchargement terminé");
+
       } catch (e) {
           console.error(e);
           toast.error("Erreur lors de la génération du PDF");
@@ -203,7 +272,7 @@ export const ReportsPage = () => {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Rapports</h1>
-          <p className="text-slate-500">Exports et digests email programmés.</p>
+          <p className="text-slate-500">Exports PDF et digests email programmés.</p>
         </div>
         <Button icon={Plus} onClick={handleCreate}>Créer un rapport</Button>
       </div>
@@ -230,7 +299,9 @@ export const ReportsPage = () => {
                     </div>
                     <div className="ml-4">
                       <div className="text-sm font-medium text-slate-900">{report.name}</div>
-                      <div className="text-xs text-slate-500">Inclut tous les établissements</div>
+                      <div className="text-xs text-slate-500">
+                          {report.name.includes('Audit') ? 'Veille concurrentielle & SWOT' : 'Analyse de performance interne'}
+                      </div>
                     </div>
                   </div>
                 </td>
