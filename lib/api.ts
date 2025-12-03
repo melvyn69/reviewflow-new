@@ -1,5 +1,6 @@
 
 
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -132,24 +133,43 @@ const companyService = {
         await new Promise(resolve => setTimeout(resolve, 800)); // Fake latency
 
         // Mock results
-        if (query.length < 3) return [];
+        if (!query || query.length < 3) return [];
         
-        return [
+        const mockDb = [
             {
                 siret: "123 456 789 00012",
                 legal_name: "SAS RESTAURANT DU PARC",
                 address: "12 Avenue des Champs, 75008 Paris",
                 vat: "FR12123456789",
-                industry: "Restauration traditionnelle"
+                industry: "restaurant"
             },
             {
                 siret: "987 654 321 00034",
                 legal_name: "SARL LE GOURMET RAPIDE",
                 address: "45 Rue de la République, 69002 Lyon",
                 vat: "FR98987654321",
-                industry: "Restauration rapide"
+                industry: "restaurant"
+            },
+            {
+                siret: "456 789 123 00056",
+                legal_name: "EURL GARAGE DES LILAS",
+                address: "8 Impasse des Fleurs, 33000 Bordeaux",
+                vat: "FR456789123",
+                industry: "automotive"
+            },
+            {
+                siret: "321 654 987 00089",
+                legal_name: "SCP AVOCATS ASSOCIES",
+                address: "2 Place du Palais, 13001 Marseille",
+                vat: "FR321654987",
+                industry: "legal"
             }
-        ].filter(c => c.legal_name.toLowerCase().includes(query.toLowerCase()) || c.siret.includes(query));
+        ];
+
+        return mockDb.filter(c => 
+            c.legal_name.toLowerCase().includes(query.toLowerCase()) || 
+            c.siret.includes(query)
+        );
     }
 };
 
@@ -182,6 +202,13 @@ const organizationService = {
                   integrations: org.integrations || INITIAL_ORG.integrations,
                   saved_replies: org.saved_replies || [],
                   workflows: org.workflows || [], 
+                  notification_settings: org.notification_settings || {
+                      email_alerts: true,
+                      alert_threshold: 3,
+                      weekly_digest: true,
+                      digest_day: 'monday',
+                      marketing_emails: false
+                  },
                   locations: locations || [] 
               } as Organization;
           } catch (e) { 
@@ -316,36 +343,44 @@ const reviewsService = {
                   const text = e.target?.result as string;
                   if (!text) return reject("Fichier vide");
                   
-                  // Simple CSV Parser (Header: Date,Author,Rating,Comment,Source)
+                  // Simple CSV Parser (Header expected: Date,Author,Rating,Comment,Source)
+                  // Handles quotes somewhat simplistically
                   const lines = text.split('\n').slice(1); // Skip header
                   const parsedReviews = [];
                   
                   for (const line of lines) {
-                      const cols = line.split(',');
-                      if (cols.length >= 4) {
+                      if (!line.trim()) continue;
+                      const cols = line.split(','); // Warning: breaks if comma in content without proper csv parsing library
+                      if (cols.length >= 3) {
+                          // Try to be robust
+                          const date = cols[0] ? new Date(cols[0]).toISOString() : new Date().toISOString();
+                          const author = cols[1] || 'Anonyme';
+                          const rating = parseInt(cols[2]) || 5;
+                          // Join rest as body in case of extra commas
+                          const body = cols.slice(3).join(',').replace(/^"|"$/g, '').trim(); 
+                          
                           parsedReviews.push({
-                              received_at: cols[0] ? new Date(cols[0]).toISOString() : new Date().toISOString(),
-                              author_name: cols[1] || 'Anonyme',
-                              rating: parseInt(cols[2]) || 5,
-                              text: cols[3].replace(/"/g, '') || '',
-                              source: cols[4]?.trim() || 'google'
+                              received_at: date,
+                              author_name: author,
+                              rating: rating,
+                              text: body,
+                              source: 'direct' // Default for imported
                           });
                       }
                   }
                   
                   if (parsedReviews.length > 0) {
                       try {
-                          // Batch insert via existing bulk method (mocked locally, real in db)
                           const db = requireSupabase();
                           const formattedData = parsedReviews.map(r => ({
                               location_id: locationId,
-                              source: r.source.toLowerCase(),
+                              source: r.source,
                               rating: r.rating,
                               author_name: r.author_name,
                               text: r.text,
                               language: 'fr',
                               received_at: r.received_at,
-                              status: 'manual', // Marqué comme importé manuellement
+                              status: 'manual', 
                               analysis: { sentiment: 'neutral', themes: [], keywords: [], flags: { hygiene: false, security: false } }
                           }));
                           

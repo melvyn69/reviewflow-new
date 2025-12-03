@@ -1,8 +1,9 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Location, BrandSettings, User, IndustryType } from '../types';
+import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle } from '../components/ui';
 import { 
     Building2, 
@@ -278,6 +279,15 @@ export const SettingsPage = () => {
   const [userEmail, setUserEmail] = useState('');
   const [userPassword, setUserPassword] = useState('');
 
+  // Form states (Notifications)
+  const [notifSettings, setNotifSettings] = useState<NotificationSettings>({
+      email_alerts: true,
+      alert_threshold: 3,
+      weekly_digest: true,
+      digest_day: 'monday',
+      marketing_emails: false
+  });
+
   useEffect(() => {
     loadData();
   }, []);
@@ -312,6 +322,9 @@ export const SettingsPage = () => {
                 setBrandKnowledge(orgData.brand.knowledge_base || '');
                 setUseEmojis(orgData.brand.use_emojis || false);
                 setLanguageStyle(orgData.brand.language_style || 'formal');
+            }
+            if (orgData.notification_settings) {
+                setNotifSettings(orgData.notification_settings);
             }
         }
       } catch (e) {
@@ -386,6 +399,12 @@ export const SettingsPage = () => {
       };
       await api.organization.update({ brand: newBrand });
       toast.success("Identité de marque mise à jour");
+  };
+
+  const handleSaveNotifications = async () => {
+      if (!org) return;
+      await api.organization.update({ notification_settings: notifSettings });
+      toast.success("Préférences de notification enregistrées");
   };
 
   const handleSaveLocation = async (data: any) => {
@@ -467,13 +486,13 @@ export const SettingsPage = () => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex border-b border-slate-200 overflow-x-auto">
-            {['profile', 'organization', 'locations', 'integrations', 'brand', 'team'].map((tab) => (
+            {['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team'].map((tab) => (
                 <button 
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap capitalize ${activeTab === tab ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
                 >
-                    {tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'Identité & IA' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'organization' ? 'Entreprise' : tab}
+                    {tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'Identité & IA' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'organization' ? 'Entreprise' : tab === 'notifications' ? 'Notifications' : tab}
                 </button>
             ))}
         </div>
@@ -713,6 +732,56 @@ export const SettingsPage = () => {
                             <IntegrationCard type="social" icon={TikTokIcon} title="TikTok" description="Vidéos virales." connected={org?.integrations.tiktok_posting} />
                             <IntegrationCard type="social" icon={Facebook} title="Facebook" description="Posts page pro." connected={org?.integrations.facebook_posting} />
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- ONGLET NOTIFICATIONS --- */}
+            {activeTab === 'notifications' && (
+                <div className="max-w-2xl space-y-6">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <h3 className="text-lg font-medium text-slate-900">Alertes Email</h3>
+                            <p className="text-sm text-slate-500">Recevez un email quand un nouvel avis arrive.</p>
+                        </div>
+                        <Toggle checked={notifSettings.email_alerts} onChange={(v) => setNotifSettings({...notifSettings, email_alerts: v})} />
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-6">
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Seuil d'alerte critique</label>
+                        <p className="text-sm text-slate-500 mb-4">Recevoir une alerte "Urgence" si la note est inférieure ou égale à :</p>
+                        <div className="flex items-center gap-4">
+                            <input 
+                                type="range" 
+                                min="1" max="5" 
+                                value={notifSettings.alert_threshold} 
+                                onChange={(e) => setNotifSettings({...notifSettings, alert_threshold: parseInt(e.target.value)})}
+                                className="w-full max-w-xs"
+                            />
+                            <span className="font-bold text-lg text-indigo-600">{notifSettings.alert_threshold} ★</span>
+                        </div>
+                    </div>
+
+                    <div className="border-t border-slate-100 pt-6 flex items-start justify-between">
+                        <div>
+                            <h3 className="text-lg font-medium text-slate-900">Digest Hebdomadaire</h3>
+                            <p className="text-sm text-slate-500">Un résumé de vos performances chaque semaine.</p>
+                        </div>
+                        <Toggle checked={notifSettings.weekly_digest} onChange={(v) => setNotifSettings({...notifSettings, weekly_digest: v})} />
+                    </div>
+
+                    {notifSettings.weekly_digest && (
+                        <div className="ml-8 p-4 bg-slate-50 rounded-lg">
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Jour d'envoi</label>
+                            <Select value={notifSettings.digest_day} onChange={(e) => setNotifSettings({...notifSettings, digest_day: e.target.value})}>
+                                <option value="monday">Lundi matin</option>
+                                <option value="friday">Vendredi soir</option>
+                            </Select>
+                        </div>
+                    )}
+
+                    <div className="border-t border-slate-100 pt-6">
+                        <Button onClick={handleSaveNotifications} icon={CheckSquare}>Enregistrer les préférences</Button>
                     </div>
                 </div>
             )}
