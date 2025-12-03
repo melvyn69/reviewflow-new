@@ -24,7 +24,8 @@ import {
   Archive,
   Flag,
   Trash2,
-  Store
+  Store,
+  ShieldCheck
 } from 'lucide-react';
 import { Button, Badge } from '../components/ui';
 import { useNavigate, useLocation as useRouterLocation } from 'react-router-dom';
@@ -458,13 +459,13 @@ export const InboxPage = () => {
                     <SourceIcon source={review.source} />
                   </div>
                   
-                  {/* Location Badge */}
-                  {locations.length > 1 && (
-                      <div className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 mb-1.5 uppercase tracking-wide">
+                  {/* Location Badge (Improved) */}
+                  <div className="flex items-center gap-1.5 mt-2 mb-2">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
                           <Store className="h-3 w-3" />
                           {getLocationName(review.location_id)}
-                      </div>
-                  )}
+                      </span>
+                  </div>
                   
                   <div className="mb-2">
                     <div className="flex justify-between items-center mb-1">
@@ -712,7 +713,14 @@ export const InboxPage = () => {
                             >
                                 {replyText ? 'Régénérer' : 'Générer Brouillon'}
                             </Button>
-                            <div className="flex gap-3 w-full sm:w-auto">
+                            
+                            <div className="flex gap-3 w-full sm:w-auto items-center">
+                                {/* Reply Context Safety Indicator */}
+                                <div className="hidden md:flex items-center gap-1.5 text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100 mr-2">
+                                    <ShieldCheck className="h-3 w-3 text-green-500" />
+                                    Réponse publique via : <span className="font-bold text-slate-600 truncate max-w-[100px]">{getLocationName(selectedReview.location_id)}</span>
+                                </div>
+
                                 <Button variant="ghost" size="sm" onClick={handleSaveDraft} isLoading={isSaving} disabled={!replyText} className="flex-1 sm:flex-none">Sauvegarder</Button>
                                 <Button variant="primary" size="sm" icon={Send} onClick={handleSendReply} className="flex-1 sm:flex-none shadow-lg shadow-indigo-200" disabled={!replyText}>Envoyer</Button>
                             </div>
