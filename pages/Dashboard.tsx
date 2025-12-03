@@ -16,7 +16,8 @@ import {
   Activity, 
   Zap, 
   CheckCircle2, 
-  ShieldAlert
+  ShieldAlert,
+  ArrowRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -71,40 +72,75 @@ const ActivityFeed = () => {
 
 const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
     const navigate = useNavigate();
-    if (!status) return null;
-    if (status.completionPercentage === 100) return null;
+    if (!status || status.completionPercentage === 100) return null;
+
+    const steps = [
+        {
+            id: 'google',
+            label: 'Connecter Google Business Profile',
+            desc: 'Pour récupérer vos avis existants.',
+            done: status.googleConnected,
+            action: () => navigate('/settings'),
+            btn: 'Connecter'
+        },
+        {
+            id: 'brand',
+            label: 'Définir votre Identité IA',
+            desc: 'Configurez le ton et le style de vos réponses.',
+            done: status.brandVoiceConfigured,
+            action: () => navigate('/settings'),
+            btn: 'Configurer'
+        },
+        {
+            id: 'first_reply',
+            label: 'Répondre à un premier avis',
+            desc: 'Testez la génération de réponse IA.',
+            done: status.firstReviewReplied,
+            action: () => navigate('/inbox'),
+            btn: 'Aller aux avis'
+        }
+    ];
 
     return (
-        <Card className="bg-gradient-to-r from-indigo-50 to-white border-indigo-100 mb-8">
-            <CardContent className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-4">
-                    <div className="relative h-16 w-16 flex items-center justify-center">
-                        <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
-                            <path className="text-indigo-100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" />
-                            <path className="text-indigo-600 drop-shadow-sm transition-all duration-1000 ease-out" strokeDasharray={`${status.completionPercentage}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="4" />
-                        </svg>
-                        <span className="absolute text-sm font-bold text-indigo-700">{status.completionPercentage}%</span>
-                    </div>
+        <Card className="mb-8 border-indigo-100 overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-slate-100">
+                <div className="h-full bg-indigo-600 transition-all duration-1000" style={{ width: `${status.completionPercentage}%` }}></div>
+            </div>
+            <CardContent className="p-0">
+                <div className="p-6 bg-gradient-to-br from-indigo-50/50 to-white border-b border-indigo-50 flex justify-between items-center">
                     <div>
-                        <h3 className="font-bold text-indigo-900 text-lg">Configuration du compte</h3>
-                        <p className="text-indigo-600/80 text-sm">Complétez votre profil pour activer l'IA.</p>
+                        <h3 className="font-bold text-lg text-indigo-900 flex items-center gap-2">
+                            <Rocket className="h-5 w-5 text-indigo-600" />
+                            Démarrage Rapide
+                        </h3>
+                        <p className="text-slate-500 text-sm">Complétez ces étapes pour profiter à 100% de l'IA.</p>
+                    </div>
+                    <div className="text-right hidden sm:block">
+                        <span className="text-2xl font-bold text-indigo-600">{status.completionPercentage}%</span>
+                        <span className="text-xs text-slate-400 block uppercase tracking-wide">Complété</span>
                     </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                    {!status.googleConnected && (
-                        <Button size="sm" variant="outline" className="bg-white border-indigo-200 text-indigo-700" onClick={() => navigate('/settings')}>
-                            Connecter Google
-                        </Button>
-                    )}
-                    {!status.brandVoiceConfigured && (
-                        <Button size="sm" variant="outline" className="bg-white border-indigo-200 text-indigo-700" onClick={() => navigate('/settings')}>
-                            Définir Voix de Marque
-                        </Button>
-                    )}
+                <div className="divide-y divide-slate-50">
+                    {steps.map((step, i) => (
+                        <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-white opacity-50' : 'bg-white hover:bg-slate-50'}`}>
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
+                            </div>
+                            <div className="flex-1">
+                                <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
+                                <p className="text-xs text-slate-500">{step.desc}</p>
+                            </div>
+                            {!step.done && (
+                                <Button size="xs" variant="outline" onClick={step.action} className="whitespace-nowrap">
+                                    {step.btn} <ArrowRight className="ml-1 h-3 w-3" />
+                                </Button>
+                            )}
+                        </div>
+                    ))}
                 </div>
             </CardContent>
         </Card>
-    )
+    );
 }
 
 export const DashboardPage = () => {
