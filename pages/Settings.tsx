@@ -1,15 +1,21 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link, Play, MessageSquare, User as UserIcon, Lock, AlertTriangle } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link, Play, MessageSquare, User as UserIcon, Lock, AlertTriangle, Square, CheckSquare } from 'lucide-react';
 
 // --- GOOGLE CONNECT WIZARD COMPONENT ---
 const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onConnect: () => void }) => {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
-    const [locations, setLocations] = useState<{id: string, name: string, address: string}[]>([]);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    // Mock list of locations returned by Google API
+    const [locations, setLocations] = useState<{id: string, name: string, address: string}[]>([
+        { id: 'loc_g_1', name: 'Le Bistrot Gourmand', address: '12 Rue de Paris, Lyon' },
+        { id: 'loc_g_2', name: 'Le Bistrot Gourmand - Annex', address: '4 Avenue Jean Jaurès, Lyon' },
+        { id: 'loc_g_3', name: 'Garage Auto Plus', address: 'Zone Industrielle Nord, Paris' }
+    ]);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const toast = useToast();
 
     const handleAuth = async () => {
@@ -26,14 +32,51 @@ const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onCo
         }
     };
 
-    const handleSync = () => {
-        if(!selectedId) return;
+    // Note: Dans un vrai flux, au retour de l'OAuth, on appellerait l'API backend pour lister les locations
+    // Ici on simule que l'auth a réussi et on montre l'étape 2 (Selection)
+    useEffect(() => {
+        // En prod, ceci serait déclenché après le retour OAuth réussi
+        // Pour l'interface, on montre directement l'étape de sélection si on simule le retour
+        // Mais comme handleAuth redirige, ce code ne sert qu'à la démo UI si on bypass auth
+    }, []);
+
+    const toggleLocation = (id: string) => {
+        if (selectedIds.includes(id)) {
+            setSelectedIds(selectedIds.filter(i => i !== id));
+        } else {
+            setSelectedIds([...selectedIds, id]);
+        }
+    };
+
+    const handleSync = async () => {
+        if(selectedIds.length === 0) return;
         setLoading(true);
-        // Simulation import avis (la partie backend réelle nécessiterait un proxy API)
-        setTimeout(() => {
+        
+        try {
+            // Simulation de l'import backend
+            // En réalité: api.locations.importFromGoogle(selectedIds)
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // On simule la création des locations dans la DB locale
+            for (const id of selectedIds) {
+                const gLoc = locations.find(l => l.id === id);
+                if (gLoc) {
+                    await api.locations.create({
+                        name: gLoc.name,
+                        address: gLoc.address,
+                        city: gLoc.address.split(',')[1]?.trim() || 'Ville inconnue',
+                        country: 'France',
+                        google_review_url: `https://search.google.com/local/writereview?placeid=${id}`
+                    });
+                }
+            }
+            
             setLoading(false);
             setStep(3);
-        }, 2000);
+        } catch (e) {
+            toast.error("Erreur lors de la synchronisation");
+            setLoading(false);
+        }
     };
 
     return (
@@ -53,44 +96,55 @@ const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onCo
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="h-8 w-8" alt="G" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Associer votre compte Google</h3>
+                                <h3 className="text-lg font-bold text-slate-900">Centralisez vos avis Google</h3>
                                 <p className="text-sm text-slate-500 mt-2 max-w-xs mx-auto">
-                                    Nous allons vous rediriger vers Google pour autoriser l'accès à vos fiches établissement.
+                                    Connectez votre compte Google pour importer et gérer tous vos établissements en une seule fois.
                                 </p>
                             </div>
                             <Button size="lg" className="w-full bg-white text-slate-700 border border-slate-300 hover:bg-slate-50" onClick={handleAuth} isLoading={loading}>
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="h-4 w-4 mr-2" alt="G" />
                                 Continuer avec Google
                             </Button>
-                            <p className="text-xs text-slate-400">Reviewflow utilise l'API officielle Google Business Profile.</p>
+                            <div className="text-xs text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100 text-left">
+                                <strong className="text-slate-600">Note Importante :</strong> Le compte Google que vous connectez doit avoir le rôle "Propriétaire" ou "Gestionnaire" sur les fiches établissements que vous souhaitez importer.
+                            </div>
                         </div>
                     )}
 
                     {step === 2 && (
                         <div className="space-y-6 animate-in slide-in-from-right-8">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Sélectionnez l'établissement</h3>
-                                <p className="text-sm text-slate-500 mt-1">Quel établissement souhaitez-vous gérer ?</p>
+                                <h3 className="text-lg font-bold text-slate-900">Établissements trouvés</h3>
+                                <p className="text-sm text-slate-500 mt-1">Sélectionnez les fiches à synchroniser avec Reviewflow.</p>
                             </div>
-                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {locations.map(loc => (
-                                    <div 
-                                        key={loc.id}
-                                        onClick={() => setSelectedId(loc.id)}
-                                        className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${selectedId === loc.id ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:border-slate-300'}`}
-                                    >
-                                        <Building2 className={`h-5 w-5 ${selectedId === loc.id ? 'text-indigo-600' : 'text-slate-400'}`} />
-                                        <div>
-                                            <div className="font-medium text-slate-900">{loc.name}</div>
-                                            <div className="text-xs text-slate-500">{loc.address}</div>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                                {locations.map(loc => {
+                                    const isSelected = selectedIds.includes(loc.id);
+                                    return (
+                                        <div 
+                                            key={loc.id}
+                                            onClick={() => toggleLocation(loc.id)}
+                                            className={`p-4 rounded-lg border cursor-pointer transition-all flex items-center gap-3 ${isSelected ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:border-slate-300'}`}
+                                        >
+                                            {isSelected 
+                                                ? <CheckSquare className="h-5 w-5 text-indigo-600 shrink-0" />
+                                                : <Square className="h-5 w-5 text-slate-300 shrink-0" />
+                                            }
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-medium text-slate-900 truncate">{loc.name}</div>
+                                                <div className="text-xs text-slate-500 truncate">{loc.address}</div>
+                                            </div>
+                                            <Building2 className={`h-5 w-5 ${isSelected ? 'text-indigo-600' : 'text-slate-300'}`} />
                                         </div>
-                                        {selectedId === loc.id && <CheckCircle2 className="h-5 w-5 text-indigo-600 ml-auto" />}
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
-                            <Button className="w-full" disabled={!selectedId} onClick={handleSync} isLoading={loading}>
-                                Confirmer et Synchroniser
-                            </Button>
+                            <div className="flex justify-between items-center pt-2">
+                                <span className="text-xs text-slate-500">{selectedIds.length} sélectionné(s)</span>
+                                <Button className="w-auto px-8" disabled={selectedIds.length === 0} onClick={handleSync} isLoading={loading}>
+                                    Importer ({selectedIds.length})
+                                </Button>
+                            </div>
                         </div>
                     )}
 
@@ -100,13 +154,13 @@ const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onCo
                                 <CheckCircle2 className="h-8 w-8" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900">Connexion réussie !</h3>
+                                <h3 className="text-lg font-bold text-slate-900">Terminé !</h3>
                                 <p className="text-sm text-slate-500 mt-2">
-                                    Vos avis sont en cours d'importation. Cela peut prendre quelques minutes.
+                                    Vos établissements ont été importés. Les avis sont en cours de synchronisation en arrière-plan.
                                 </p>
                             </div>
                             <Button className="w-full" onClick={onConnect}>
-                                Accéder aux paramètres
+                                Voir mes établissements
                             </Button>
                         </div>
                     )}
@@ -176,17 +230,18 @@ export const SettingsPage = () => {
     // Check if coming back from Google Auth redirect
     const hash = window.location.hash;
     if (hash && (hash.includes('access_token') || hash.includes('refresh_token'))) {
-        // Simple heuristic: if we have tokens in URL, likely success
-        // Supabase client handles the session automatically
-        // En vrai production, on ferait un vrai check, mais pour l'instant on peut juste dire "Connecté"
-        // si on revient de Google.
+        // En vrai production, le token est géré par supabase-js.
+        // Ici on détecte juste le retour pour l'UX
         toast.success("Retour de Google détecté. Connexion en cours...");
         
-        // Si on a showGoogleWizard qui était actif dans le state persisted ou autre, on le fermerait
-        // Mais ici on recharge la page.
-        // On peut tenter de mettre à jour le statut Google si on détecte le provider token
-        setTimeout(async () => {
-             await handleGoogleConnected(); 
+        // Simuler le passage à l'étape 2 du wizard (sélection)
+        // Note: En prod, on vérifierait l'état de la session
+        setTimeout(() => {
+             // Pour la démo, on ne relance pas handleGoogleConnected qui fermerait tout, 
+             // on pourrait rouvrir le wizard à l'étape 2 si on persistait l'état
+             window.location.hash = ''; // Clean URL
+             // On suppose que la connexion est OK
+             handleGoogleConnected();
         }, 1000);
     }
 
@@ -435,11 +490,11 @@ export const SettingsPage = () => {
   
   const handleGoogleConnected = async () => {
       setShowGoogleWizard(false);
+      await loadOrg(); // Refresh locations and status
       if (org) {
           const updatedIntegrations = { ...org.integrations, google: true };
           setOrg({ ...org, integrations: updatedIntegrations });
           await api.organization.update({ integrations: updatedIntegrations });
-          // toast.success("Compte Google associé avec succès !"); // On évite le spam si appelé auto
       }
   };
 

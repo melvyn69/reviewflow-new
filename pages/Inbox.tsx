@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Review, ReviewStatus, InternalNote, SavedReply } from '../types';
+import { Review, ReviewStatus, InternalNote, SavedReply, Location } from '../types';
 import { Card, CardContent, Skeleton, useToast } from '../components/ui';
 import { SocialShareModal } from '../components/SocialShareModal';
 import { 
@@ -23,10 +23,11 @@ import {
   Share2,
   Archive,
   Flag,
-  Trash2
+  Trash2,
+  Store
 } from 'lucide-react';
 import { Button, Badge } from '../components/ui';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation as useRouterLocation } from 'react-router-dom';
 
 const SourceIcon = ({ source }: { source: string }) => {
   const colors: Record<string, string> = {
@@ -77,7 +78,7 @@ const FilterSelect = ({ label, value, onChange, options }: { label: string; valu
             onChange={(e) => onChange(e.target.value)}
             className="appearance-none pl-3 pr-8 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-900 hover:bg-slate-50 hover:border-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer"
         >
-            <option value="Tout">Tout</option>
+            <option value="Tout">{label}: Tout</option>
             {options.map(opt => {
                 const val = typeof opt === 'string' ? opt : opt.value;
                 const lbl = typeof opt === 'string' ? opt : opt.label;
@@ -143,11 +144,12 @@ const NotesList = ({ notes }: { notes: InternalNote[] }) => {
 
 export const InboxPage = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
+  const routeLocation = useRouterLocation();
+  const searchParams = new URLSearchParams(routeLocation.search);
   const searchQuery = searchParams.get('search') || '';
   const targetReviewId = searchParams.get('reviewId');
   const toast = useToast();
@@ -155,6 +157,7 @@ export const InboxPage = () => {
   const [statusFilter, setStatusFilter] = useState('Tout');
   const [sourceFilter, setSourceFilter] = useState('Tout');
   const [ratingFilter, setRatingFilter] = useState('Tout');
+  const [locationFilter, setLocationFilter] = useState('Tout');
 
   const [activeTab, setActiveTab] = useState<'reply' | 'notes'>('reply');
   const [replyText, setReplyText] = useState('');
@@ -185,37 +188,50 @@ export const InboxPage = () => {
       long: 'Long'
   };
 
-  // On mount: check for deep link
+  // On mount: check for deep link and load locations
   useEffect(() => {
-    if (targetReviewId) {
-        // Reset filters to ensure the target review is found
-        setStatusFilter('Tout');
-        setSourceFilter('Tout');
-        setRatingFilter('Tout');
-    }
+    const init = async () => {
+        const org = await api.organization.get();
+        if (org && org.locations) {
+            setLocations(org.locations);
+        }
+        if (targetReviewId) {
+            setStatusFilter('Tout');
+            setSourceFilter('Tout');
+            setRatingFilter('Tout');
+            setLocationFilter('Tout');
+        }
+    };
+    init();
   }, [targetReviewId]);
 
   useEffect(() => {
     loadReviews();
     loadTemplates();
-  }, [statusFilter, sourceFilter, ratingFilter, searchQuery]);
+  }, [statusFilter, sourceFilter, ratingFilter, locationFilter, searchQuery]);
 
   const loadReviews = async () => {
     setLoading(true);
+    // On pourrait filtrer côté API, mais ici on filtre côté client pour l'exemple location
     const data = await api.reviews.list({
         status: statusFilter,
         source: sourceFilter,
         rating: ratingFilter,
         search: searchQuery
     });
-    setReviews(data);
     
-    // Deep Link Logic: Find and select the review
+    let filtered = data;
+    if (locationFilter !== 'Tout') {
+        filtered = data.filter(r => r.location_id === locationFilter);
+    }
+
+    setReviews(filtered);
+    
+    // Deep Link Logic
     if (targetReviewId && !selectedReview) {
-        const target = data.find(r => r.id === targetReviewId);
+        const target = filtered.find(r => r.id === targetReviewId);
         if (target) {
             onSelectReview(target);
-            // Clean URL without reloading
             window.history.replaceState({}, '', '#/inbox');
         }
     }
@@ -230,14 +246,21 @@ export const InboxPage = () => {
       }
   };
 
+  const getLocationName = (id: string) => {
+      const loc = locations.find(l => l.id === id);
+      return loc ? loc.name : 'Établissement inconnu';
+  };
+
   const handleResetFilters = () => {
       setStatusFilter('Tout');
       setSourceFilter('Tout');
       setRatingFilter('Tout');
+      setLocationFilter('Tout');
       navigate('/inbox'); 
   };
 
-const handleGenerateReply = async () => {
+  // ... (rest of the logic: handleGenerateReply, handleSendReply, etc. remains same) ...
+  const handleGenerateReply = async () => {
     if (!selectedReview) return;
     setIsGenerating(true);
     setLimitReached(false);
@@ -370,6 +393,17 @@ const handleGenerateReply = async () => {
              {searchQuery && (
                  <Badge variant="neutral" onClick={() => navigate('/inbox')} className="mr-2 cursor-pointer shrink-0">Recherche: {searchQuery} <span className="ml-1 opacity-50">×</span></Badge>
              )}
+             
+             {/* Location Filter */}
+             {locations.length > 1 && (
+                 <FilterSelect 
+                    label="Lieu" 
+                    value={locationFilter} 
+                    onChange={setLocationFilter} 
+                    options={locations.map(l => ({ label: l.name, value: l.id }))} 
+                 />
+             )}
+
              <FilterSelect 
                 label="Statut" 
                 value={statusFilter} 
@@ -392,7 +426,7 @@ const handleGenerateReply = async () => {
                 onChange={setRatingFilter} 
                 options={['5 ★', '4 ★', '3 ★', '2 ★', '1 ★']} 
              />
-             {(statusFilter !== 'Tout' || sourceFilter !== 'Tout' || ratingFilter !== 'Tout' || searchQuery) && (
+             {(statusFilter !== 'Tout' || sourceFilter !== 'Tout' || ratingFilter !== 'Tout' || locationFilter !== 'Tout' || searchQuery) && (
                  <Button variant="ghost" size="xs" onClick={handleResetFilters} className="text-slate-400 hover:text-red-500 ml-auto shrink-0">Réinit.</Button>
              )}
           </div>
@@ -423,6 +457,14 @@ const handleGenerateReply = async () => {
                     </div>
                     <SourceIcon source={review.source} />
                   </div>
+                  
+                  {/* Location Badge */}
+                  {locations.length > 1 && (
+                      <div className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 mb-1.5 uppercase tracking-wide">
+                          <Store className="h-3 w-3" />
+                          {getLocationName(review.location_id)}
+                      </div>
+                  )}
                   
                   <div className="mb-2">
                     <div className="flex justify-between items-center mb-1">
@@ -493,7 +535,7 @@ const handleGenerateReply = async () => {
                         <div className="font-bold text-slate-900">{selectedReview.author_name}</div>
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 mt-0.5">
                         <MapPin className="h-3 w-3" />
-                        Hôtel Bellevue Paris
+                        {getLocationName(selectedReview.location_id)}
                         <span>•</span>
                         {new Date(selectedReview.received_at).toLocaleString()}
                         </div>
