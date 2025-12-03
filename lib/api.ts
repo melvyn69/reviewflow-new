@@ -350,7 +350,6 @@ const aiService = {
               throw new Error(e.message || "Erreur lors de la génération IA.");
           }
       },
-      // --- NEW FUNCTION FOR SIMULATOR ---
       previewBrandVoice: async (brand: BrandSettings, mockReview: any) => {
           const apiKey = process.env.API_KEY; 
           if (!apiKey) throw new Error("Clé API Google Gemini manquante.");
@@ -967,7 +966,7 @@ const competitorsService = {
         if (idx !== -1) INITIAL_COMPETITORS.splice(idx, 1);
         return true;
     },
-    autoDiscover: async (): Promise<Competitor[]> => {
+    autoDiscover: async (radius: number = 5, sectorOverride?: string): Promise<any[]> => {
         const apiKey = process.env.API_KEY; 
         if (!apiKey) throw new Error("Clé API manquante pour l'auto-découverte.");
 
@@ -975,23 +974,28 @@ const competitorsService = {
         if (!org || org.locations.length === 0) throw new Error("Aucun établissement configuré pour localiser la recherche.");
 
         const location = org.locations[0]; // On prend le premier établissement
-        const industry = org.industry || 'commerce';
+        const industry = sectorOverride || org.industry || 'commerce';
         const city = location.city || 'Paris';
 
         const prompt = `
             Agis comme un expert en intelligence économique locale.
-            Trouve 5 concurrents directs réalistes pour un établissement de type "${industry}" situé à "${city}".
+            Trouve 5 concurrents directs réalistes pour un établissement de type "${industry}" situé à "${city}" dans un rayon de ${radius}km.
             Pour chaque concurrent, invente des données plausibles basées sur le marché local.
+            
+            Calcul également le "threat_level" (niveau de menace) de 1 à 100, la distance estimée, et le revenu estimé mensuel.
             
             Retourne UNIQUEMENT un tableau JSON strict (pas de texte avant/après) avec cette structure :
             [
               {
                 "name": "Nom du concurrent",
-                "rating": 4.5 (nombre entre 3.5 et 5.0),
-                "review_count": 150 (nombre entre 50 et 1000),
+                "rating": 4.5 (nombre entre 3.0 et 5.0),
+                "review_count": 150 (nombre entre 50 et 2000),
                 "address": "Adresse approximative à ${city}",
-                "strengths": ["Point fort 1", "Point fort 2", "Point fort 3"],
-                "weaknesses": ["Faiblesse 1", "Faiblesse 2", "Faiblesse 3"]
+                "strengths": ["Point fort 1", "Point fort 2"],
+                "weaknesses": ["Faiblesse 1", "Faiblesse 2"],
+                "threat_level": 85 (score calculé basé sur note+volume),
+                "distance": "1.2 km",
+                "estimated_revenue": "45k €/mois"
               }
             ]
         `;
@@ -1004,27 +1008,9 @@ const competitorsService = {
             });
 
             const text = response.text || "[]";
-            // Nettoyage du JSON (au cas où l'IA ajoute des ```json)
             const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            const competitors = JSON.parse(cleanJson);
-
-            // Sauvegarde en base si connecté
-            if (isSupabaseConfigured() && org.id) {
-                const user = await authService.getUser();
-                if (user?.organization_id) {
-                    // On supprime les anciens pour refresh
-                    try { await supabase!.from('competitors').delete().eq('organization_id', user.organization_id); } catch(e){}
-                    
-                    // On ajoute les nouveaux
-                    const toInsert = competitors.map((c: any) => ({
-                        ...c,
-                        organization_id: user.organization_id
-                    }));
-                    await supabase!.from('competitors').insert(toInsert);
-                }
-            }
-
-            return competitors;
+            const results = JSON.parse(cleanJson);
+            return results;
         } catch (e: any) {
             console.error("Auto-discover error", e);
             throw new Error("Erreur IA lors de la découverte: " + e.message);

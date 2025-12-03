@@ -19,6 +19,7 @@ import { WidgetPage } from './pages/Widget';
 import { HelpPage } from './pages/Help';
 import { CustomersPage } from './pages/Customers';
 import { SuperAdminPage } from './pages/SuperAdmin';
+import { CompetitorsPage } from './pages/Competitors';
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
@@ -83,6 +84,7 @@ function AppRoutes() {
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
                         <Route path="analytics" element={<AnalyticsPage />} />
+                        <Route path="competitors" element={<CompetitorsPage />} />
                         <Route path="automation" element={<AutomationPage />} />
                         <Route path="collect" element={<CollectPage />} />
                         <Route path="customers" element={<CustomersPage />} />

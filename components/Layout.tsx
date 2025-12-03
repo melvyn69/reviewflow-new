@@ -20,7 +20,8 @@ import {
   Users,
   ShieldAlert,
   Home,
-  PlusCircle
+  PlusCircle,
+  Target
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification } from '../types';
@@ -148,6 +149,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, userEmail }) => {
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Tableau de bord" exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label="Boîte de réception" onClick={onClose} />
           <SidebarItem to="/analytics" icon={BarChart3} label="Statistiques" onClick={onClose} />
+          <SidebarItem to="/competitors" icon={Target} label="Veille Concurrentielle" onClick={onClose} />
           <SidebarItem to="/customers" icon={Users} label="Base Clients" onClick={onClose} />
           <SidebarItem to="/collect" icon={QrCode} label="Collecte d'avis" onClick={onClose} />
           <SidebarItem to="/reports" icon={FileText} label="Rapports" onClick={onClose} />
