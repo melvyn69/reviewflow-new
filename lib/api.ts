@@ -1,4 +1,3 @@
-
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -98,6 +97,24 @@ const authService = {
             }
         });
         if (error) throw error;
+    },
+    connectGoogleBusiness: async () => {
+        const db = requireSupabase();
+        // IMPORTANT: Le scope 'business.manage' est requis pour gérer les fiches établissements.
+        // Si ce scope n'apparait pas dans votre console Google Cloud, assurez-vous d'avoir activé :
+        // "Google My Business Account Management API" et "Google My Business Information API".
+        const { error } = await db.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.href, // Redirection vers la page actuelle (Settings)
+                scopes: 'https://www.googleapis.com/auth/business.manage', 
+                queryParams: {
+                    access_type: 'offline', // Nécessaire pour obtenir le refresh_token pour les actions en arrière-plan
+                    prompt: 'consent'       // Force l'écran de consentement pour valider les scopes
+                }
+            }
+        });
+        if (error) throw error;
     }
 };
 
@@ -183,10 +200,6 @@ const organizationService = {
               if (error) throw error;
           }
           return INITIAL_ORG;
-      },
-      initiateGoogleAuth: async (clientId: string) => { 
-          alert("Nécessite une App Google Cloud vérifiée avec scope 'business.manage'.");
-          return true; 
       },
       toggleIntegration: async (provider: string, enabled: boolean) => { return true; },
       upgradePlan: async (plan: string) => { return true; }
