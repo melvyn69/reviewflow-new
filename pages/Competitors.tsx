@@ -15,14 +15,20 @@ import {
     Radar, 
     CheckCircle2,
     DollarSign,
-    Zap
+    Zap,
+    BarChart3,
+    Download,
+    Lightbulb,
+    Shield
 } from 'lucide-react';
 
 export const CompetitorsPage = () => {
     const [trackedCompetitors, setTrackedCompetitors] = useState<Competitor[]>([]);
     const [scannedResults, setScannedResults] = useState<any[]>([]);
-    const [activeTab, setActiveTab] = useState<'tracked' | 'scan'>('tracked');
+    const [activeTab, setActiveTab] = useState<'tracked' | 'scan' | 'insights'>('tracked');
     const [loading, setLoading] = useState(false);
+    const [marketData, setMarketData] = useState<any>(null);
+    const [loadingInsights, setLoadingInsights] = useState(false);
     
     // Scan settings
     const [scanRadius, setScanRadius] = useState(5);
@@ -80,6 +86,24 @@ export const CompetitorsPage = () => {
         }
     };
 
+    const loadInsights = async () => {
+        setLoadingInsights(true);
+        try {
+            const data = await api.competitors.getDeepAnalysis();
+            setMarketData(data);
+        } catch (e: any) {
+            toast.error("Erreur lors de l'analyse : " + e.message);
+        } finally {
+            setLoadingInsights(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'insights' && !marketData) {
+            loadInsights();
+        }
+    }, [activeTab]);
+
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -90,22 +114,172 @@ export const CompetitorsPage = () => {
                     </h1>
                     <p className="text-slate-500">Surveillez votre marché et anticipez les mouvements adverses.</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button 
-                        variant={activeTab === 'tracked' ? 'primary' : 'outline'}
+                <div className="flex bg-slate-100 p-1 rounded-lg">
+                    <button 
                         onClick={() => setActiveTab('tracked')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'tracked' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        Ma Sélection ({trackedCompetitors.length})
-                    </Button>
-                    <Button 
-                        variant={activeTab === 'scan' ? 'primary' : 'outline'}
+                        Ma Sélection
+                    </button>
+                    <button 
                         onClick={() => setActiveTab('scan')}
-                        icon={Radar}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'scan' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
-                        Radar de Zone
-                    </Button>
+                        <Radar className="h-4 w-4" /> Radar
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('insights')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'insights' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <BarChart3 className="h-4 w-4" /> Analyse SWOT
+                    </button>
                 </div>
             </div>
+
+            {/* INSIGHTS / SWOT SECTION */}
+            {activeTab === 'insights' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                    {loadingInsights ? (
+                        <div className="p-12 text-center">
+                            <Loader2 className="h-10 w-10 text-indigo-600 animate-spin mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-slate-900">Analyse du marché en cours...</h3>
+                            <p className="text-slate-500">L'IA examine les avis de vos concurrents pour identifier les tendances.</p>
+                        </div>
+                    ) : marketData ? (
+                        <>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* TRENDS */}
+                                <Card className="lg:col-span-1 bg-gradient-to-br from-slate-900 to-slate-800 text-white border-none shadow-xl">
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <TrendingUp className="h-5 w-5 text-yellow-400" />
+                                            Tendances Clés
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <ul className="space-y-4">
+                                            {marketData.trends.map((trend: string, i: number) => (
+                                                <li key={i} className="flex gap-3 text-sm text-slate-300 leading-relaxed">
+                                                    <span className="text-yellow-400 font-bold">•</span>
+                                                    {trend}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <div className="mt-8 pt-6 border-t border-slate-700">
+                                            <Button variant="outline" className="w-full bg-white/10 text-white border-white/20 hover:bg-white/20" icon={Download}>
+                                                Télécharger le Rapport Complet
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {/* SWOT MATRIX */}
+                                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {/* Forces */}
+                                    <Card className="bg-green-50 border-green-200">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-green-800 flex items-center gap-2 text-base">
+                                                <CheckCircle2 className="h-5 w-5" /> Forces du Marché
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="space-y-2">
+                                                {marketData.swot.strengths.map((item: string, i: number) => (
+                                                    <li key={i} className="text-sm text-green-700 flex gap-2">
+                                                        <span className="font-bold">+</span> {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Faiblesses */}
+                                    <Card className="bg-red-50 border-red-200">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-red-800 flex items-center gap-2 text-base">
+                                                <AlertTriangle className="h-5 w-5" /> Faiblesses (Opportunités)
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="space-y-2">
+                                                {marketData.swot.weaknesses.map((item: string, i: number) => (
+                                                    <li key={i} className="text-sm text-red-700 flex gap-2">
+                                                        <span className="font-bold">-</span> {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Opportunités */}
+                                    <Card className="bg-blue-50 border-blue-200">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-blue-800 flex items-center gap-2 text-base">
+                                                <Lightbulb className="h-5 w-5" /> Opportunités Stratégiques
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="space-y-2">
+                                                {marketData.swot.opportunities.map((item: string, i: number) => (
+                                                    <li key={i} className="text-sm text-blue-700 flex gap-2">
+                                                        <span className="font-bold">→</span> {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Menaces */}
+                                    <Card className="bg-amber-50 border-amber-200">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-amber-800 flex items-center gap-2 text-base">
+                                                <Shield className="h-5 w-5" /> Menaces & Risques
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <ul className="space-y-2">
+                                                {marketData.swot.threats.map((item: string, i: number) => (
+                                                    <li key={i} className="text-sm text-amber-700 flex gap-2">
+                                                        <span className="font-bold">!</span> {item}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </div>
+                            
+                            <h3 className="text-lg font-bold text-slate-900 mt-8 mb-4">Détail par Concurrent</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {marketData.competitors_detailed.map((comp: any, i: number) => (
+                                    <Card key={i}>
+                                        <CardContent className="p-6">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h4 className="font-bold text-slate-900">{comp.name}</h4>
+                                                <Badge variant={comp.sentiment_trend === 'Positif' ? 'success' : 'neutral'}>
+                                                    Tendance: {comp.sentiment_trend}
+                                                </Badge>
+                                            </div>
+                                            <p className="text-sm text-slate-500 mb-4 flex items-center gap-2">
+                                                <TrendingUp className="h-4 w-4 text-indigo-500" />
+                                                Croissance: <span className="font-semibold text-indigo-600">{comp.last_month_growth}</span>
+                                            </p>
+                                            <div className="text-xs space-y-1">
+                                                <p className="text-red-600 font-medium">Plainte fréquente: {comp.top_complaint}</p>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-12">
+                            <p className="text-slate-500">Impossible de charger les données.</p>
+                            <Button onClick={loadInsights} variant="outline" className="mt-4">Réessayer</Button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* SCANNER SECTION */}
             {activeTab === 'scan' && (
