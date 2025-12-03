@@ -1018,28 +1018,85 @@ const competitorsService = {
     },
     // Nouvelle fonction pour simuler le rapport d'analyse approfondie
     getDeepAnalysis: async (): Promise<any> => {
+        const apiKey = process.env.API_KEY;
         const comps = await competitorsService.list();
+        const org = await organizationService.get();
+        const industry = org?.industry || 'commerce';
         
-        // Simulation des données d'un vrai "Smart Scrape" avec analyse IA
-        return {
-            trends: [
-                "Hausse générale des prix de 12% sur le secteur.",
-                "Les clients privilégient de plus en plus la réservation en ligne.",
-                "Forte demande pour les produits 'Eco-responsables' dans les avis récents."
-            ],
-            swot: {
-                strengths: ["Qualité de service supérieure à la moyenne", "Fidélisation client élevée"],
-                weaknesses: ["Présence digitale plus faible que le leader", "Horaires d'ouverture restreints"],
-                opportunities: ["Lancer une offre premium", "Capter la clientèle du concurrent X qui baisse en qualité"],
-                threats: ["Arrivée d'une franchise low-cost à proximité", "Inflation des coûts matières"]
-            },
-            competitors_detailed: comps.map(c => ({
-                ...c,
-                last_month_growth: Math.floor(Math.random() * 10) + "%",
-                sentiment_trend: Math.random() > 0.5 ? "Positif" : "Stable",
-                top_complaint: "Attente"
-            }))
-        };
+        // Si aucun concurrent n'est suivi, on renvoie une structure vide ou un message
+        if (comps.length === 0) {
+             return {
+                trends: ["Ajoutez des concurrents à votre liste pour générer une analyse de marché pertinente."],
+                swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] },
+                competitors_detailed: []
+            };
+        }
+
+        const competitorsNames = comps.map(c => c.name).join(', ');
+
+        const prompt = `
+            Tu es un expert en stratégie d'entreprise spécialisé dans le secteur "${industry}".
+            
+            Voici une liste de concurrents que je surveille : ${competitorsNames}.
+            
+            Basé sur ta connaissance générale de ce secteur et de ces types d'établissements, génère une analyse de marché fictive mais réaliste pour simuler un rapport de veille concurrentielle.
+            
+            Format de réponse attendu (JSON uniquement) :
+            {
+                "trends": ["Tendance 1 (ex: hausse prix)", "Tendance 2", "Tendance 3"],
+                "swot": {
+                    "strengths": ["Force globale du marché"],
+                    "weaknesses": ["Faiblesse courante"],
+                    "opportunities": ["Opportunité à saisir"],
+                    "threats": ["Menace externe"]
+                },
+                "competitors_detailed": [
+                    {
+                        "name": "${comps[0].name}", 
+                        "sentiment_trend": "Positif" | "Stable" | "Négatif",
+                        "last_month_growth": "+X%",
+                        "top_complaint": "Sujet de plainte probable"
+                    }
+                    // ... répéter pour les autres concurrents si possible, sinon au moins un
+                ]
+            }
+        `;
+
+        try {
+            if (!apiKey) throw new Error("Clé API manquante");
+            
+            const ai = new GoogleGenAI({ apiKey });
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+            });
+
+            const text = response.text || "{}";
+            const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const analysis = JSON.parse(cleanJson);
+            
+            // Merge AI data with existing competitor objects to handle missing fields gracefully
+            return {
+                ...analysis,
+                competitors_detailed: analysis.competitors_detailed.map((d: any) => {
+                    const original = comps.find(c => c.name === d.name);
+                    return { ...original, ...d };
+                })
+            };
+        } catch (e) {
+            console.error("Deep analysis error", e);
+            // Fallback en cas d'erreur IA pour ne pas casser l'UI
+            return {
+                trends: ["Impossible de générer l'analyse IA pour le moment. Veuillez réessayer plus tard."],
+                swot: { strengths: ["-"], weaknesses: ["-"], opportunities: ["-"], threats: ["-"] },
+                competitors_detailed: comps.map(c => ({
+                    ...c,
+                    last_month_growth: "?",
+                    sentiment_trend: "Inconnu",
+                    top_complaint: "-"
+                }))
+            };
+        }
     }
 };
 

@@ -158,7 +158,7 @@ export const CompetitorsPage = () => {
                                     </CardHeader>
                                     <CardContent>
                                         <ul className="space-y-4">
-                                            {marketData.trends.map((trend: string, i: number) => (
+                                            {marketData.trends?.map((trend: string, i: number) => (
                                                 <li key={i} className="flex gap-3 text-sm text-slate-300 leading-relaxed">
                                                     <span className="text-yellow-400 font-bold">•</span>
                                                     {trend}
@@ -184,7 +184,7 @@ export const CompetitorsPage = () => {
                                         </CardHeader>
                                         <CardContent>
                                             <ul className="space-y-2">
-                                                {marketData.swot.strengths.map((item: string, i: number) => (
+                                                {marketData.swot?.strengths?.map((item: string, i: number) => (
                                                     <li key={i} className="text-sm text-green-700 flex gap-2">
                                                         <span className="font-bold">+</span> {item}
                                                     </li>
@@ -202,7 +202,7 @@ export const CompetitorsPage = () => {
                                         </CardHeader>
                                         <CardContent>
                                             <ul className="space-y-2">
-                                                {marketData.swot.weaknesses.map((item: string, i: number) => (
+                                                {marketData.swot?.weaknesses?.map((item: string, i: number) => (
                                                     <li key={i} className="text-sm text-red-700 flex gap-2">
                                                         <span className="font-bold">-</span> {item}
                                                     </li>
@@ -220,7 +220,7 @@ export const CompetitorsPage = () => {
                                         </CardHeader>
                                         <CardContent>
                                             <ul className="space-y-2">
-                                                {marketData.swot.opportunities.map((item: string, i: number) => (
+                                                {marketData.swot?.opportunities?.map((item: string, i: number) => (
                                                     <li key={i} className="text-sm text-blue-700 flex gap-2">
                                                         <span className="font-bold">→</span> {item}
                                                     </li>
@@ -238,7 +238,7 @@ export const CompetitorsPage = () => {
                                         </CardHeader>
                                         <CardContent>
                                             <ul className="space-y-2">
-                                                {marketData.swot.threats.map((item: string, i: number) => (
+                                                {marketData.swot?.threats?.map((item: string, i: number) => (
                                                     <li key={i} className="text-sm text-amber-700 flex gap-2">
                                                         <span className="font-bold">!</span> {item}
                                                     </li>
@@ -251,7 +251,7 @@ export const CompetitorsPage = () => {
                             
                             <h3 className="text-lg font-bold text-slate-900 mt-8 mb-4">Détail par Concurrent</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {marketData.competitors_detailed.map((comp: any, i: number) => (
+                                {marketData.competitors_detailed?.map((comp: any, i: number) => (
                                     <Card key={i}>
                                         <CardContent className="p-6">
                                             <div className="flex justify-between items-start mb-2">
