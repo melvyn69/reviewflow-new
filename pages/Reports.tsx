@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { ReportConfig } from '../types';
@@ -25,6 +26,15 @@ export const ReportsPage = () => {
         time: '08:00',
         enabled: true,
         last_sent: '2023-10-23'
+      },
+      {
+        id: 'rep2',
+        name: 'Audit Concurrentiel Mensuel',
+        format: 'pdf',
+        frequency: 'monthly',
+        time: '09:00',
+        enabled: false,
+        last_sent: '-'
       }
     ]);
   }, []);
@@ -32,7 +42,7 @@ export const ReportsPage = () => {
   const handleCreate = () => {
       const newReport: ReportConfig = {
           id: 'rep-' + Date.now(),
-          name: 'Nouveau Rapport Mensuel',
+          name: 'Nouveau Rapport',
           format: 'pdf',
           frequency: 'monthly',
           time: '09:00',
@@ -65,15 +75,17 @@ export const ReportsPage = () => {
       toast.success("Rapport mis à jour");
   };
 
-  const handleDownload = async () => {
+  const handleDownload = async (reportName: string) => {
       toast.info("Génération du rapport PDF...");
       try {
-          const [analytics, reviews] = await Promise.all([
+          const [analytics, reviews, competitors] = await Promise.all([
               api.analytics.getOverview(),
-              api.reviews.list({ status: 'all' })
+              api.reviews.list({ status: 'all' }),
+              api.competitors.list()
           ]);
 
           const doc = new jsPDF();
+          const isCompetitiveReport = reportName.toLowerCase().includes('concurrentiel') || reportName.toLowerCase().includes('audit');
           
           doc.setFontSize(22);
           doc.setTextColor(79, 70, 229); // Indigo
@@ -81,51 +93,94 @@ export const ReportsPage = () => {
           
           doc.setFontSize(16);
           doc.setTextColor(30, 41, 59); // Slate-800
-          doc.text("Rapport de Performance", 20, 30);
+          doc.text(isCompetitiveReport ? "Audit de Veille Concurrentielle" : "Rapport de Performance", 20, 30);
           
           doc.setFontSize(10);
           doc.setTextColor(100);
           doc.text(`Généré le: ${new Date().toLocaleDateString('fr-FR')}`, 20, 40);
-          doc.text("Période: 30 derniers jours", 20, 45);
-
-          doc.setFontSize(14);
-          doc.setTextColor(0);
-          doc.text("Résumé des KPI", 20, 60);
           
-          const statsData = [
-              ["Total Avis", analytics.total_reviews.toString()],
-              ["Note Moyenne", `${analytics.average_rating}/5`],
-              ["Taux de Réponse", `${analytics.response_rate}%`],
-              ["NPS Score", analytics.nps_score.toString()]
-          ];
-          
-          autoTable(doc, {
-              startY: 65,
-              head: [['Métrique', 'Valeur']],
-              body: statsData,
-              theme: 'striped',
-              headStyles: { fillColor: [79, 70, 229] },
-              styles: { fontSize: 11 }
-          });
+          if (isCompetitiveReport) {
+              // --- SECTION CONCURRENTIELLE ---
+              doc.setFontSize(14);
+              doc.setTextColor(0);
+              doc.text("1. Analyse du Marché", 20, 60);
+              
+              const compData = competitors.map(c => [
+                  c.name,
+                  c.rating + "/5",
+                  c.review_count,
+                  c.strengths.slice(0,2).join(', '),
+                  c.weaknesses.slice(0,2).join(', ')
+              ]);
 
-          doc.text("Derniers Avis Traités", 20, (doc as any).lastAutoTable.finalY + 20);
-          
-          const reviewsData = reviews.slice(0, 15).map(r => [
-              new Date(r.received_at).toLocaleDateString('fr-FR'),
-              r.source,
-              r.rating + "/5",
-              r.author_name,
-              r.body.substring(0, 50) + (r.body.length > 50 ? '...' : '')
-          ]);
+              // Ajouter notre entreprise
+              compData.unshift([
+                  "VOUS", 
+                  analytics.average_rating + "/5", 
+                  analytics.total_reviews, 
+                  "Service, Qualité", 
+                  "-"
+              ]);
 
-          autoTable(doc, {
-              startY: (doc as any).lastAutoTable.finalY + 25,
-              head: [['Date', 'Source', 'Note', 'Client', 'Extrait']],
-              body: reviewsData,
-              styles: { fontSize: 9 },
-              headStyles: { fillColor: [79, 70, 229] },
-              columnStyles: { 4: { cellWidth: 80 } }
-          });
+              autoTable(doc, {
+                  startY: 65,
+                  head: [['Établissement', 'Note', 'Avis', 'Forces', 'Faiblesses']],
+                  body: compData,
+                  theme: 'striped',
+                  headStyles: { fillColor: [79, 70, 229] },
+                  styles: { fontSize: 10 }
+              });
+
+              const finalY = (doc as any).lastAutoTable.finalY + 15;
+              doc.setFontSize(12);
+              doc.text("2. Insights Stratégiques", 20, finalY);
+              doc.setFontSize(10);
+              doc.setTextColor(80);
+              const rank = compData.sort((a:any, b:any) => parseFloat(b[1]) - parseFloat(a[1])).findIndex((c:any) => c[0] === 'VOUS') + 1;
+              doc.text(`Votre établissement est classé #${rank} sur ${compData.length} établissements analysés.`, 20, finalY + 10);
+              doc.text(`La note moyenne du secteur est de ${(compData.reduce((acc:number, val:any) => acc + parseFloat(val[1]), 0) / compData.length).toFixed(2)}/5.`, 20, finalY + 16);
+
+          } else {
+              // --- SECTION PERFORMANCE CLASSIQUE ---
+              doc.setFontSize(14);
+              doc.setTextColor(0);
+              doc.text("Résumé des KPI", 20, 60);
+              
+              const statsData = [
+                  ["Total Avis", analytics.total_reviews.toString()],
+                  ["Note Moyenne", `${analytics.average_rating}/5`],
+                  ["Taux de Réponse", `${analytics.response_rate}%`],
+                  ["NPS Score", analytics.nps_score.toString()]
+              ];
+              
+              autoTable(doc, {
+                  startY: 65,
+                  head: [['Métrique', 'Valeur']],
+                  body: statsData,
+                  theme: 'striped',
+                  headStyles: { fillColor: [79, 70, 229] },
+                  styles: { fontSize: 11 }
+              });
+
+              doc.text("Derniers Avis Traités", 20, (doc as any).lastAutoTable.finalY + 20);
+              
+              const reviewsData = reviews.slice(0, 15).map(r => [
+                  new Date(r.received_at).toLocaleDateString('fr-FR'),
+                  r.source,
+                  r.rating + "/5",
+                  r.author_name,
+                  r.body.substring(0, 50) + (r.body.length > 50 ? '...' : '')
+              ]);
+
+              autoTable(doc, {
+                  startY: (doc as any).lastAutoTable.finalY + 25,
+                  head: [['Date', 'Source', 'Note', 'Client', 'Extrait']],
+                  body: reviewsData,
+                  styles: { fontSize: 9 },
+                  headStyles: { fillColor: [79, 70, 229] },
+                  columnStyles: { 4: { cellWidth: 80 } }
+              });
+          }
 
           const pageCount = (doc as any).internal.getNumberOfPages();
           for(let i = 1; i <= pageCount; i++) {
@@ -135,7 +190,7 @@ export const ReportsPage = () => {
               doc.text('Généré par Reviewflow - Page ' + i, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
           }
 
-          doc.save("rapport_reviewflow.pdf");
+          doc.save(`rapport_${reportName.toLowerCase().replace(/\s/g, '_')}.pdf`);
           toast.success("Téléchargement terminé");
       } catch (e) {
           console.error(e);
@@ -170,7 +225,7 @@ export const ReportsPage = () => {
               <tr key={report.id} className="hover:bg-slate-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
+                    <div className={`flex-shrink-0 h-10 w-10 rounded-lg flex items-center justify-center ${report.name.includes('Audit') ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
                       <FileText className="h-5 w-5" />
                     </div>
                     <div className="ml-4">
@@ -194,7 +249,7 @@ export const ReportsPage = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex items-center justify-end gap-3">
                   <button onClick={() => handleEdit(report)} className="text-indigo-600 hover:text-indigo-900">Éditer</button>
-                  <button className="text-slate-400 hover:text-slate-600" onClick={handleDownload} title="Télécharger"><Download className="h-4 w-4" /></button>
+                  <button className="text-slate-400 hover:text-slate-600" onClick={() => handleDownload(report.name)} title="Télécharger"><Download className="h-4 w-4" /></button>
                   <button className="text-slate-400 hover:text-red-600" onClick={() => handleDelete(report.id)}><Trash2 className="h-4 w-4" /></button>
                 </td>
               </tr>

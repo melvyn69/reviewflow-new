@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, SavedReply, BrandSettings, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, Toggle, useToast, Badge } from '../components/ui';
-import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link, Play, MessageSquare, User as UserIcon, Lock } from 'lucide-react';
+import { Terminal, Building2, Plus, UploadCloud, X, Sparkles, Download, Database, Users, Mail, Bell, Instagram, Facebook, Trash2, CheckCircle2, Loader2, ArrowRight, AlertCircle, RefreshCw, Send, Edit, Link, Play, MessageSquare, User as UserIcon, Lock, AlertTriangle } from 'lucide-react';
 
 // --- GOOGLE CONNECT WIZARD COMPONENT ---
 const GoogleConnectWizard = ({ onClose, onConnect }: { onClose: () => void, onConnect: () => void }) => {
@@ -159,6 +159,9 @@ export const SettingsPage = () => {
   const [simReview, setSimReview] = useState('Service très lent et personnel désagréable.');
   const [simResponse, setSimResponse] = useState('');
   const [simLoading, setSimLoading] = useState(false);
+
+  // Reset State
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -418,6 +421,21 @@ export const SettingsPage = () => {
           setOrg({ ...org, integrations: updatedIntegrations });
           await api.organization.update({ integrations: updatedIntegrations });
           toast.success("Compte Google associé avec succès !");
+      }
+  };
+
+  const handleResetAccount = async () => {
+      if (confirm("ATTENTION : Cette action va effacer TOUS vos avis et réinitialiser vos statistiques. C'est irréversible. Êtes-vous sûr ?")) {
+          setResetting(true);
+          try {
+              await api.admin.resetAccount();
+              toast.success("Compte réinitialisé. Les données de test ont été effacées.");
+              window.location.reload();
+          } catch (e: any) {
+              toast.error("Erreur de réinitialisation: " + e.message);
+          } finally {
+              setResetting(false);
+          }
       }
   };
 
@@ -1063,6 +1081,26 @@ export const SettingsPage = () => {
                       </div>
                   </CardContent>
               </Card>
+
+              {/* DANGER ZONE */}
+              <div className="border border-red-200 rounded-xl bg-red-50 p-6">
+                  <h3 className="text-lg font-bold text-red-900 mb-2 flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                      Zone de Danger
+                  </h3>
+                  <p className="text-sm text-red-700 mb-4">
+                      Ces actions sont irréversibles. Soyez prudent.
+                  </p>
+                  <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-red-100">
+                      <div>
+                          <h4 className="font-bold text-slate-900">Réinitialiser le compte</h4>
+                          <p className="text-xs text-slate-500">Supprime tous les avis importés ou créés. Utile après un test.</p>
+                      </div>
+                      <Button variant="danger" onClick={handleResetAccount} isLoading={resetting}>
+                          Effacer les données
+                      </Button>
+                  </div>
+              </div>
           </div>
       )}
 

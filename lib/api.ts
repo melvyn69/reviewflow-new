@@ -773,7 +773,27 @@ const adminService = {
             { id: '1', name: 'Demo Corp', admin_email: 'ceo@demo.com', plan: 'pro', usage: 120, mrr: '79€' },
             { id: '2', name: 'Boulangerie Paul', admin_email: 'paul@boulangerie.com', plan: 'starter', usage: 45, mrr: '49€' }
         ] 
-    })
+    }),
+    resetAccount: async () => {
+        if (!isSupabaseConfigured()) {
+            return true;
+        }
+        const user = await authService.getUser();
+        if (!user?.organization_id) return false;
+
+        // Supprimer les avis liés à l'organisation via les locations
+        const { data: locations } = await supabase!.from('locations').select('id').eq('organization_id', user.organization_id);
+        const locationIds = locations?.map(l => l.id) || [];
+        
+        if (locationIds.length > 0) {
+            await supabase!.from('reviews').delete().in('location_id', locationIds);
+        }
+        
+        // Reset usage count
+        await supabase!.from('organizations').update({ ai_usage_count: 0 }).eq('id', user.organization_id);
+        
+        return true;
+    }
 };
 
 const socialService = {
@@ -899,7 +919,117 @@ const teamService = {
 };
 
 const competitorsService = {
-    list: async (): Promise<Competitor[]> => INITIAL_COMPETITORS
+    list: async (): Promise<Competitor[]> => {
+        // Fallback Mock si la table n'existe pas encore
+        if (!isSupabaseConfigured()) return INITIAL_COMPETITORS;
+        try {
+            const { data, error } = await supabase!.from('competitors').select('*');
+            if (error) throw error;
+            if (data && data.length > 0) {
+                return data.map(c => ({
+                    ...c,
+                    strengths: c.strengths || [],
+                    weaknesses: c.weaknesses || []
+                }));
+            }
+            return INITIAL_COMPETITORS; // Return mock if DB empty for better DX
+        } catch (e) {
+            return INITIAL_COMPETITORS;
+        }
+    },
+    create: async (competitor: Omit<Competitor, 'id'>) => {
+        if (!isSupabaseConfigured()) {
+            INITIAL_COMPETITORS.push({ ...competitor, id: `c-${Date.now()}` });
+            return true;
+        }
+        try {
+            const user = await authService.getUser();
+            const { error } = await supabase!.from('competitors').insert({
+                ...competitor,
+                organization_id: user?.organization_id
+            });
+            if (error) throw error;
+            return true;
+        } catch (e) {
+            console.warn("Ajout concurrent en mémoire (table manquante)", e);
+            INITIAL_COMPETITORS.push({ ...competitor, id: `c-${Date.now()}` });
+            return true;
+        }
+    },
+    delete: async (id: string) => {
+        if (isSupabaseConfigured()) {
+            try {
+                await supabase!.from('competitors').delete().eq('id', id);
+            } catch (e) { /* ignore if fails */ }
+        }
+        // Remove from memory fallback too
+        const idx = INITIAL_COMPETITORS.findIndex(c => c.id === id);
+        if (idx !== -1) INITIAL_COMPETITORS.splice(idx, 1);
+        return true;
+    },
+    autoDiscover: async (): Promise<Competitor[]> => {
+        const apiKey = process.env.API_KEY; 
+        if (!apiKey) throw new Error("Clé API manquante pour l'auto-découverte.");
+
+        const org = await organizationService.get();
+        if (!org || org.locations.length === 0) throw new Error("Aucun établissement configuré pour localiser la recherche.");
+
+        const location = org.locations[0]; // On prend le premier établissement
+        const industry = org.industry || 'commerce';
+        const city = location.city || 'Paris';
+
+        const prompt = `
+            Agis comme un expert en intelligence économique locale.
+            Trouve 5 concurrents directs réalistes pour un établissement de type "${industry}" situé à "${city}".
+            Pour chaque concurrent, invente des données plausibles basées sur le marché local.
+            
+            Retourne UNIQUEMENT un tableau JSON strict (pas de texte avant/après) avec cette structure :
+            [
+              {
+                "name": "Nom du concurrent",
+                "rating": 4.5 (nombre entre 3.5 et 5.0),
+                "review_count": 150 (nombre entre 50 et 1000),
+                "address": "Adresse approximative à ${city}",
+                "strengths": ["Point fort 1", "Point fort 2", "Point fort 3"],
+                "weaknesses": ["Faiblesse 1", "Faiblesse 2", "Faiblesse 3"]
+              }
+            ]
+        `;
+
+        try {
+            const ai = new GoogleGenAI({ apiKey });
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+            });
+
+            const text = response.text || "[]";
+            // Nettoyage du JSON (au cas où l'IA ajoute des ```json)
+            const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const competitors = JSON.parse(cleanJson);
+
+            // Sauvegarde en base si connecté
+            if (isSupabaseConfigured() && org.id) {
+                const user = await authService.getUser();
+                if (user?.organization_id) {
+                    // On supprime les anciens pour refresh
+                    try { await supabase!.from('competitors').delete().eq('organization_id', user.organization_id); } catch(e){}
+                    
+                    // On ajoute les nouveaux
+                    const toInsert = competitors.map((c: any) => ({
+                        ...c,
+                        organization_id: user.organization_id
+                    }));
+                    await supabase!.from('competitors').insert(toInsert);
+                }
+            }
+
+            return competitors;
+        } catch (e: any) {
+            console.error("Auto-discover error", e);
+            throw new Error("Erreur IA lors de la découverte: " + e.message);
+        }
+    }
 };
 
 const billingService = {

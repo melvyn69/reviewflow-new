@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, BarChart, Bar, Legend, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
-import { Card, CardContent, CardTitle, CardHeader, Button, Badge } from '../components/ui';
+import { Card, CardContent, CardTitle, CardHeader, Button, Badge, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { AnalyticsSummary, Competitor } from '../types';
-import { Download, Calendar, Cloud, Trophy, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Download, Calendar, Cloud, Trophy, TrendingUp, AlertTriangle, Plus, Trash2, X, Radio, Loader2 } from 'lucide-react';
 
 const COLORS = ['#4f46e5', '#94a3b8', '#f43f5e']; // Indigo, Slate, Rose
 
@@ -43,11 +43,29 @@ export const AnalyticsPage = () => {
   const [data, setData] = React.useState<AnalyticsSummary | null>(null);
   const [competitors, setCompetitors] = React.useState<Competitor[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'competitors'>('overview');
+  
+  // Competitor Modal State
+  const [showCompModal, setShowCompModal] = useState(false);
+  const [compName, setCompName] = useState('');
+  const [compRating, setCompRating] = useState('4.5');
+  const [compStrengths, setCompStrengths] = useState('');
+  const [compWeaknesses, setCompWeaknesses] = useState('');
+  
+  // Auto-Discover State
+  const [isScanning, setIsScanning] = useState(false);
+
+  const toast = useToast();
 
   React.useEffect(() => {
-    api.analytics.getOverview().then(setData);
-    api.competitors.list().then(setCompetitors);
+    loadData();
   }, []);
+
+  const loadData = async () => {
+      const analytics = await api.analytics.getOverview();
+      const comps = await api.competitors.list();
+      setData(analytics);
+      setCompetitors(comps);
+  };
 
   const handleExport = () => {
       if (!data) return;
@@ -74,6 +92,48 @@ export const AnalyticsPage = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+  };
+
+  const handleAddCompetitor = async () => {
+      if (!compName) return;
+      await api.competitors.create({
+          name: compName,
+          rating: parseFloat(compRating),
+          review_count: Math.floor(Math.random() * 200) + 50, // Mock count
+          address: 'Local',
+          strengths: compStrengths.split(',').map(s => s.trim()).filter(s => s),
+          weaknesses: compWeaknesses.split(',').map(s => s.trim()).filter(s => s)
+      });
+      setShowCompModal(false);
+      setCompName('');
+      setCompStrengths('');
+      setCompWeaknesses('');
+      toast.success("Concurrent ajouté");
+      loadData();
+  };
+
+  const handleDeleteCompetitor = async (id: string) => {
+      if (confirm("Supprimer ce concurrent ?")) {
+          await api.competitors.delete(id);
+          toast.success("Concurrent supprimé");
+          loadData();
+      }
+  };
+
+  const handleAutoScan = async () => {
+      setIsScanning(true);
+      try {
+          toast.info("Scan de la zone de chalandise en cours...");
+          // Simulation d'un délai pour l'effet "Radar"
+          await new Promise(r => setTimeout(r, 1500)); 
+          const results = await api.competitors.autoDiscover();
+          setCompetitors(results);
+          toast.success(`${results.length} concurrents trouvés par l'IA !`);
+      } catch (e: any) {
+          toast.error(e.message);
+      } finally {
+          setIsScanning(false);
+      }
   };
 
   if (!data) return <div className="p-8 text-center text-slate-500">Chargement des statistiques...</div>;
@@ -264,7 +324,19 @@ export const AnalyticsPage = () => {
       ) : (
         // COMPETITORS TAB
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-            
+            <div className="flex justify-end gap-3">
+                <Button 
+                    variant="primary" 
+                    icon={isScanning ? Loader2 : Radio} 
+                    onClick={handleAutoScan} 
+                    isLoading={isScanning}
+                    className="bg-gradient-to-r from-indigo-600 to-violet-600 border-none shadow-md"
+                >
+                    {isScanning ? 'Analyse de la zone...' : 'Scanner la zone de chalandise'}
+                </Button>
+                <Button variant="outline" icon={Plus} onClick={() => setShowCompModal(true)}>Ajout manuel</Button>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card className="lg:col-span-2">
                     <CardHeader>
@@ -327,16 +399,17 @@ export const AnalyticsPage = () => {
                                     <th className="py-3 px-4">Volume</th>
                                     <th className="py-3 px-4">Points Forts</th>
                                     <th className="py-3 px-4">Points Faibles</th>
+                                    <th className="py-3 px-4"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                 {[
-                                    { rank: 1, ...competitors[0] }, // Mock rank logic
-                                    { rank: 2, name: 'Vous (Groupe Multiservices)', rating: data.average_rating, review_count: data.total_reviews, strengths: ['Service', 'Propreté'], weaknesses: ['Prix'] },
-                                    { rank: 3, ...competitors[1] },
-                                    { rank: 4, ...competitors[2] }
-                                ].sort((a,b) => b.rating - a.rating).map((comp, i) => (
-                                    <tr key={i} className={comp.name.startsWith('Vous') ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}>
+                                    ...(competitors.length > 0 ? competitors.map((c, i) => ({ ...c, rank: 0 })) : []), 
+                                    { id: 'self', name: 'Vous', rating: data.average_rating, review_count: data.total_reviews, strengths: ['Service', 'Propreté'], weaknesses: ['Prix'], rank: 0 }
+                                ]
+                                .sort((a,b) => b.rating - a.rating)
+                                .map((comp, i) => (
+                                    <tr key={comp.id || i} className={comp.name.startsWith('Vous') ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}>
                                         <td className="py-4 px-4 font-bold text-slate-400">#{i + 1}</td>
                                         <td className="py-4 px-4 font-medium text-slate-900">{comp.name}</td>
                                         <td className="py-4 px-4">
@@ -355,6 +428,13 @@ export const AnalyticsPage = () => {
                                                 {comp.weaknesses?.map(w => <Badge key={w} variant="error" className="text-[10px]">{w}</Badge>)}
                                             </div>
                                         </td>
+                                        <td className="py-4 px-4 text-right">
+                                            {!comp.name.startsWith('Vous') && (
+                                                <button onClick={() => handleDeleteCompetitor(comp.id)} className="text-slate-400 hover:text-red-500">
+                                                    <Trash2 className="h-4 w-4"/>
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -363,6 +443,36 @@ export const AnalyticsPage = () => {
                 </CardContent>
             </Card>
         </div>
+      )}
+
+      {showCompModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <Card className="w-full max-w-md animate-in zoom-in-95">
+                  <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 pb-4">
+                      <CardTitle>Ajouter un concurrent</CardTitle>
+                      <button onClick={() => setShowCompModal(false)}><X className="h-5 w-5 text-slate-400" /></button>
+                  </CardHeader>
+                  <CardContent className="pt-6 space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Nom</label>
+                          <Input value={compName} onChange={e => setCompName(e.target.value)} placeholder="Ex: Salon Prestige" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Note Moyenne</label>
+                          <Input type="number" step="0.1" max="5" value={compRating} onChange={e => setCompRating(e.target.value)} />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Points Forts (séparés par virgule)</label>
+                          <Input value={compStrengths} onChange={e => setCompStrengths(e.target.value)} placeholder="Service, Prix..." />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Points Faibles (séparés par virgule)</label>
+                          <Input value={compWeaknesses} onChange={e => setCompWeaknesses(e.target.value)} placeholder="Attente, Bruit..." />
+                      </div>
+                      <Button className="w-full mt-2" onClick={handleAddCompetitor}>Enregistrer</Button>
+                  </CardContent>
+              </Card>
+          </div>
       )}
     </div>
   );
