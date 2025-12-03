@@ -8,6 +8,7 @@ export interface User {
   role: 'admin' | 'editor' | 'viewer';
   organizations: string[];
   organization_id?: string;
+  status?: 'active' | 'invited';
 }
 
 export interface BrandSettings {
@@ -34,11 +35,15 @@ export interface SavedReply {
   category: 'positive' | 'negative' | 'neutral' | 'question';
 }
 
-export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'beauty' | 'health' | 'services' | 'automotive' | 'legal' | 'other';
+export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'beauty' | 'health' | 'services' | 'automotive' | 'legal' | 'real_estate' | 'other';
 
 export interface Organization {
   id: string;
-  name: string;
+  name: string; // Nom Commercial (Utilisé pour l'IA et l'affichage)
+  legal_name?: string; // Raison Sociale (Utilisé pour Stripe)
+  siret?: string;
+  vat_number?: string;
+  address?: string; // Siège social
   industry?: IndustryType;
   created_at: string;
   locations: Location[];
@@ -49,11 +54,14 @@ export interface Organization {
     facebook: boolean;
     instagram_posting: boolean; // New: For Marketing
     facebook_posting: boolean; // New: For Marketing
+    linkedin_posting: boolean;
+    tiktok_posting: boolean;
   };
   brand?: BrandSettings;
   notification_settings?: NotificationSettings;
   saved_replies?: SavedReply[];
   workflows?: WorkflowRule[];
+  stripe_customer_id?: string;
 }
 
 export interface Location {
@@ -62,6 +70,9 @@ export interface Location {
   address: string;
   city: string;
   country: string;
+  phone?: string;
+  website?: string;
+  description?: string;
   external_reference?: string;
   group_id?: string;
   connection_status?: 'connected' | 'disconnected' | 'pending';
@@ -70,7 +81,7 @@ export interface Location {
 }
 
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';
-export type ReviewSource = 'google' | 'facebook' | 'tripadvisor' | 'yelp' | 'direct';
+export type ReviewSource = 'google' | 'facebook' | 'tripadvisor' | 'yelp' | 'direct' | 'trustpilot' | 'yellowpages';
 export type Sentiment = 'positive' | 'neutral' | 'negative';
 
 // --- STABLE DATA CONTRACTS (AI ENGINE OUTPUTS) ---

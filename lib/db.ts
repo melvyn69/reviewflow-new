@@ -58,7 +58,9 @@ export const INITIAL_ORG: Organization = {
     google: false,
     facebook: false,
     instagram_posting: false,
-    facebook_posting: false
+    facebook_posting: false,
+    linkedin_posting: false,
+    tiktok_posting: false
   },
   saved_replies: [
       { id: 't1', title: 'Remerciement Simple', content: 'Merci beaucoup pour votre avis ! Nous sommes ravis que vous ayez apprécié votre visite.', category: 'positive' },
