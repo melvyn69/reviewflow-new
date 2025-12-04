@@ -21,6 +21,7 @@ import { CustomersPage } from './pages/Customers';
 import { SuperAdminPage } from './pages/SuperAdmin';
 import { CompetitorsPage } from './pages/Competitors';
 import { BookDemoPage } from './pages/BookDemo';
+import { OnboardingPage } from './pages/Onboarding';
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
@@ -81,7 +82,10 @@ function AppRoutes() {
         <Route path="/feedback/:locationId" element={<ReviewFunnel />} />
         <Route path="/widget/:locationId" element={<WidgetPage />} />
         
-        {/* Protected Routes */}
+        {/* Protected Route: Onboarding (No Layout) */}
+        <Route path="/onboarding" element={user ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+
+        {/* Protected Routes (App Layout) */}
         <Route path="/*" element={
             user ? (
                 <AppLayout>

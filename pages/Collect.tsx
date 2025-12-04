@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Review } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { SocialShareModal } from '../components/SocialShareModal';
+import { QRCodeSVG } from 'qrcode.react';
 
 export const CollectPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -21,6 +22,8 @@ export const CollectPage = () => {
   // QR Customization
   const [qrColor, setQrColor] = useState('#000000');
   const [qrBgColor, setQrBgColor] = useState('#ffffff');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   
   // Widget State
   const [widgetType, setWidgetType] = useState<'carousel' | 'list' | 'badge'>('carousel');
@@ -93,16 +96,33 @@ export const CollectPage = () => {
       toast.success("Code HTML copié !");
   };
 
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0];
+          setLogoFile(file);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setLogoUrl(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
   const handleDownloadQr = () => {
-    // Clean hex codes for URL
-    const cleanColor = qrColor.replace('#', '');
-    const cleanBg = qrBgColor.replace('#', '');
-    const link = document.createElement('a');
-    link.href = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(reviewLink)}&color=${cleanColor}&bgcolor=${cleanBg}&margin=10`;
-    link.download = 'qrcode.png';
-    link.target = '_blank';
-    link.click();
-    toast.success("Téléchargement lancé");
+    // Basic download for now - real impl would canvas draw the SVG
+    toast.success("Téléchargement lancé (SVG)");
+    const svg = document.getElementById("qr-code-svg");
+    if (svg) {
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "qrcode.svg";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
   };
 
   const handleSendCampaign = async () => {
@@ -114,13 +134,6 @@ export const CollectPage = () => {
     setRecipient('');
   };
   
-  // Helper to generate dynamic QR URL based on state
-  const getQrUrl = () => {
-      const cleanColor = qrColor.replace('#', '');
-      const cleanBg = qrBgColor.replace('#', '');
-      return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(reviewLink)}&color=${cleanColor}&bgcolor=${cleanBg}&margin=10`;
-  };
-
   if (!org) {
       if (loadingError) {
           return (
@@ -192,16 +205,29 @@ export const CollectPage = () => {
                   <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                           <QrCode className="h-5 w-5 text-indigo-600" />
-                          Générateur QR Code
+                          Générateur QR Code Pro
                       </CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col items-center">
-                      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm mb-6 w-full flex justify-center items-center min-h-[250px] relative transition-colors duration-300">
-                          <img 
-                            src={getQrUrl()} 
-                            alt="QR Code" 
-                            className="rounded shadow-md bg-white p-2"
-                          />
+                      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm mb-6 w-full flex justify-center items-center min-h-[300px] relative transition-colors duration-300">
+                          <div className="bg-white p-4 rounded-xl shadow-lg">
+                              <QRCodeSVG 
+                                id="qr-code-svg"
+                                value={reviewLink} 
+                                size={200}
+                                fgColor={qrColor}
+                                bgColor={qrBgColor}
+                                level="H"
+                                imageSettings={logoUrl ? {
+                                    src: logoUrl,
+                                    x: undefined,
+                                    y: undefined,
+                                    height: 40,
+                                    width: 40,
+                                    excavate: true,
+                                } : undefined}
+                              />
+                          </div>
                       </div>
                       
                       <div className="w-full space-y-4 mb-6">
@@ -221,11 +247,27 @@ export const CollectPage = () => {
                                   </div>
                               </div>
                           </div>
+                          
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
+                                  <ImageIcon className="h-3 w-3"/> Logo Central (Optionnel)
+                              </label>
+                              <div className="flex items-center gap-3">
+                                  <label className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 text-sm text-slate-600 transition-colors">
+                                      <UploadCloud className="h-4 w-4" />
+                                      <span>Choisir une image</span>
+                                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                                  </label>
+                                  {logoUrl && (
+                                      <button onClick={() => setLogoUrl(null)} className="text-xs text-red-500 hover:underline">Supprimer</button>
+                                  )}
+                              </div>
+                          </div>
                       </div>
 
                       <div className="flex gap-3 w-full">
                           <Button variant="outline" className="flex-1" icon={Copy} onClick={handleCopyLink}>Copier le lien</Button>
-                          <Button variant="primary" className="flex-1 shadow-lg shadow-indigo-100" icon={Download} onClick={handleDownloadQr}>Télécharger PNG</Button>
+                          <Button variant="primary" className="flex-1 shadow-lg shadow-indigo-100" icon={Download} onClick={handleDownloadQr}>Télécharger SVG</Button>
                       </div>
                   </CardContent>
               </Card>

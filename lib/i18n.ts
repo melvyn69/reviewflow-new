@@ -22,6 +22,16 @@ const resources: Translations = {
     "lang.fr": "Français",
     "lang.en": "English",
     "lang.es": "Español",
+    
+    // Onboarding
+    "onboarding.welcome": "Bienvenue sur Reviewflow",
+    "onboarding.subtitle": "Configurons votre espace de travail en quelques secondes.",
+    "onboarding.step1": "Entreprise",
+    "onboarding.step2": "Connexions",
+    "onboarding.step3": "Intelligence Artificielle",
+    "onboarding.next": "Continuer",
+    "onboarding.finish": "Accéder au Dashboard",
+    "onboarding.skip": "Passer pour le moment"
   },
   en: {
     "nav.login": "Client Login",
@@ -35,6 +45,16 @@ const resources: Translations = {
     "lang.fr": "Français",
     "lang.en": "English",
     "lang.es": "Español",
+
+    // Onboarding
+    "onboarding.welcome": "Welcome to Reviewflow",
+    "onboarding.subtitle": "Let's set up your workspace in seconds.",
+    "onboarding.step1": "Company",
+    "onboarding.step2": "Connections",
+    "onboarding.step3": "Artificial Intelligence",
+    "onboarding.next": "Continue",
+    "onboarding.finish": "Go to Dashboard",
+    "onboarding.skip": "Skip for now"
   },
   es: {
     "nav.login": "Área de Cliente",
@@ -48,6 +68,16 @@ const resources: Translations = {
     "lang.fr": "Français",
     "lang.en": "English",
     "lang.es": "Español",
+
+    // Onboarding
+    "onboarding.welcome": "Bienvenido a Reviewflow",
+    "onboarding.subtitle": "Configuremos su espacio de trabajo en segundos.",
+    "onboarding.step1": "Empresa",
+    "onboarding.step2": "Conexiones",
+    "onboarding.step3": "Inteligencia Artificial",
+    "onboarding.next": "Continuar",
+    "onboarding.finish": "Ir al Panel",
+    "onboarding.skip": "Saltar por ahora"
   }
 };
 
