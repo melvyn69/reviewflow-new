@@ -1072,8 +1072,8 @@ export const SettingsPage = () => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <Badge variant="neutral" className="capitalize">{member.role === 'admin' ? 'Administrateur' : member.role === 'editor' ? 'Éditeur' : 'Lecteur'}</Badge>
-                                    {member.role !== 'owner' && (
+                                    <Badge variant="neutral" className="capitalize">{member.role === 'super_admin' ? 'Super Admin' : member.role === 'admin' ? 'Administrateur' : member.role === 'editor' ? 'Éditeur' : 'Lecteur'}</Badge>
+                                    {member.role !== 'super_admin' && (
                                         <button className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                                     )}
                                 </div>

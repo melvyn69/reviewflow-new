@@ -24,11 +24,12 @@ import { OnboardingPage } from './pages/Onboarding';
 import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
-import { PublicProfilePage } from './pages/PublicProfile'; // Import
+import { PublicProfilePage } from './pages/PublicProfile';
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
 import { I18nProvider } from './lib/i18n';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // ScrollToTop component
 const ScrollToTop = () => {
@@ -162,7 +163,9 @@ const App = () => {
     <HashRouter>
       <I18nProvider>
         <ToastProvider>
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
         </ToastProvider>
       </I18nProvider>
     </HashRouter>

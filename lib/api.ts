@@ -795,10 +795,58 @@ const competitorsService = {
 
 const customersService = {
     list: async (): Promise<Customer[]> => {
-        return [
-            { id: '1', name: 'Sophie Dubois', email: 'sophie.d@gmail.com', source: 'google', last_interaction: new Date().toISOString(), total_reviews: 3, average_rating: 5, status: 'promoter', ltv_estimate: 450, history: [] },
-            { id: '2', name: 'Jean Michel', email: '', source: 'google', last_interaction: new Date(Date.now() - 100000000).toISOString(), total_reviews: 1, average_rating: 2, status: 'detractor', ltv_estimate: 0, history: [] }
-        ];
+        if (!isSupabaseConfigured()) return [];
+        
+        try {
+            // Aggregate customers from Reviews
+            const { data: reviews, error } = await supabase!
+                .from('reviews')
+                .select('author_name, rating, received_at, source, customer_email, status');
+                
+            if (error || !reviews) return [];
+
+            const customerMap = new Map<string, Customer>();
+
+            reviews.forEach(r => {
+                const name = r.author_name || 'Anonyme';
+                if (!customerMap.has(name)) {
+                    customerMap.set(name, {
+                        id: name,
+                        name: name,
+                        email: r.customer_email,
+                        source: r.source,
+                        last_interaction: r.received_at,
+                        total_reviews: 0,
+                        average_rating: 0,
+                        status: 'passive',
+                        ltv_estimate: 0,
+                        history: []
+                    });
+                }
+                
+                const cust = customerMap.get(name)!;
+                cust.total_reviews += 1;
+                cust.average_rating = ((cust.average_rating * (cust.total_reviews - 1)) + r.rating) / cust.total_reviews;
+                
+                if (new Date(r.received_at) > new Date(cust.last_interaction)) {
+                    cust.last_interaction = r.received_at;
+                }
+                if (r.customer_email && !cust.email) cust.email = r.customer_email;
+                
+                // Status logic
+                if (cust.average_rating >= 4.5) cust.status = 'promoter';
+                else if (cust.average_rating <= 3) cust.status = 'detractor';
+                else cust.status = 'passive';
+                
+                // LTV Mock calculation (e.g. 50€ per review/visit)
+                cust.ltv_estimate = cust.total_reviews * 50; 
+            });
+
+            return Array.from(customerMap.values());
+        } catch (e) {
+            console.error("Customers Load Error:", e);
+            return [];
+        }
     },
     getCustomerDetails: async (id: string) => (await customersService.list()).find(c => c.id === id)
 };
