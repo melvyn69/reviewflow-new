@@ -1,6 +1,7 @@
 
 
 
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -505,7 +506,30 @@ const reviewsService = {
           };
       },
       reply: async (id: string, text: string) => {
-          await requireSupabase().from('reviews').update({ status: 'sent', posted_reply: text, replied_at: new Date().toISOString() }).eq('id', id);
+          // Si pas de backend, on simule
+          if (!isSupabaseConfigured()) {
+              console.log("Mock Reply:", text);
+              return true;
+          }
+
+          // Appel de la Edge Function sécurisée pour poster sur Google
+          const { data: { session } } = await supabase!.auth.getSession();
+          if (!session) throw new Error("Unauthorized");
+
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/post_google_reply`, {
+              method: 'POST',
+              headers: { 
+                  'Authorization': `Bearer ${session.access_token}`,
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ reviewId: id, replyText: text })
+          });
+
+          if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.error || "Erreur lors de l'envoi à Google");
+          }
+          
           return true;
       },
       saveDraft: async (id: string, text: string) => {
