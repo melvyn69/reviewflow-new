@@ -220,7 +220,39 @@ export const DashboardPage = () => {
       }
   };
 
-  const isNewAccount = !loading && (!stats || stats.total_reviews === 0);
+  // Logic for empty state or new account
+  const isGoogleConnected = setupStatus?.googleConnected;
+  
+  // Show big empty state if Google is NOT connected, regardless of stats
+  if (!loading && !isGoogleConnected) {
+      return (
+          <Card className="bg-indigo-600 text-white border-none shadow-xl overflow-hidden relative min-h-[60vh] flex items-center justify-center">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+              <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+              
+              <CardContent className="p-8 md:p-12 text-center relative z-10 max-w-2xl">
+                  <div className="bg-white/20 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
+                      <Rocket className="h-10 w-10 text-white" />
+                  </div>
+                  <h2 className="text-4xl font-extrabold mb-4">Bienvenue sur Reviewflow !</h2>
+                  <p className="text-indigo-100 text-xl mb-10 leading-relaxed">
+                      Pour commencer à automatiser vos réponses et booster votre note, nous devons synchroniser vos avis existants.
+                  </p>
+                  <div className="flex flex-col sm:flex-row justify-center gap-6">
+                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-6 text-lg shadow-xl hover:scale-105 transition-transform" onClick={() => navigate('/settings')}>
+                          <UploadCloud className="mr-2 h-6 w-6" /> Connecter Google Business
+                      </Button>
+                      <Button size="lg" variant="outline" className="text-white border-indigo-300 hover:bg-indigo-700/50 py-6 text-lg" onClick={handleSeedData} isLoading={seeding}>
+                          Mode Démo (Données Test)
+                      </Button>
+                  </div>
+                  <p className="mt-8 text-xs text-indigo-300 opacity-80">
+                      Connexion sécurisée via l'API officielle Google. Aucun mot de passe requis.
+                  </p>
+              </CardContent>
+          </Card>
+      );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -243,125 +275,102 @@ export const DashboardPage = () => {
         </div>
       </div>
 
-      {isNewAccount ? (
-          <Card className="bg-indigo-600 text-white border-none shadow-xl overflow-hidden relative">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-              <CardContent className="p-8 md:p-12 text-center relative z-10">
-                  <Rocket className="h-16 w-16 mx-auto mb-6 text-indigo-200" />
-                  <h2 className="text-3xl font-bold mb-4">Bienvenue sur Reviewflow !</h2>
-                  <p className="text-indigo-100 text-lg mb-8 max-w-2xl mx-auto">
-                      Votre tableau de bord est vide. Connectez une source d'avis ou injectez des données de test.
-                  </p>
-                  <div className="flex justify-center gap-4">
-                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-8 shadow-xl" onClick={() => navigate('/settings')}>
-                          Connecter Google
-                      </Button>
-                      <Button size="lg" variant="outline" className="text-white border-indigo-400 hover:bg-indigo-700" onClick={handleSeedData} isLoading={seeding}>
-                          Mode Démo
-                      </Button>
-                  </div>
-              </CardContent>
-          </Card>
-      ) : (
-        <>
-          <SetupProgress status={setupStatus} />
+      <SetupProgress status={setupStatus} />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <KPI title={t('kpi.rating')} value={stats?.average_rating ? stats.average_rating + '/5' : '-'} change="+0.1" icon={Star} trend="up" loading={loading} />
-            <KPI title={t('kpi.response')} value={stats?.response_rate + '%'} change="+5%" icon={MessageSquare} trend="up" loading={loading} />
-            <KPI title={t('kpi.nps')} value={stats?.nps_score} change="+2" icon={Clock} trend="up" loading={loading} />
-            <KPI title={t('kpi.sentiment')} value={(stats ? Math.round(stats.sentiment_distribution.positive * 100) : 0) + '%'} change="+4%" icon={Activity} trend="up" loading={loading} />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <KPI title={t('kpi.rating')} value={stats?.average_rating ? stats.average_rating + '/5' : '-'} change="+0.1" icon={Star} trend="up" loading={loading} />
+        <KPI title={t('kpi.response')} value={stats?.response_rate + '%'} change="+5%" icon={MessageSquare} trend="up" loading={loading} />
+        <KPI title={t('kpi.nps')} value={stats?.nps_score} change="+2" icon={Clock} trend="up" loading={loading} />
+        <KPI title={t('kpi.sentiment')} value={(stats ? Math.round(stats.sentiment_distribution.positive * 100) : 0) + '%'} change="+4%" icon={Activity} trend="up" loading={loading} />
+      </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-                {/* Urgent Tasks */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <AlertCircle className="h-5 w-5 text-amber-500" />
-                            À traiter en priorité
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        {urgentReviews.length > 0 ? (
-                            <div className="divide-y divide-slate-100">
-                                {urgentReviews.map(review => (
-                                    <div 
-                                        key={review.id} 
-                                        className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer" 
-                                        onClick={() => navigate(`/inbox?reviewId=${review.id}`)}
-                                    >
-                                        <div className="h-10 w-10 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0">
-                                            {review.rating}★
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-start">
-                                                <h4 className="text-sm font-semibold text-slate-900 truncate">{review.author_name}</h4>
-                                                <span className="text-xs text-slate-400 whitespace-nowrap">{new Date(review.received_at).toLocaleDateString()}</span>
-                                            </div>
-                                            <p className="text-sm text-slate-600 line-clamp-1">{review.body}</p>
-                                        </div>
-                                        <Button size="xs" variant="outline">Répondre</Button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+            {/* Urgent Tasks */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5 text-amber-500" />
+                        À traiter en priorité
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {urgentReviews.length > 0 ? (
+                        <div className="divide-y divide-slate-100">
+                            {urgentReviews.map(review => (
+                                <div 
+                                    key={review.id} 
+                                    className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer" 
+                                    onClick={() => navigate(`/inbox?reviewId=${review.id}`)}
+                                >
+                                    <div className="h-10 w-10 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0">
+                                        {review.rating}★
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="p-8 text-center text-slate-500 text-sm">
-                                <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                                Tout est à jour ! Aucune urgence.
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start">
+                                            <h4 className="text-sm font-semibold text-slate-900 truncate">{review.author_name}</h4>
+                                            <span className="text-xs text-slate-400 whitespace-nowrap">{new Date(review.received_at).toLocaleDateString()}</span>
+                                        </div>
+                                        <p className="text-sm text-slate-600 line-clamp-1">{review.body}</p>
+                                    </div>
+                                    <Button size="xs" variant="outline">Répondre</Button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="p-8 text-center text-slate-500 text-sm">
+                            <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                            Tout est à jour ! Aucune urgence.
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
-                {/* Demo Shortcuts Card */}
-                <Card className="bg-indigo-900 text-white border-none">
-                    <CardHeader>
-                        <CardTitle className="text-white flex items-center gap-2">
-                            <Zap className="h-5 w-5 text-yellow-400" />
-                            Raccourcis Démo
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                             onClick={openFunnel}>
-                            <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-bold">Funnel Public</h4>
-                                <ExternalLink className="h-4 w-4 text-indigo-300" />
-                            </div>
-                            <p className="text-xs text-indigo-200">Page de collecte (ID: {realLocationId ? realLocationId.substring(0,8) : '...'})</p>
+            {/* Shortcuts Card */}
+            <Card className="bg-indigo-900 text-white border-none">
+                <CardHeader>
+                    <CardTitle className="text-white flex items-center gap-2">
+                        <Zap className="h-5 w-5 text-yellow-400" />
+                        Accès Rapides
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+                            onClick={openFunnel}>
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-bold">Formulaire de Collecte</h4>
+                            <ExternalLink className="h-4 w-4 text-indigo-300" />
                         </div>
-                        <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                             onClick={() => navigate('/admin')}>
-                            <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-bold">Super Admin</h4>
-                                <ShieldAlert className="h-4 w-4 text-red-300" />
-                            </div>
-                            <p className="text-xs text-indigo-200">Accéder au tableau de bord SaaS.</p>
+                        <p className="text-xs text-indigo-200">Page publique pour vos clients.</p>
+                    </div>
+                    <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+                            onClick={() => navigate('/collect')}>
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-bold">QR Code</h4>
+                            <Zap className="h-4 w-4 text-yellow-300" />
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
+                        <p className="text-xs text-indigo-200">Imprimer l'affiche comptoir.</p>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
 
-            <div className="space-y-6">
-                {/* Live Feed */}
-                <Card className="h-full flex flex-col">
-                    <CardHeader className="border-b border-slate-100 bg-slate-50/50">
-                        <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wider text-slate-500">
-                            <Activity className="h-4 w-4" /> Flux d'activité
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0 flex-1 overflow-hidden">
-                        <div className="max-h-[400px] overflow-y-auto p-4 custom-scrollbar">
-                            <ActivityFeed />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-          </div>
-        </>
-      )}
+        <div className="space-y-6">
+            {/* Live Feed */}
+            <Card className="h-full flex flex-col">
+                <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+                    <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wider text-slate-500">
+                        <Activity className="h-4 w-4" /> Flux d'activité
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex-1 overflow-hidden">
+                    <div className="max-h-[400px] overflow-y-auto p-4 custom-scrollbar">
+                        <ActivityFeed />
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+      </div>
     </div>
   );
 };

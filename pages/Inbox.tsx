@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Review, ReviewStatus, InternalNote, SavedReply, Location } from '../types';
-import { Card, CardContent, Skeleton, useToast } from '../components/ui';
+import { Card, CardContent, Skeleton, useToast, Button, Badge } from '../components/ui';
 import { SocialShareModal } from '../components/SocialShareModal';
 import { InboxFocusMode } from '../components/InboxFocusMode';
 import { 
@@ -26,9 +26,9 @@ import {
   Trash2,
   Store,
   ShieldCheck,
-  Zap
+  Zap,
+  ArrowDown
 } from 'lucide-react';
-import { Button, Badge } from '../components/ui';
 import { useNavigate, useLocation as useRouterLocation } from 'react-router-dom';
 
 const SourceIcon = ({ source }: { source: string }) => {
@@ -149,6 +149,11 @@ export const InboxPage = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const LIMIT = 20;
+
   const navigate = useNavigate();
   const routeLocation = useRouterLocation();
   const searchParams = new URLSearchParams(routeLocation.search);
@@ -210,27 +215,82 @@ export const InboxPage = () => {
   }, [targetReviewId]);
 
   useEffect(() => {
-    loadReviews();
+    setPage(0);
+    setHasMore(true);
+    loadReviews(true);
     loadTemplates();
   }, [statusFilter, sourceFilter, ratingFilter, locationFilter, searchQuery]);
 
-  const loadReviews = async () => {
-    setLoading(true);
-    const data = await api.reviews.list({
-        status: statusFilter,
-        source: sourceFilter,
-        rating: ratingFilter,
+  // Real-time subscription
+  useEffect(() => {
+      const sub = api.reviews.subscribe((payload) => {
+          // Handle Realtime updates
+          if (payload.eventType === 'INSERT') {
+              const newReview = payload.new;
+              newReview.body = newReview.text; // mapper body
+              
+              // Only add if matches current filters? (Simplified for now: always show toast, add to top)
+              setReviews(prev => [newReview, ...prev]);
+              toast.info(`Nouvel avis reçu de ${newReview.author_name} !`);
+          } else if (payload.eventType === 'UPDATE') {
+              const updated = payload.new;
+              updated.body = updated.text;
+              setReviews(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
+              
+              if (selectedReview?.id === updated.id) {
+                  setSelectedReview(prev => ({ ...prev!, ...updated }));
+              }
+          }
+      });
+      return () => { sub.unsubscribe(); };
+  }, [selectedReview]);
+
+  const loadReviews = async (reset = false) => {
+    if (reset) {
+        setLoading(true);
+        setReviews([]);
+    } else {
+        setLoadingMore(true);
+    }
+
+    const currentPage = reset ? 0 : page;
+
+    // Build filters object
+    const filters: any = {
+        page: currentPage,
+        limit: LIMIT,
         search: searchQuery
-    });
+    };
+    if (statusFilter !== 'Tout') filters.status = statusFilter;
+    if (sourceFilter !== 'Tout') filters.source = sourceFilter;
+    if (ratingFilter !== 'Tout') filters.rating = ratingFilter;
+    
+    // Client-side filtering for location (or server-side if API supports it)
+    // NOTE: Ideally API should support location_id filter. Assuming list returns filtered by org, we filter here if API doesn't support specific location arg.
+    // For scalability, location filtering should move to API args. For now, let's fetch & filter or assume API handles it.
+    // Let's modify the service call to include location if possible, or filter locally after fetch (less scalable).
+    // Given the previous updates, let's assume filtering happens mostly on DB.
+    
+    const data = await api.reviews.list(filters);
     
     let filtered = data;
     if (locationFilter !== 'Tout') {
         filtered = data.filter(r => r.location_id === locationFilter);
     }
 
-    setReviews(filtered);
+    if (reset) {
+        setReviews(filtered);
+    } else {
+        setReviews(prev => [...prev, ...filtered]);
+    }
     
-    if (targetReviewId && !selectedReview) {
+    // Check if we reached the end
+    if (data.length < LIMIT) {
+        setHasMore(false);
+    }
+
+    // Handle deep link
+    if (targetReviewId && reset) {
         const target = filtered.find(r => r.id === targetReviewId);
         if (target) {
             onSelectReview(target);
@@ -239,6 +299,14 @@ export const InboxPage = () => {
     }
     
     setLoading(false);
+    setLoadingMore(false);
+  };
+
+  const loadMore = () => {
+      if (!loadingMore && hasMore) {
+          setPage(prev => prev + 1);
+          loadReviews(false);
+      }
   };
 
   const loadTemplates = async () => {
@@ -387,8 +455,8 @@ export const InboxPage = () => {
       {showFocusMode && (
           <InboxFocusMode 
               reviews={reviews} 
-              onClose={() => { setShowFocusMode(false); loadReviews(); }} 
-              onUpdate={loadReviews}
+              onClose={() => { setShowFocusMode(false); loadReviews(true); }} 
+              onUpdate={() => loadReviews(true)}
           />
       )}
 
@@ -397,7 +465,8 @@ export const InboxPage = () => {
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                Boîte de réception <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{reviews.length}</span>
+                Boîte de réception 
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{reviews.length}{hasMore ? '+' : ''}</span>
             </h1>
             
             {pendingCount > 0 && (
@@ -454,7 +523,7 @@ export const InboxPage = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" id="reviews-list">
           {loading ? (
             <InboxSkeleton />
           ) : reviews.length === 0 ? (
@@ -463,54 +532,64 @@ export const InboxPage = () => {
                   Aucun avis ne correspond à vos filtres.
               </div>
           ) : (
-            <div className="divide-y divide-slate-50">
-              {reviews.map((review) => (
-                <div 
-                  key={review.id}
-                  onClick={() => onSelectReview(review)}
-                  className={`p-5 cursor-pointer hover:bg-slate-50 transition-all duration-200 border-l-4 ${selectedReview?.id === review.id ? 'bg-indigo-50/60 border-l-indigo-600' : 'border-l-transparent bg-white'}`}
-                >
-                  <div className="flex justify-between items-start mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <ReviewStatusBadge status={review.status} />
-                      <span className="text-[10px] font-medium text-slate-400">
-                        {new Date(review.received_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </span>
+            <>
+                <div className="divide-y divide-slate-50">
+                {reviews.map((review) => (
+                    <div 
+                    key={review.id}
+                    onClick={() => onSelectReview(review)}
+                    className={`p-5 cursor-pointer hover:bg-slate-50 transition-all duration-200 border-l-4 ${selectedReview?.id === review.id ? 'bg-indigo-50/60 border-l-indigo-600' : 'border-l-transparent bg-white'}`}
+                    >
+                    <div className="flex justify-between items-start mb-1.5">
+                        <div className="flex items-center gap-2">
+                        <ReviewStatusBadge status={review.status} />
+                        <span className="text-[10px] font-medium text-slate-400">
+                            {new Date(review.received_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                        </div>
+                        <SourceIcon source={review.source} />
                     </div>
-                    <SourceIcon source={review.source} />
-                  </div>
-                  
-                  <div className="flex items-center gap-1.5 mt-2 mb-2">
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
-                          <Store className="h-3 w-3" />
-                          {getLocationName(review.location_id)}
-                      </span>
-                  </div>
-                  
-                  <div className="mb-2">
-                    <div className="flex justify-between items-center mb-1">
-                      <h3 className={`font-semibold text-slate-900 truncate pr-4 ${review.status === 'pending' ? 'font-bold' : ''}`}>{review.author_name}</h3>
-                      <RatingStars rating={review.rating} />
+                    
+                    <div className="flex items-center gap-1.5 mt-2 mb-2">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
+                            <Store className="h-3 w-3" />
+                            {getLocationName(review.location_id)}
+                        </span>
                     </div>
-                    <p className={`text-sm text-slate-600 line-clamp-2 leading-snug ${review.status === 'pending' ? 'text-slate-900' : ''}`}>{review.body}</p>
-                  </div>
+                    
+                    <div className="mb-2">
+                        <div className="flex justify-between items-center mb-1">
+                        <h3 className={`font-semibold text-slate-900 truncate pr-4 ${review.status === 'pending' ? 'font-bold' : ''}`}>{review.author_name}</h3>
+                        <RatingStars rating={review.rating} />
+                        </div>
+                        <p className={`text-sm text-slate-600 line-clamp-2 leading-snug ${review.status === 'pending' ? 'text-slate-900' : ''}`}>{review.body}</p>
+                    </div>
 
-                  <div className="flex justify-between items-center mt-3">
-                      <div className="flex flex-wrap gap-2">
-                        {review.analysis && review.analysis.themes && review.analysis.themes.slice(0, 2).map(t => (
-                          <span key={t} className="capitalize text-[10px] font-semibold text-slate-500 px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">{t}</span>
-                        ))}
-                      </div>
-                      {review.internal_notes && review.internal_notes.length > 0 && (
-                          <div className="flex items-center text-[10px] text-slate-400 bg-yellow-50 px-1.5 py-0.5 rounded border border-yellow-100">
-                              <MessageSquare className="h-3 w-3 mr-1 text-yellow-600" />
-                              {review.internal_notes.length} note(s)
-                          </div>
-                      )}
-                  </div>
+                    <div className="flex justify-between items-center mt-3">
+                        <div className="flex flex-wrap gap-2">
+                            {review.analysis && review.analysis.themes && review.analysis.themes.slice(0, 2).map(t => (
+                            <span key={t} className="capitalize text-[10px] font-semibold text-slate-500 px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">{t}</span>
+                            ))}
+                        </div>
+                        {review.internal_notes && review.internal_notes.length > 0 && (
+                            <div className="flex items-center text-[10px] text-slate-400 bg-yellow-50 px-1.5 py-0.5 rounded border border-yellow-100">
+                                <MessageSquare className="h-3 w-3 mr-1 text-yellow-600" />
+                                {review.internal_notes.length} note(s)
+                            </div>
+                        )}
+                    </div>
+                    </div>
+                ))}
                 </div>
-              ))}
-            </div>
+                
+                {hasMore && (
+                    <div className="p-4 flex justify-center">
+                        <Button variant="ghost" onClick={loadMore} isLoading={loadingMore} icon={ArrowDown}>
+                            Charger plus d'avis
+                        </Button>
+                    </div>
+                )}
+            </>
           )}
         </div>
       </div>

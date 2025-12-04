@@ -1,3 +1,4 @@
+
 import React, { InputHTMLAttributes, SelectHTMLAttributes, useContext, useState, useEffect } from 'react';
 import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle } from 'lucide-react';
 
@@ -31,7 +32,7 @@ export const useToast = () => {
   };
 };
 
-export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ToastProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const addToast = (type: ToastType, message: string, duration = 3000) => {

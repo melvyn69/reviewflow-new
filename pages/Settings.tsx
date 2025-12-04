@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
@@ -45,7 +43,8 @@ import {
     Webhook,
     Copy,
     Zap,
-    Image as ImageIcon
+    Image as ImageIcon,
+    CreditCard
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -58,13 +57,6 @@ const GoogleIcon = () => (
     </svg>
 );
 const TripAdvisorIcon = () => <div className="font-serif font-bold text-green-600 text-lg tracking-tighter">TA</div>;
-const TrustpilotIcon = () => <Star className="h-full w-full text-green-500 fill-current" />;
-const YelpIcon = () => <div className="font-bold text-red-600 text-lg">yelp</div>;
-const TikTokIcon = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full text-black">
-        <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.65-1.58-1.11-.01.08-.01.16-.01.24v9.96c.42 4.67-4.48 7.6-8.32 5.91-2.91-1.32-4.14-5.26-2.45-8.03 1.29-2.09 3.95-3.04 6.22-2.23v4.18c-1.63-.73-3.66.19-4.15 1.9-.38 1.34.42 2.92 1.83 3.23 1.64.33 3.19-.92 3.22-2.55V.02h-.46z" />
-    </svg>
-);
 
 // --- COMPONENTS ---
 
@@ -281,7 +273,6 @@ const GoogleMappingModal = ({ locations, onClose, onSave }: { locations: Locatio
 
     useEffect(() => {
         loadGoogleData();
-        // Init mappings with existing
         const initialMap: Record<string, string> = {};
         locations.forEach(l => {
             if (l.external_reference) initialMap[l.id] = l.external_reference;
@@ -477,12 +468,14 @@ export const SettingsPage = () => {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [keyName, setKeyName] = useState('');
 
+  // Test email state
+  const [testingEmail, setTestingEmail] = useState(false);
+
   useEffect(() => {
     // Tentative de capture du token au chargement si retour de login
     api.organization.saveGoogleTokens().then((success) => {
         if (success) {
             toast.success("Compte connecté avec succès !");
-            // On recharge tout pour mettre à jour l'état visuel (case cochée verte)
             loadData(); 
         } else {
             loadData();
@@ -538,8 +531,7 @@ export const SettingsPage = () => {
       try {
           await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined, role: userRole });
           toast.success("Profil mis à jour !");
-          setUserPassword(''); // Clear password field
-          // Reload window to reflect role changes if any (simplest way for demo)
+          setUserPassword(''); 
           if (user?.role !== userRole) window.location.reload();
       } catch(e: any) {
           toast.error("Erreur mise à jour profil : " + e.message);
@@ -570,7 +562,7 @@ export const SettingsPage = () => {
       setOrgLegalName(company.legal_name);
       setOrgSiret(company.siret);
       setOrgAddress(company.address);
-      if(!orgCommercialName) setOrgCommercialName(company.legal_name); // Autofill commercial name if empty
+      if(!orgCommercialName) setOrgCommercialName(company.legal_name); 
       setSearchResults([]);
       setSearchQuery('');
   };
@@ -578,8 +570,8 @@ export const SettingsPage = () => {
   const handleSaveOrg = async () => {
       if (!org) return;
       await api.organization.update({ 
-          name: orgCommercialName, // Nom Commercial
-          legal_name: orgLegalName, // Raison Sociale
+          name: orgCommercialName, 
+          legal_name: orgLegalName, 
           siret: orgSiret,
           address: orgAddress,
           industry: industry as any 
@@ -606,6 +598,18 @@ export const SettingsPage = () => {
       if (!org) return;
       await api.organization.update({ notification_settings: notifSettings });
       toast.success("Préférences de notification enregistrées");
+  };
+
+  const handleTestEmail = async () => {
+      setTestingEmail(true);
+      try {
+          await api.notifications.sendTestEmail();
+          toast.success("Email de test envoyé ! (Vérifiez Resend)");
+      } catch (e: any) {
+          toast.error("Erreur: " + e.message);
+      } finally {
+          setTestingEmail(false);
+      }
   };
 
   const handleSaveLocation = async (data: any) => {
@@ -682,10 +686,7 @@ export const SettingsPage = () => {
               }
           }
           toast.success("Configuration sauvegardée !");
-          
-          // Trigger sync immediately after saving
           await handleSyncNow();
-          
           loadData();
       } catch (e) {
           toast.error("Erreur de sauvegarde");
@@ -711,7 +712,6 @@ export const SettingsPage = () => {
       }
   };
 
-  // API Handlers
   const handleGenerateKey = async () => {
       if (!keyName) return;
       await api.organization.generateApiKey(keyName);
@@ -747,6 +747,17 @@ export const SettingsPage = () => {
       loadData();
   };
 
+  const handleSimulateStripe = async () => {
+      try {
+          // Effectively update the org plan via mock API or real endpoint if backend exists
+          await api.organization.simulatePlanChange('pro');
+          await loadData();
+          toast.success("Webhook Stripe simulé : Abonnement activé (PRO) !");
+      } catch (e) {
+          toast.error("Erreur simulation");
+      }
+  };
+
   if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
   return (
@@ -772,8 +783,6 @@ export const SettingsPage = () => {
         </div>
 
         <div className="p-6 md:p-8">
-            
-            {/* --- ONGLET PROFIL --- */}
             {activeTab === 'profile' && (
                 <div className="max-w-xl space-y-6">
                     <div className="flex items-center gap-4 mb-6">
@@ -799,164 +808,274 @@ export const SettingsPage = () => {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe (Laisser vide si inchangé)</label>
                             <Input type="password" value={userPassword} onChange={e => setUserPassword(e.target.value)} placeholder="••••••••" />
                         </div>
-                        <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mt-4">
-                            <label className="block text-xs font-bold text-amber-900 uppercase tracking-wide mb-2">
-                                <ShieldCheck className="h-3 w-3 inline-block mr-1" />
-                                Simulation de Rôle (Mode Démo)
-                            </label>
-                            <Select value={userRole} onChange={e => setUserRole(e.target.value)}>
-                                <option value="super_admin">Super Admin (Vue SaaS)</option>
-                                <option value="admin">Administrateur Organisation</option>
-                                <option value="editor">Éditeur</option>
-                                <option value="viewer">Lecteur</option>
-                            </Select>
-                            <p className="text-xs text-amber-700 mt-2">Changez votre rôle pour tester l'accès aux différentes interfaces (ex: Super Admin pour voir le menu caché).</p>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-4 pt-2">
-                        <Button onClick={handleUpdateProfile} icon={Check}>Mettre à jour</Button>
-                        <Button variant="ghost" onClick={handleResetPassword} icon={Lock}>Réinitialiser MDP</Button>
+                        <Button onClick={handleUpdateProfile}>Enregistrer le profil</Button>
                     </div>
                 </div>
             )}
 
-            {/* --- ONGLET ENTREPRISE --- */}
             {activeTab === 'organization' && (
-                <div className="max-w-2xl space-y-8">
-                    
-                    {/* Module Recherche SIRET */}
-                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                            <Search className="h-5 w-5 text-indigo-600" />
-                            Recherche Automatique (Societe.com)
-                        </h3>
-                        <div className="flex gap-2 relative">
+                <div className="max-w-xl space-y-6">
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4">
+                        <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
+                            <Search className="h-4 w-4" /> Recherche Auto (SIRET)
+                        </h4>
+                        <div className="flex gap-2">
                             <Input 
-                                placeholder="Entrez un nom ou SIRET..." 
+                                placeholder="Nom de l'entreprise..." 
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="bg-white"
                             />
                             <Button onClick={handleSearchCompany} isLoading={searching}>Chercher</Button>
-                            
-                            {searchResults.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl border border-slate-200 z-10 overflow-hidden">
-                                    {searchResults.map((res: any, i) => (
-                                        <div 
-                                            key={i} 
-                                            className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-0"
-                                            onClick={() => handleSelectCompany(res)}
-                                        >
-                                            <div className="font-bold text-sm text-slate-900">{res.legal_name}</div>
-                                            <div className="text-xs text-slate-500">SIRET: {res.siret} • {res.address}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
                         </div>
-                        <p className="text-xs text-slate-500 mt-2">Permet de pré-remplir les informations légales.</p>
+                        {searchResults.length > 0 && (
+                            <div className="mt-2 space-y-2">
+                                {searchResults.map((res, i) => (
+                                    <div key={i} className="p-2 bg-white rounded border border-slate-200 cursor-pointer hover:bg-slate-50" onClick={() => handleSelectCompany(res)}>
+                                        <div className="font-bold text-sm">{res.legal_name}</div>
+                                        <div className="text-xs text-slate-500">{res.address} - {res.siret}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Nom Commercial</label>
-                            <Input value={orgCommercialName} onChange={e => setOrgCommercialName(e.target.value)} placeholder="Nom affiché aux clients (ex: Le Gourmet)" />
-                            <p className="text-xs text-slate-500 mt-1">Utilisé par l'IA pour signer les réponses.</p>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Nom Commercial</label>
+                            <Input value={orgCommercialName} onChange={e => setOrgCommercialName(e.target.value)} />
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Raison Sociale</label>
+                            <Input value={orgLegalName} onChange={e => setOrgLegalName(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Raison Sociale</label>
-                                <Input value={orgLegalName} onChange={e => setOrgLegalName(e.target.value)} placeholder="SAS LE GOURMET" />
+                                <label className="block text-sm font-medium text-slate-700 mb-1">SIRET</label>
+                                <Input value={orgSiret} onChange={e => setOrgSiret(e.target.value)} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">SIRET</label>
-                                <Input value={orgSiret} onChange={e => setOrgSiret(e.target.value)} placeholder="123 456 789 00012" />
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Industrie</label>
+                                <Select value={industry} onChange={e => setIndustry(e.target.value as any)}>
+                                    <option value="restaurant">Restauration</option>
+                                    <option value="hotel">Hôtellerie</option>
+                                    <option value="retail">Commerce</option>
+                                    <option value="services">Services</option>
+                                </Select>
                             </div>
                         </div>
-
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Adresse du Siège</label>
-                            <Input value={orgAddress} onChange={e => setOrgAddress(e.target.value)} placeholder="10 Rue de la République..." />
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Adresse Siège</label>
+                            <Input value={orgAddress} onChange={e => setOrgAddress(e.target.value)} />
                         </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Secteur d'activité (Important pour l'IA)</label>
-                            <Select value={industry} onChange={e => setIndustry(e.target.value as any)}>
-                                <option value="restaurant">Restauration</option>
-                                <option value="hotel">Hôtellerie</option>
-                                <option value="retail">Commerce de détail</option>
-                                <option value="beauty">Beauté & Coiffure</option>
-                                <option value="health">Santé & Bien-être</option>
-                                <option value="services">Services aux entreprises</option>
-                                <option value="automotive">Automobile / Garage</option>
-                                <option value="real_estate">Immobilier</option>
-                                <option value="legal">Juridique / Comptabilité</option>
-                                <option value="other">Autre</option>
-                            </Select>
-                        </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-slate-100">
-                        <Button onClick={handleSaveOrg} icon={CheckSquare}>Enregistrer les modifications</Button>
+                        <Button onClick={handleSaveOrg}>Mettre à jour l'entreprise</Button>
                     </div>
                 </div>
             )}
 
-            {/* --- ONGLET ÉTABLISSEMENTS --- */}
             {activeTab === 'locations' && (
                 <div className="space-y-6">
                     <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-slate-900">Vos Points de Vente</h3>
-                        <Button size="sm" icon={Plus} onClick={() => { setEditingLocation(null); setShowLocationModal(true); }}>Ajouter</Button>
+                        <h3 className="font-bold text-lg">Vos Établissements</h3>
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => setShowMappingModal(true)}>Mapper Google</Button>
+                            <Button icon={Plus} onClick={() => { setEditingLocation(null); setShowLocationModal(true); }}>Ajouter</Button>
+                        </div>
+                    </div>
+
+                    {org?.locations?.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500 border border-dashed border-slate-300 rounded-xl">
+                            Aucun établissement. Ajoutez-en un pour commencer.
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {org?.locations?.map(loc => (
+                                <Card key={loc.id}>
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div>
+                                            <h4 className="font-bold text-slate-900">{loc.name}</h4>
+                                            <p className="text-sm text-slate-500">{loc.address}, {loc.city}</p>
+                                            {loc.external_reference && (
+                                                <div className="text-[10px] text-green-600 flex items-center gap-1 mt-1">
+                                                    <GoogleIcon /> Synchronisé
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button size="xs" variant="ghost" onClick={() => { setEditingLocation(loc); setShowLocationModal(true); }}>Modifier</Button>
+                                            <button onClick={() => handleDeleteLocation(loc.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'integrations' && (
+                <div className="space-y-6">
+                    <h3 className="font-bold text-lg mb-4">Connexions</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <IntegrationCard 
+                            icon={GoogleIcon} 
+                            title="Google Business Profile" 
+                            description="Synchronisation des avis et réponses en temps réel."
+                            connected={org?.integrations.google}
+                            onConnect={api.auth.connectGoogleBusiness}
+                        />
+                        <IntegrationCard 
+                            icon={Facebook} 
+                            title="Facebook Pages" 
+                            description="Gérez les avis et commentaires de vos pages."
+                            connected={org?.integrations.facebook}
+                            onConnect={() => toast.info("Intégration Facebook bientôt disponible")}
+                            comingSoon
+                        />
+                        <IntegrationCard 
+                            icon={Instagram} 
+                            title="Instagram" 
+                            description="Publiez vos meilleurs avis en story."
+                            connected={org?.integrations.instagram_posting}
+                            type="social"
+                            comingSoon
+                        />
+                        <IntegrationCard 
+                            icon={TripAdvisorIcon} 
+                            title="TripAdvisor" 
+                            description="Importation des avis voyageurs."
+                            connected={false}
+                            comingSoon
+                        />
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'brand' && (
+                <div className="max-w-2xl space-y-6">
+                    <div className="bg-gradient-to-r from-indigo-50 to-violet-50 p-6 rounded-xl border border-indigo-100">
+                        <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">
+                            <Sparkles className="h-5 w-5" /> Brand Voice IA
+                        </h4>
+                        <p className="text-sm text-indigo-700 mb-6">
+                            Définissez comment l'IA doit parler pour qu'elle ressemble à votre équipe.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-indigo-900 mb-1">Ton</label>
+                                    <Select value={brandTone} onChange={e => setBrandTone(e.target.value)}>
+                                        <option value="professionnel">Professionnel</option>
+                                        <option value="amical">Amical & Chaleureux</option>
+                                        <option value="luxe">Luxe & Distingué</option>
+                                        <option value="humoristique">Humoristique</option>
+                                    </Select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-indigo-900 mb-1">Style</label>
+                                    <Select value={languageStyle} onChange={e => setLanguageStyle(e.target.value as any)}>
+                                        <option value="formal">Vouvoiement (Classique)</option>
+                                        <option value="casual">Tutoiement (Moderne)</option>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-indigo-900 mb-1">Base de Connaissance (Context)</label>
+                                <textarea 
+                                    className="w-full p-3 rounded-lg border border-indigo-200 text-sm h-32 focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Ex: Nous sommes fermés le lundi. Le chef s'appelle Mario. Notre spécialité est la truffe..."
+                                    value={brandKnowledge}
+                                    onChange={e => setBrandKnowledge(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <Toggle checked={useEmojis} onChange={setUseEmojis} />
+                                <span className="text-sm font-medium text-indigo-900">Utiliser des émojis 😊</span>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2">
+                                <Button variant="secondary" size="sm" onClick={handleTestVoice} isLoading={testingVoice}>Tester la voix</Button>
+                                <Button onClick={handleSaveBrand}>Sauvegarder</Button>
+                            </div>
+
+                            {testResponse && (
+                                <div className="mt-4 p-4 bg-white rounded-lg border border-indigo-100 text-sm text-slate-600 italic relative">
+                                    <div className="absolute -top-3 left-4 bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded uppercase font-bold">Aperçu</div>
+                                    "{testResponse}"
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'notifications' && (
+                <div className="max-w-xl space-y-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
+                            <div>
+                                <div className="font-bold text-slate-900">Alertes Email Instantanées</div>
+                                <div className="text-xs text-slate-500">Recevez un email à chaque nouvel avis.</div>
+                            </div>
+                            <Toggle checked={notifSettings.email_alerts} onChange={v => setNotifSettings({...notifSettings, email_alerts: v})} />
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
+                            <div>
+                                <div className="font-bold text-slate-900">Digest Hebdomadaire</div>
+                                <div className="text-xs text-slate-500">Un résumé de vos performances chaque lundi.</div>
+                            </div>
+                            <Toggle checked={notifSettings.weekly_digest} onChange={v => setNotifSettings({...notifSettings, weekly_digest: v})} />
+                        </div>
+
+                        <div className="p-4 bg-slate-50 rounded-lg">
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Seuil d'alerte critique</label>
+                            <div className="flex items-center gap-4">
+                                <input 
+                                    type="range" min="1" max="5" step="1" 
+                                    value={notifSettings.alert_threshold}
+                                    onChange={e => setNotifSettings({...notifSettings, alert_threshold: parseInt(e.target.value)})}
+                                    className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-600"
+                                />
+                                <span className="font-bold text-red-600">{notifSettings.alert_threshold} Étoiles</span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">Vous serez notifié en priorité si un avis est inférieur ou égal à ce score.</p>
+                        </div>
+
+                        <div className="flex gap-3 justify-end">
+                            <Button variant="outline" onClick={handleTestEmail} isLoading={testingEmail}>Envoyer un email de test</Button>
+                            <Button onClick={handleSaveNotifications}>Enregistrer</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'team' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-lg">Membres de l'équipe</h3>
+                        <Button icon={UserPlus} onClick={() => setShowInviteModal(true)}>Inviter</Button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {org?.locations.map(loc => (
-                            <div key={loc.id} className="p-5 border border-slate-200 rounded-xl hover:border-indigo-300 transition-all bg-white group relative">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
-                                            <Building2 className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900 text-sm">{loc.name}</h4>
-                                            <p className="text-xs text-slate-500">{loc.city}</p>
-                                        </div>
+                    <div className="grid gap-4">
+                        {team.map(member => (
+                            <div key={member.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center font-bold text-indigo-700">
+                                        {member.name.charAt(0)}
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => { setEditingLocation(loc); setShowLocationModal(true); }} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600" title="Modifier">
-                                            <PenLine className="h-4 w-4" />
-                                        </button>
-                                        <button onClick={() => handleDeleteLocation(loc.id)} className="p-1.5 hover:bg-red-50 rounded text-slate-400 hover:text-red-600" title="Supprimer">
-                                            <Trash2 className="h-4 w-4" />
-                                        </button>
+                                    <div>
+                                        <div className="font-bold text-slate-900">{member.name}</div>
+                                        <div className="text-xs text-slate-500">{member.email}</div>
                                     </div>
                                 </div>
-                                <div className="space-y-1.5 mt-3 border-t border-slate-50 pt-3">
-                                    {loc.google_review_url ? (
-                                        <div className="flex items-center gap-2 text-xs text-green-600 font-medium">
-                                            <CheckCircle2 className="h-3 w-3" /> Lien Google configuré
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-2 text-xs text-amber-600 font-medium">
-                                            <AlertCircle className="h-3 w-3" /> Lien Google manquant
-                                        </div>
+                                <div className="flex items-center gap-4">
+                                    <Badge variant="neutral" className="capitalize">{member.role === 'admin' ? 'Administrateur' : member.role === 'editor' ? 'Éditeur' : 'Lecteur'}</Badge>
+                                    {member.role !== 'owner' && (
+                                        <button className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                                     )}
-                                    <div className="flex items-center gap-2 text-xs text-slate-500 truncate">
-                                        <MapPin className="h-3 w-3 shrink-0" /> {loc.address}
-                                    </div>
-                                    {loc.public_profile_enabled && (
-                                        <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium">
-                                            <Globe className="h-3 w-3" /> Profil Public Actif
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="mt-3">
-                                    <Button variant="outline" size="xs" className="w-full" onClick={() => { setEditingLocation(loc); setShowLocationModal(true); }}>
-                                        Gérer
-                                    </Button>
                                 </div>
                             </div>
                         ))}
@@ -964,359 +1083,71 @@ export const SettingsPage = () => {
                 </div>
             )}
 
-            {/* --- ONGLET INTÉGRATIONS --- */}
-            {activeTab === 'integrations' && (
-                <div className="space-y-8 animate-in fade-in">
-                    
-                    {/* Carte principale Google (Redesign Officiel) */}
-                    <Card className={`border-2 ${org?.integrations.google ? 'border-green-100 bg-green-50/20' : 'border-indigo-100'}`}>
-                        <CardContent className="p-6 flex flex-col md:flex-row justify-between items-center gap-6">
-                            <div className="flex items-center gap-4">
-                                <div className="h-16 w-16 bg-white rounded-full p-3 shadow-md border border-slate-100 flex items-center justify-center">
-                                    <GoogleIcon />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-900">Google Business Profile</h3>
-                                    <p className="text-sm text-slate-500 max-w-sm">Synchronisez vos avis, répondez en temps réel et analysez votre e-réputation locale.</p>
-                                    {org?.integrations.google && <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600 mt-2"><CheckCircle2 className="h-3 w-3"/> Compte connecté</span>}
-                                </div>
-                            </div>
-                            
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                {!org?.integrations.google ? (
-                                    <button 
-                                        onClick={() => api.auth.connectGoogleBusiness()}
-                                        className="flex items-center justify-center gap-3 bg-white text-slate-700 font-medium py-2.5 px-6 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50 transition-all group"
-                                    >
-                                        <div className="h-5 w-5"><GoogleIcon /></div>
-                                        <span>Sign in with Google</span>
-                                    </button>
-                                ) : (
-                                    <>
-                                        <Button icon={RefreshCw} onClick={handleSyncNow} isLoading={syncing}>Synchroniser maintenant</Button>
-                                        <Button variant="outline" icon={LinkIcon} onClick={() => setShowMappingModal(true)}>Configurer les liens</Button>
-                                    </>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                    
-                    {/* ZAPIER PROMO CARD */}
-                    <div className="p-5 rounded-xl border border-orange-200 bg-orange-50 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="h-10 w-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                                Zap
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-orange-900">Automation (Zapier, Make, Slack)</h4>
-                                <p className="text-xs text-orange-700">Connectez vos outils externes via API & Webhooks.</p>
-                            </div>
-                        </div>
-                        <Button size="sm" variant="outline" className="border-orange-300 text-orange-800 hover:bg-orange-100" onClick={() => setActiveTab('developer')}>
-                            Configurer
-                        </Button>
-                    </div>
-
-                    <div>
-                        <h3 className="font-bold text-lg text-slate-900 mb-4 flex items-center gap-2">
-                            <RefreshCw className="h-5 w-5 text-indigo-600" /> Autres Sources
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <IntegrationCard 
-                                icon={Facebook} title="Facebook Page" 
-                                description="Récupération des recommandations." 
-                                connected={org?.integrations.facebook} 
-                                onConnect={() => {}} 
-                            />
-                            <IntegrationCard icon={TripAdvisorIcon} title="TripAdvisor" description="Avis voyageurs et classements." comingSoon />
-                            <IntegrationCard icon={TrustpilotIcon} title="Trustpilot" description="Avis vérifiés e-commerce." comingSoon />
-                            <IntegrationCard icon={YelpIcon} title="Yelp" description="Populaire pour la restauration." comingSoon />
-                            <IntegrationCard icon={Briefcase} title="Pages Jaunes" description="Annuaire local français." comingSoon />
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="font-bold text-lg text-slate-900 mb-4 flex items-center gap-2">
-                            <Activity className="h-5 w-5 text-pink-600" /> Canaux Marketing
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <IntegrationCard type="social" icon={Instagram} title="Instagram" description="Posts & Stories." connected={org?.integrations.instagram_posting} />
-                            <IntegrationCard type="social" icon={Linkedin} title="LinkedIn" description="Communication B2B." connected={org?.integrations.linkedin_posting} />
-                            <IntegrationCard type="social" icon={TikTokIcon} title="TikTok" description="Vidéos virales." connected={org?.integrations.tiktok_posting} />
-                            <IntegrationCard type="social" icon={Facebook} title="Facebook" description="Posts page pro." connected={org?.integrations.facebook_posting} />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* --- ONGLET DEVELOPER (NOUVEAU) --- */}
             {activeTab === 'developer' && (
-                <div className="space-y-8 animate-in fade-in">
-                    <div className="bg-slate-900 text-white p-6 rounded-xl flex items-center justify-between">
-                        <div>
-                            <h2 className="text-xl font-bold flex items-center gap-2">
-                                <Code className="h-6 w-6 text-indigo-400" />
-                                API & Webhooks
-                            </h2>
-                            <p className="text-indigo-200 text-sm mt-1">
-                                Intégrez Reviewflow à votre écosystème (CRM, POS, Slack).
-                            </p>
-                        </div>
-                        <Button variant="outline" className="text-white border-white/20 hover:bg-white/10" onClick={() => window.open('https://docs.reviewflow.com', '_blank')}>
-                            Documentation
-                        </Button>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* API KEYS */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><Key className="h-5 w-5 text-slate-500" /> Clés API</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    {org?.api_keys?.map(key => (
-                                        <div key={key.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                            <div>
-                                                <div className="font-mono text-sm font-bold text-slate-700">{key.name}</div>
-                                                <div className="font-mono text-xs text-slate-400 mt-1 flex items-center gap-2">
-                                                    {key.key.substring(0, 12)}...
-                                                    <Copy className="h-3 w-3 cursor-pointer hover:text-indigo-600" onClick={() => { navigator.clipboard.writeText(key.key); toast.success("Copié !") }} />
-                                                </div>
-                                            </div>
-                                            <button onClick={() => handleRevokeKey(key.id)} className="text-red-500 text-xs hover:underline">Révoquer</button>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex gap-2 border-t border-slate-100 pt-4">
-                                    <Input placeholder="Nom de la clé (ex: Zapier)" value={keyName} onChange={e => setKeyName(e.target.value)} className="text-sm" />
-                                    <Button size="sm" onClick={handleGenerateKey} disabled={!keyName}>Générer</Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* WEBHOOKS */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><Webhook className="h-5 w-5 text-slate-500" /> Webhooks</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="space-y-2">
-                                    {org?.webhooks?.map(hook => (
-                                        <div key={hook.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                            <div className="flex justify-between items-start mb-1">
-                                                <div className="font-mono text-xs text-slate-600 break-all">{hook.url}</div>
-                                                <div className="flex gap-2">
-                                                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded">Actif</span>
-                                                    <Trash2 className="h-3 w-3 text-slate-400 cursor-pointer hover:text-red-600" onClick={() => handleDeleteWebhook(hook.id)} />
-                                                </div>
-                                            </div>
-                                            <div className="flex justify-between items-center mt-2">
-                                                <div className="flex gap-1">
-                                                    {hook.events.map(e => <Badge key={e} variant="neutral" className="text-[10px]">{e}</Badge>)}
-                                                </div>
-                                                <button onClick={() => handleTestWebhook(hook.id)} className="text-[10px] text-indigo-600 hover:underline">Tester</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="border-t border-slate-100 pt-4 space-y-2">
-                                    <Input placeholder="URL de destination (https://...)" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} className="text-sm" />
-                                    <Button size="sm" className="w-full" onClick={handleAddWebhook} disabled={!webhookUrl}>Ajouter un Webhook</Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* QUICK START */}
-                    <Card className="bg-slate-50 border-slate-200">
-                        <CardHeader>
-                            <CardTitle>Exemple : Demander un avis après achat (Node.js)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <pre className="bg-slate-900 text-slate-300 p-4 rounded-lg text-xs font-mono overflow-x-auto">
-{`const axios = require('axios');
-
-await axios.post('https://api.reviewflow.com/v1/request-review', {
-  location_id: 'loc_123456',
-  customer: {
-    name: 'Jean Dupont',
-    email: 'jean@gmail.com',
-    phone: '+33612345678'
-  }
-}, {
-  headers: { 'Authorization': 'Bearer sk_live_...' }
-});`}
-                            </pre>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* --- ONGLET NOTIFICATIONS --- */}
-            {activeTab === 'notifications' && (
-                <div className="max-w-2xl space-y-6">
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <h3 className="text-lg font-medium text-slate-900">Alertes Email</h3>
-                            <p className="text-sm text-slate-500">Recevez un email quand un nouvel avis arrive.</p>
-                        </div>
-                        <Toggle checked={notifSettings.email_alerts} onChange={(v) => setNotifSettings({...notifSettings, email_alerts: v})} />
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-6">
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Seuil d'alerte critique</label>
-                        <p className="text-sm text-slate-500 mb-4">Recevoir une alerte "Urgence" si la note est inférieure ou égale à :</p>
-                        <div className="flex items-center gap-4">
-                            <input 
-                                type="range" 
-                                min="1" max="5" 
-                                value={notifSettings.alert_threshold} 
-                                onChange={(e) => setNotifSettings({...notifSettings, alert_threshold: parseInt(e.target.value)})}
-                                className="w-full max-w-xs"
-                            />
-                            <span className="font-bold text-lg text-indigo-600">{notifSettings.alert_threshold} ★</span>
-                        </div>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-6 flex items-start justify-between">
-                        <div>
-                            <h3 className="text-lg font-medium text-slate-900">Digest Hebdomadaire</h3>
-                            <p className="text-sm text-slate-500">Un résumé de vos performances chaque semaine.</p>
-                        </div>
-                        <Toggle checked={notifSettings.weekly_digest} onChange={(v) => setNotifSettings({...notifSettings, weekly_digest: v})} />
-                    </div>
-
-                    {notifSettings.weekly_digest && (
-                        <div className="ml-8 p-4 bg-slate-50 rounded-lg">
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Jour d'envoi</label>
-                            <Select value={notifSettings.digest_day} onChange={(e) => setNotifSettings({...notifSettings, digest_day: e.target.value})}>
-                                <option value="monday">Lundi matin</option>
-                                <option value="friday">Vendredi soir</option>
-                            </Select>
-                        </div>
-                    )}
-
-                    <div className="border-t border-slate-100 pt-6">
-                        <Button onClick={handleSaveNotifications} icon={CheckSquare}>Enregistrer les préférences</Button>
-                    </div>
-                </div>
-            )}
-
-            {/* --- ONGLET MARQUE & IA --- */}
-            {activeTab === 'brand' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Ton de la marque</label>
-                            <Input 
-                                value={brandTone} 
-                                onChange={(e) => setBrandTone(e.target.value)}
-                                placeholder="ex: Professionnel, Chaleureux, Décalé..."
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Style de langage</label>
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input 
-                                        type="radio" 
-                                        checked={languageStyle === 'formal'} 
-                                        onChange={() => setLanguageStyle('formal')}
-                                        className="text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm">Vouvoiement (Formel)</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input 
-                                        type="radio" 
-                                        checked={languageStyle === 'casual'} 
-                                        onChange={() => setLanguageStyle('casual')}
-                                        className="text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm">Tutoiement (Amical)</span>
-                                </label>
+                <div className="space-y-8">
+                    {/* API Keys */}
+                    <section>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg flex items-center gap-2"><Key className="h-5 w-5 text-indigo-600"/> Clés API</h3>
+                            <div className="flex gap-2">
+                                <Input placeholder="Nom de la clé (ex: Zapier)" className="w-48 h-9 text-xs" value={keyName} onChange={e => setKeyName(e.target.value)} />
+                                <Button size="sm" onClick={handleGenerateKey} disabled={!keyName}>Générer</Button>
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-3">
-                            <Toggle checked={useEmojis} onChange={setUseEmojis} />
-                            <div>
-                                <div className="text-sm font-medium text-slate-900">Utiliser des Emojis</div>
-                                <div className="text-xs text-slate-500">L'IA ajoutera quelques emojis pertinents.</div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Base de Connaissances (Contexte)</label>
-                            <textarea 
-                                className="w-full h-32 p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"
-                                placeholder="Indiquez ici des faits clés : 'Fermé le lundi', 'Livraison gratuite dès 50€', 'Fondé en 1990'..."
-                                value={brandKnowledge}
-                                onChange={(e) => setBrandKnowledge(e.target.value)}
-                            />
-                        </div>
-
-                        <Button onClick={handleSaveBrand} icon={CheckSquare}>Enregistrer</Button>
-                    </div>
-
-                    <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                            <Sparkles className="h-5 w-5 text-indigo-500" />
-                            Simulateur de Voix
-                        </h3>
-                        <div className="bg-white p-4 rounded-lg border border-slate-200 mb-4 shadow-sm">
-                            <p className="text-sm text-slate-600 italic">"Service un peu lent ce midi, mais le plat était bon."</p>
-                        </div>
-                        <div className="flex justify-center mb-4">
-                             <Button size="sm" variant="secondary" onClick={handleTestVoice} isLoading={testingVoice} icon={Play}>Tester la réponse</Button>
-                        </div>
-                        {testResponse && (
-                            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 animate-in fade-in slide-in-from-top-2">
-                                <p className="text-sm text-indigo-900 leading-relaxed">{testResponse}</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* --- ONGLET ÉQUIPE --- */}
-            {activeTab === 'team' && (
-                <div>
-                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-bold text-lg text-slate-900">Membres de l'équipe</h3>
-                        <Button size="sm" icon={UserPlus} onClick={() => setShowInviteModal(true)}>Inviter</Button>
-                    </div>
-                    
-                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                        <div className="divide-y divide-slate-100">
-                            {team.map(member => (
-                                <div key={member.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center font-bold text-indigo-600 text-sm">
-                                            {member.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <div className="font-medium text-slate-900">{member.name}</div>
-                                            <div className="text-xs text-slate-500">{member.email}</div>
-                                        </div>
+                        <div className="space-y-2">
+                            {org?.api_keys?.map(apiKey => (
+                                <div key={apiKey.id} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
+                                    <div>
+                                        <div className="font-bold text-sm text-slate-900">{apiKey.name}</div>
+                                        <div className="font-mono text-xs text-slate-500 mt-1">{apiKey.key.substring(0, 12)}...</div>
                                     </div>
-                                    <div className="flex items-center gap-4">
-                                        <Badge variant={member.role === 'admin' ? 'default' : 'neutral'}>{member.role}</Badge>
-                                        {member.status === 'invited' && <span className="text-xs text-amber-600 italic">En attente</span>}
-                                        <button className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                                    <button onClick={() => handleRevokeKey(apiKey.id)} className="text-xs text-red-600 hover:underline">Révoquer</button>
+                                </div>
+                            ))}
+                            {(!org?.api_keys || org.api_keys.length === 0) && <p className="text-sm text-slate-500 italic">Aucune clé active.</p>}
+                        </div>
+                    </section>
+
+                    {/* Webhooks */}
+                    <section>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg flex items-center gap-2"><Webhook className="h-5 w-5 text-indigo-600"/> Webhooks</h3>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                            <div className="flex gap-2">
+                                <Input placeholder="https://votre-api.com/webhook" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} />
+                                <Button onClick={handleAddWebhook}>Ajouter</Button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {org?.webhooks?.map(hook => (
+                                <div key={hook.id} className="flex items-center justify-between p-3 bg-white rounded border border-slate-200">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`h-2 w-2 rounded-full ${hook.active ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                        <div className="text-sm font-mono text-slate-700 truncate max-w-xs">{hook.url}</div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button size="xs" variant="outline" onClick={() => handleTestWebhook(hook.id)}>Tester</Button>
+                                        <button onClick={() => handleDeleteWebhook(hook.id)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </section>
+
+                    {/* Billing Simulator (Dev Only) */}
+                    <section className="pt-8 border-t border-slate-200">
+                        <h3 className="font-bold text-sm text-slate-400 uppercase mb-4">Zone de Test (Simulation)</h3>
+                        <Button variant="outline" onClick={handleSimulateStripe} icon={CreditCard}>
+                            Simuler Webhook Stripe (Upgrade Pro)
+                        </Button>
+                    </section>
                 </div>
             )}
-
         </div>
       </div>
-      
+
+      {/* Modals */}
       {showLocationModal && <LocationModal location={editingLocation} onClose={() => setShowLocationModal(false)} onSave={handleSaveLocation} onUpload={handleImportCsv} />}
       {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onInvite={handleInvite} />}
       {showMappingModal && org?.locations && <GoogleMappingModal locations={org.locations} onClose={() => setShowMappingModal(false)} onSave={handleSaveMappings} />}

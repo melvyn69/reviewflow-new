@@ -114,7 +114,7 @@ const RoiCalculator = () => {
                         <div>
                             <div className="flex justify-between text-sm mb-3">
                                 <span className="text-slate-400">CA Mensuel Moyen</span>
-                                <span className="font-bold text-white">{monthlyRevenue.toLocaleString()} $</span>
+                                <span className="font-bold text-white">{monthlyRevenue.toLocaleString()} €</span>
                             </div>
                             <input 
                                 type="range" min="5000" max="200000" step="5000" 
@@ -142,7 +142,7 @@ const RoiCalculator = () => {
                         <TrendingUp className="h-12 w-12 text-green-400 mb-4 opacity-80" />
                         <div className="text-sm text-slate-400 uppercase tracking-widest font-semibold mb-2">Manque à Gagner Annuel</div>
                         <div className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400 mb-4">
-                            {potentialAnnualGain.toLocaleString()} $
+                            {potentialAnnualGain.toLocaleString()} €
                         </div>
                         <p className="text-sm text-slate-500 text-center max-w-xs leading-relaxed">
                             C'est le montant estimé que vous laissez à vos concurrents chaque année à cause d'une réputation non optimisée.
@@ -174,8 +174,8 @@ export const LandingPage = () => {
           
           <div className="hidden md:flex gap-8 text-sm font-medium text-slate-600 items-center">
               <a href="#roi" className="hover:text-indigo-900 transition-colors">ROI</a>
-              <a href="#features" className="hover:text-indigo-900 transition-colors">Platform</a>
-              <a href="#pricing" className="hover:text-indigo-900 transition-colors">Pricing</a>
+              <a href="#features" className="hover:text-indigo-900 transition-colors">Plateforme</a>
+              <a href="#pricing" className="hover:text-indigo-900 transition-colors">Tarifs</a>
           </div>
 
           <div className="flex items-center gap-4">
@@ -204,7 +204,7 @@ export const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
             <div className="inline-flex items-center gap-2 bg-slate-900 rounded-full px-4 py-1.5 text-white text-xs font-bold uppercase tracking-wide mb-8 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <Sparkles className="h-3 w-3 text-yellow-400" />
-                Enterprise-Grade AI Engine
+                Solution B2B Enterprise-Grade
             </div>
             <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight mb-8 leading-tight max-w-5xl mx-auto whitespace-pre-line animate-in fade-in slide-in-from-bottom-6 duration-700">
                 {t('hero.title')}
@@ -277,83 +277,93 @@ export const LandingPage = () => {
       <section id="pricing" className="py-24 bg-slate-50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="text-center mb-16">
-                  <h2 className="text-3xl font-bold text-slate-900 mb-4">Investissement Rentable</h2>
-                  <p className="text-slate-500">Tarification transparente B2B. Pas de coûts cachés.</p>
+                  <h2 className="text-3xl font-bold text-slate-900 mb-4">Tarifs B2B</h2>
+                  <p className="text-slate-500">Choisissez la puissance dont votre enseigne a besoin.</p>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
                   <PricingCard 
                     title="Essential" 
-                    price="$49"
-                    subtitle="Pour 1 établissement" 
+                    price="49€"
+                    subtitle="Pour les indépendants" 
                     buttonLabel={t('cta.book')}
                     onAction={handleBookDemo}
                     features={[
-                        "Connexion Google & Facebook",
+                        "1 Établissement",
                         "Réponses IA Illimitées",
-                        "Alertes Email instantanées",
-                        "Dashboard Analytics",
+                        "Collecte QR Code",
                         "Support Email 24/7"
                     ]} 
                   />
                   <PricingCard 
                     title="Growth" 
-                    price="$79" 
+                    price="89€"
+                    subtitle="Pour les gérants exigeants" 
                     recommended
-                    subtitle="Jusqu'à 2 établissements"
                     buttonLabel={t('cta.book')}
                     onAction={handleBookDemo}
                     features={[
-                        "Multi-établissements (Max 2)",
-                        "IA Avancée (Personnalisation)",
+                        "Jusqu'à 3 Établissements",
+                        "Tout du plan Essential",
                         "Automatisation (Workflows)",
-                        "Rapports PDF Marque Blanche",
-                        "Support Prioritaire"
+                        "Veille Concurrentielle",
+                        "Social Studio (Image Gen)"
                     ]} 
                   />
                   <PricingCard 
                     title="Enterprise" 
-                    price="Sur Devis" 
-                    subtitle="Réseaux & Franchises (+3)"
+                    price="Sur Devis"
+                    subtitle="Réseaux & Franchises" 
                     buttonLabel={t('pricing.contact')}
                     onAction={() => window.location.href = "mailto:sales@reviewflow.com"}
                     features={[
-                        "Etablissements Illimités",
-                        "Dashboard Master (Vue Groupe)",
-                        "API Access & Webhooks",
-                        "Onboarding Dédié & CSM",
-                        "Contrat SLA & Facturation Groupe"
+                        "Établissements Illimités",
+                        "Dashboard Master Groupe",
+                        "API & Webhooks",
+                        "Account Manager Dédié",
+                        "SSO / SAML"
                     ]} 
                   />
-              </div>
-              <div className="mt-12 text-center">
-                  <p className="text-sm text-slate-500">
-                      Besoin d'une offre sur mesure pour plus de 50 points de vente ? <a href="#" className="text-indigo-600 font-bold hover:underline" onClick={handleBookDemo}>Parlons-en.</a>
-                  </p>
               </div>
           </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 py-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 bg-indigo-900 rounded-lg flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">R</span>
-                    </div>
-                    <span className="font-bold text-slate-900 text-xl">Reviewflow</span>
-                  </div>
-                  <div className="text-sm text-slate-500">
-                      © 2025 Reviewflow SAS. Paris, France.
-                  </div>
-                  <div className="flex gap-6 text-sm font-medium text-slate-600">
-                      <a href="/legal" className="hover:text-indigo-900">Legal</a>
-                      <a href="/privacy" className="hover:text-indigo-900">Privacy</a>
-                      <a href="/contact" className="hover:text-indigo-900">Contact</a>
-                  </div>
-              </div>
-          </div>
+      <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div>
+                <div className="flex items-center gap-2 mb-4 text-white">
+                    <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold">R</div>
+                    <span className="font-bold text-lg">Reviewflow</span>
+                </div>
+                <p className="text-sm leading-relaxed">
+                    La plateforme d'e-réputation préférée des enseignes locales.
+                </p>
+            </div>
+            <div>
+                <h4 className="text-white font-bold mb-4">Produit</h4>
+                <ul className="space-y-2 text-sm">
+                    <li><a href="#features" className="hover:text-indigo-400">Fonctionnalités</a></li>
+                    <li><a href="#roi" className="hover:text-indigo-400">Calculateur ROI</a></li>
+                    <li><a href="#pricing" className="hover:text-indigo-400">Tarifs</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 className="text-white font-bold mb-4">Légal</h4>
+                <ul className="space-y-2 text-sm">
+                    <li><button onClick={() => navigate('/legal')} className="hover:text-indigo-400 text-left">Mentions Légales</button></li>
+                    <li><button onClick={() => navigate('/privacy')} className="hover:text-indigo-400 text-left">Confidentialité</button></li>
+                    <li><button onClick={() => navigate('/contact')} className="hover:text-indigo-400 text-left">Contact</button></li>
+                </ul>
+            </div>
+            <div>
+                <h4 className="text-white font-bold mb-4">Nous suivre</h4>
+                <p className="text-xs">Paris, France 🇫🇷</p>
+            </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs border-t border-slate-800 pt-8">
+            &copy; {new Date().getFullYear()} Reviewflow SAS. Tous droits réservés.
+        </div>
       </footer>
     </div>
   );

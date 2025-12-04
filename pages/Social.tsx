@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
-import { Review } from '../types';
+import { Review, Organization } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Select, Badge } from '../components/ui';
 import { 
     Share2, 
@@ -11,16 +11,14 @@ import {
     Download, 
     Sparkles, 
     Copy, 
-    Calendar,
     Palette,
     Type,
     Layout,
-    Image as ImageIcon,
-    RefreshCw,
-    CheckCircle2,
-    Star
+    Star,
+    Lock
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import { useNavigate } from 'react-router-dom';
 
 // Template styles
 const TEMPLATES = [
@@ -31,9 +29,9 @@ const TEMPLATES = [
 ];
 
 const FORMATS = [
-    { id: 'square', name: 'Carré (1:1)', width: 600, height: 600 },
-    { id: 'portrait', name: 'Story (9:16)', width: 400, height: 711 },
-    { id: 'landscape', name: 'LinkedIn (1.91:1)', width: 800, height: 418 }
+    { id: 'square', name: 'Carré (1:1)', width: 1080, height: 1080 }, // HD Resolution
+    { id: 'portrait', name: 'Story (9:16)', width: 1080, height: 1920 },
+    { id: 'landscape', name: 'LinkedIn (1.91:1)', width: 1200, height: 628 }
 ];
 
 export const SocialPage = () => {
@@ -43,6 +41,7 @@ export const SocialPage = () => {
     const [generating, setGenerating] = useState(false);
     const [caption, setCaption] = useState('');
     const [generatingCaption, setGeneratingCaption] = useState(false);
+    const [org, setOrg] = useState<Organization | null>(null);
     
     // Editor State
     const [template, setTemplate] = useState('minimal');
@@ -50,19 +49,66 @@ export const SocialPage = () => {
     const [showBrand, setShowBrand] = useState(true);
     const [customColor, setCustomColor] = useState('#4f46e5');
     
+    // Responsive State
+    const [scale, setScale] = useState(0.8);
+    
     const toast = useToast();
     const canvasRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         loadData();
     }, []);
 
+    // Responsive Scale Effect
+    useEffect(() => {
+        const handleResize = () => {
+            if (containerRef.current) {
+                const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
+                const isMobile = window.innerWidth < 768;
+                
+                // On mobile, use window width to maximize space, otherwise use container
+                const containerWidth = isMobile ? window.innerWidth : containerRef.current.offsetWidth;
+                // Allow container to grow if needed or use window height constraint
+                const containerHeight = isMobile ? window.innerHeight * 0.5 : containerRef.current.offsetHeight;
+                
+                // Add padding consideration
+                const padding = isMobile ? 32 : 40;
+                const availableWidth = containerWidth - padding;
+                const availableHeight = containerHeight - padding;
+                
+                const scaleX = availableWidth / currentFormat.width;
+                const scaleY = availableHeight / currentFormat.height;
+                
+                // Fit within available space
+                let newScale = Math.min(scaleX, scaleY);
+                
+                // Cap max scale to avoid huge elements on large screens
+                if (newScale > 0.6) newScale = 0.6;
+                // Enforce min scale for visibility
+                if (newScale < 0.2) newScale = 0.2;
+                
+                setScale(newScale);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        // Initial calculation with a small delay to ensure layout
+        setTimeout(handleResize, 100);
+
+        return () => window.removeEventListener('resize', handleResize);
+    }, [format]);
+
     const loadData = async () => {
         setLoading(true);
-        // Fetch only 5-star reviews
-        const data = await api.reviews.list({ rating: 5 });
-        setReviews(data);
-        if (data.length > 0) setSelectedReview(data[0]);
+        const [reviewsData, organization] = await Promise.all([
+            api.reviews.list({ rating: 5 }),
+            api.organization.get()
+        ]);
+        setReviews(reviewsData);
+        setOrg(organization);
+        if (reviewsData.length > 0) setSelectedReview(reviewsData[0]);
         setLoading(false);
     };
 
@@ -82,14 +128,27 @@ export const SocialPage = () => {
     const handleDownload = async () => {
         if (!canvasRef.current || !selectedReview) return;
         setGenerating(true);
+        const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
+
         try {
-            const dataUrl = await toPng(canvasRef.current, { cacheBust: true, pixelRatio: 2 });
+            // Force capture at native resolution regardless of display scale
+            const dataUrl = await toPng(canvasRef.current, { 
+                cacheBust: true, 
+                pixelRatio: 1, // 1 is enough if width/height are HD
+                width: currentFormat.width,
+                height: currentFormat.height,
+                style: {
+                    transform: 'none', // Reset scale for capture
+                    transformOrigin: 'top left'
+                }
+            });
             const link = document.createElement('a');
             link.download = `social-post-${selectedReview.author_name.replace(/\s+/g, '-')}.png`;
             link.href = dataUrl;
             link.click();
-            toast.success("Image téléchargée !");
+            toast.success("Image HD téléchargée !");
         } catch (e) {
+            console.error(e);
             toast.error("Erreur de génération d'image");
         } finally {
             setGenerating(false);
@@ -99,6 +158,46 @@ export const SocialPage = () => {
     // Helper to get template classes
     const getTemplateClass = (id: string) => TEMPLATES.find(t => t.id === id)?.style || '';
     const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
+
+    // PAYWALL: Block Free AND Starter plans. Only allow Pro/Enterprise.
+    if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
+        return (
+            <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                            <Share2 className="h-8 w-8 text-indigo-600" />
+                            Social Studio
+                        </h1>
+                        <p className="text-slate-500">Transformez vos meilleurs avis en posts viraux.</p>
+                    </div>
+                </div>
+                
+                <Card className="relative overflow-hidden border-indigo-100 bg-white">
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-8 text-center">
+                        <div className="bg-indigo-50 p-4 rounded-full shadow-lg mb-6">
+                            <Sparkles className="h-10 w-10 text-indigo-600" />
+                        </div>
+                        <h2 className="text-3xl font-bold text-slate-900 mb-4">Débloquez le Social Studio</h2>
+                        <p className="text-slate-600 max-w-lg mb-8 text-lg">
+                            Créez des visuels HD pour Instagram et LinkedIn en un clic.
+                            <br/><strong>Fonctionnalité exclusive au plan Growth.</strong>
+                        </p>
+                        <Button size="lg" className="shadow-xl shadow-indigo-200" onClick={() => navigate('/billing')}>
+                            Passer au plan Growth
+                        </Button>
+                    </div>
+                    <CardContent className="p-8 opacity-20 filter blur-[2px]">
+                        <div className="flex justify-center">
+                            <div className="w-64 h-64 bg-slate-900 rounded-xl flex items-center justify-center text-white">
+                                Aperçu Bloqué
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -112,10 +211,10 @@ export const SocialPage = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-12rem)] min-h-[600px]">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-auto lg:h-[calc(100vh-12rem)] lg:min-h-[600px]">
                 
                 {/* 1. SELECTION (Left) */}
-                <div className="flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-96 lg:h-auto order-2 lg:order-1">
                     <div className="p-4 border-b border-slate-100 bg-slate-50 font-bold text-slate-700 flex items-center gap-2">
                         <Star className="h-4 w-4 text-amber-400 fill-current" />
                         Vos Pépites (5★)
@@ -139,43 +238,47 @@ export const SocialPage = () => {
                 </div>
 
                 {/* 2. PREVIEW & CANVAS (Center) */}
-                <div className="lg:col-span-2 flex flex-col gap-6">
-                    <div className="bg-slate-100 rounded-xl border border-slate-200 flex-1 flex items-center justify-center p-8 overflow-hidden relative">
+                <div className="lg:col-span-2 flex flex-col gap-6 order-1 lg:order-2">
+                    <div 
+                        ref={containerRef} 
+                        className="bg-slate-200/50 rounded-xl border border-slate-200 flex-1 flex items-center justify-center p-4 overflow-hidden relative min-h-[400px] lg:min-h-0"
+                    >
                         {/* THE CANVAS TO CAPTURE */}
                         <div 
                             ref={canvasRef}
                             style={{ 
                                 width: currentFormat.width, 
                                 height: currentFormat.height,
-                                transform: 'scale(0.8)', // Scale down for preview
-                                transformOrigin: 'center center'
+                                transform: `scale(${scale})`, 
+                                transformOrigin: 'center center',
+                                fontSize: '2rem' // Base font size for HD canvas
                             }}
-                            className={`flex flex-col items-center justify-center p-12 relative shadow-2xl transition-all duration-500 ${getTemplateClass(template)}`}
+                            className={`flex flex-col items-center justify-center p-16 relative shadow-2xl transition-all duration-500 shrink-0 ${getTemplateClass(template)}`}
                         >
-                            <div className="absolute top-8 right-8 flex gap-1">
+                            <div className="absolute top-12 right-12 flex gap-2">
                                 {[1,2,3,4,5].map(i => (
-                                    <Star key={i} className={`h-8 w-8 ${template === 'dark' || template === 'gradient' ? 'text-yellow-400 fill-yellow-400' : 'text-amber-400 fill-amber-400'}`} />
+                                    <Star key={i} className={`h-12 w-12 ${template === 'dark' || template === 'gradient' ? 'text-yellow-400 fill-yellow-400' : 'text-amber-400 fill-amber-400'}`} />
                                 ))}
                             </div>
 
-                            <div className="flex-1 flex items-center justify-center">
+                            <div className="flex-1 flex items-center justify-center w-full">
                                 <p className={`text-center font-serif leading-relaxed italic ${reviewTextSize(selectedReview?.body?.length || 0)}`}>
                                     "{selectedReview?.body}"
                                 </p>
                             </div>
 
-                            <div className="flex items-center gap-4 mt-8 w-full">
-                                <div className={`h-16 w-16 rounded-full flex items-center justify-center text-2xl font-bold ${template === 'dark' ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
+                            <div className="flex items-center gap-6 mt-12 w-full border-t border-current pt-8 opacity-90">
+                                <div className={`h-24 w-24 rounded-full flex items-center justify-center text-4xl font-bold ${template === 'dark' ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
                                     {selectedReview?.author_name.charAt(0)}
                                 </div>
                                 <div>
-                                    <div className="font-bold text-xl">{selectedReview?.author_name}</div>
-                                    <div className="opacity-70 text-sm">Client Vérifié</div>
+                                    <div className="font-bold text-3xl">{selectedReview?.author_name}</div>
+                                    <div className="opacity-80 text-xl mt-1">Client Vérifié</div>
                                 </div>
                                 {showBrand && (
-                                    <div className="ml-auto flex items-center gap-2 opacity-50">
-                                        <div className="h-8 w-1 px-2" style={{ backgroundColor: customColor }}></div>
-                                        <span className="font-bold tracking-widest uppercase">Reviewflow</span>
+                                    <div className="ml-auto flex items-center gap-3 opacity-60">
+                                        <div className="h-12 w-1.5 px-2" style={{ backgroundColor: customColor }}></div>
+                                        <span className="font-bold tracking-widest uppercase text-lg">Reviewflow</span>
                                     </div>
                                 )}
                             </div>
@@ -191,12 +294,12 @@ export const SocialPage = () => {
                                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-2">
                                             <Palette className="h-4 w-4" /> Style
                                         </label>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 overflow-x-auto pb-2">
                                             {TEMPLATES.map(t => (
                                                 <button
                                                     key={t.id}
                                                     onClick={() => setTemplate(t.id)}
-                                                    className={`px-3 py-2 rounded text-xs font-medium border ${template === t.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                                                    className={`px-3 py-2 rounded text-xs font-medium border whitespace-nowrap ${template === t.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
                                                 >
                                                     {t.name}
                                                 </button>
@@ -259,7 +362,7 @@ export const SocialPage = () => {
                                     </div>
 
                                     <div className="flex gap-2">
-                                        <Button className="flex-1" icon={Download} onClick={handleDownload} isLoading={generating}>Télécharger Image</Button>
+                                        <Button className="flex-1 shadow-lg shadow-indigo-200" icon={Download} onClick={handleDownload} isLoading={generating}>Télécharger HD</Button>
                                         <Button className="flex-1" variant="outline" onClick={() => { navigator.clipboard.writeText(caption); toast.success("Légende copiée !"); }}>Copier Texte</Button>
                                     </div>
                                 </div>
@@ -274,8 +377,8 @@ export const SocialPage = () => {
 
 // Helper for dynamic font size based on text length
 const reviewTextSize = (length: number) => {
-    if (length < 50) return 'text-4xl';
-    if (length < 100) return 'text-3xl';
-    if (length < 200) return 'text-2xl';
-    return 'text-xl';
+    if (length < 50) return 'text-7xl';
+    if (length < 100) return 'text-6xl';
+    if (length < 200) return 'text-5xl';
+    return 'text-4xl';
 };

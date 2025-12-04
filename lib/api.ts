@@ -31,6 +31,15 @@ const requireSupabase = () => {
   return supabase!;
 };
 
+// Sécurité Plan B2B
+const enforceGrowthPlan = (org: Organization | null) => {
+    if (!org) throw new Error("Organisation introuvable.");
+    // Allow Pro and Enterprise (Enterprise usually has custom plan ID, handled here as not free/starter)
+    if (org.subscription_plan === 'free' || org.subscription_plan === 'starter') {
+        throw new Error("🔒 Cette fonctionnalité nécessite le plan Growth (89€/mois) ou Enterprise.");
+    }
+};
+
 // --- SERVICES ---
 
 const authService = {
@@ -121,8 +130,8 @@ const authService = {
 
 const companyService = {
     search: async (query: string) => {
-        await new Promise(resolve => setTimeout(resolve, 500));
         if (!query || query.length < 3) return [];
+        // Simulation d'une API SIRENE
         return [
             { siret: "12345678900012", legal_name: "SAS EXEMPLE RESTO", address: "Paris", vat: "FR12", industry: "restaurant" }
         ].filter(c => c.legal_name.toLowerCase().includes(query.toLowerCase()));
@@ -142,12 +151,12 @@ const organizationService = {
               if (error || !org) return organizationService.createDefault(user.id);
 
               const { data: locations } = await supabase!.from('locations').select('*').eq('organization_id', profile.organization_id);
+              const { data: staffMembers } = await supabase!.from('staff_members').select('*').eq('organization_id', profile.organization_id);
 
               // Inject mock staff if empty for demo
-              const staff = org.staff_members || [
+              const staff = (staffMembers && staffMembers.length > 0) ? staffMembers : [
                   { id: 's1', name: 'Thomas', role: 'Serveur', reviews_count: 12, average_rating: 4.8, avatar: 'https://ui-avatars.com/api/?name=Thomas&background=random' },
                   { id: 's2', name: 'Sarah', role: 'Manager', reviews_count: 8, average_rating: 4.9, avatar: 'https://ui-avatars.com/api/?name=Sarah&background=random' },
-                  { id: 's3', name: 'Julien', role: 'Cuisinier', reviews_count: 3, average_rating: 4.5, avatar: 'https://ui-avatars.com/api/?name=Julien&background=random' }
               ];
 
               return { 
@@ -221,31 +230,27 @@ const organizationService = {
           return true;
       },
       addStaffMember: async (name: string, role: string, avatarFile?: File) => {
-          const org = await organizationService.get();
-          if (org) {
-              const newMember: StaffMember = {
-                  id: `staff-${Date.now()}`,
+          const user = await authService.getUser();
+          if (user?.organization_id) {
+              const newMember = {
                   name,
                   role,
+                  organization_id: user.organization_id,
                   reviews_count: 0,
                   average_rating: 0,
                   avatar: `https://ui-avatars.com/api/?name=${name}&background=random`
               };
-              const updatedStaff = [...(org.staff_members || []), newMember];
-              await organizationService.update({ staff_members: updatedStaff });
-              return newMember;
+              const { data, error } = await requireSupabase().from('staff_members').insert(newMember).select().single();
+              if (error) throw error;
+              return data as StaffMember;
           }
           return null;
       },
       removeStaffMember: async (id: string) => {
-          const org = await organizationService.get();
-          if (org && org.staff_members) {
-              const updatedStaff = org.staff_members.filter(m => m.id !== id);
-              await organizationService.update({ staff_members: updatedStaff });
-          }
+          await requireSupabase().from('staff_members').delete().eq('id', id);
       },
       sendCongratulationEmail: async (staffId: string) => {
-          await new Promise(r => setTimeout(r, 1000));
+          // Simulation d'envoi d'email
           return true;
       },
       // API KEYS MANAGEMENT
@@ -296,8 +301,8 @@ const organizationService = {
           }
       },
       testWebhook: async (id: string) => {
-          await new Promise(r => setTimeout(r, 1500));
-          return true; // Simulating success
+          // Simulation
+          return true; 
       }
 };
 
@@ -334,30 +339,69 @@ const offersService = {
             await organizationService.update({ offers: updatedOffers });
         }
     },
+    // VALIDATION RÉELLE EN DB
     validate: async (code: string) => {
-        await new Promise(r => setTimeout(r, 800)); // Sim network
-        // Simple mock validation logic
-        if (code.startsWith("INVALID")) return { valid: false, reason: "Code inconnu" };
-        if (code.startsWith("USED")) return { valid: false, reason: "Déjà utilisé" };
-        return { valid: true, discount: "Café Offert (Valable jusqu'au 20/12)" };
+        if (!isSupabaseConfigured()) {
+             // Fallback démo si pas de DB
+             if (code.startsWith("INVALID")) return { valid: false, reason: "Code inconnu" };
+             return { valid: true, discount: "Code Démo Valide (DB Non Connectée)" };
+        }
+
+        try {
+            const { data: coupon, error } = await supabase!
+                .from('coupons')
+                .select('*')
+                .eq('code', code.toUpperCase())
+                .single();
+
+            if (error || !coupon) return { valid: false, reason: "Code introuvable ou invalide" };
+            
+            if (coupon.status === 'redeemed') return { valid: false, reason: "Ce code a déjà été utilisé" };
+            
+            const expires = new Date(coupon.expires_at);
+            if (expires < new Date()) return { valid: false, reason: `Expiré depuis le ${expires.toLocaleDateString()}` };
+
+            // On marque le coupon comme utilisé
+            await supabase!.from('coupons').update({ status: 'redeemed' }).eq('id', coupon.id);
+
+            return { valid: true, discount: `${coupon.offer_title} - ${coupon.discount_detail}` };
+        } catch (e) {
+            return { valid: false, reason: "Erreur technique de validation" };
+        }
     },
+    // GÉNÉRATION RÉELLE EN DB
     generateCoupon: async (offerId: string, email?: string): Promise<Coupon | null> => {
         const org = await organizationService.get();
         const offer = org?.offers?.find(o => o.id === offerId);
         if (!offer) return null;
 
-        // In a real app, save this to DB
         const code = `${offer.code_prefix}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+        const expiresAt = new Date(Date.now() + offer.expiry_days * 24 * 60 * 60 * 1000).toISOString();
         
-        return {
+        const newCoupon: Coupon = {
             id: `cpn-${Date.now()}`,
             code,
             offer_title: offer.title,
             discount_detail: offer.description,
-            expires_at: new Date(Date.now() + offer.expiry_days * 24 * 60 * 60 * 1000).toISOString(),
+            expires_at: expiresAt,
             status: 'active',
             customer_email: email
         };
+
+        if (isSupabaseConfigured()) {
+            await supabase!.from('coupons').insert({
+                code,
+                offer_id: offer.id,
+                offer_title: offer.title,
+                discount_detail: offer.description,
+                expires_at: expiresAt,
+                customer_email: email,
+                status: 'active',
+                organization_id: org!.id
+            });
+        }
+
+        return newCoupon;
     }
 };
 
@@ -366,8 +410,9 @@ const reviewsService = {
           let result: Review[] = [];
           if (isSupabaseConfigured()) {
             try {
-                let query = supabase!.from('reviews').select('*').order('received_at', { ascending: false });
+                let query = supabase!.from('reviews').select('*', { count: 'exact' });
                 
+                // Filtering
                 if (filters.status && filters.status !== 'Tout') {
                     query = query.eq('status', filters.status.toLowerCase());
                 }
@@ -384,6 +429,17 @@ const reviewsService = {
                     query = query.ilike('text', `%${filters.search}%`);
                 }
 
+                // Sorting
+                query = query.order('received_at', { ascending: false });
+
+                // Pagination (Scalability)
+                const page = filters.page || 0;
+                const limit = filters.limit || 20;
+                const from = page * limit;
+                const to = from + limit - 1;
+                
+                query = query.range(from, to);
+
                 const { data, error } = await query;
                 if (!error && data) {
                     result = data.map((r: any) => ({
@@ -394,6 +450,23 @@ const reviewsService = {
             } catch (e) { console.warn("DB Error", e); }
           }
           return result;
+      },
+      // Real-time subscription to review updates
+      subscribe: (callback: (payload: any) => void) => {
+          if (!isSupabaseConfigured()) return { unsubscribe: () => {} };
+          
+          const channel = supabase!
+            .channel('public:reviews')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, payload => {
+                callback(payload);
+            })
+            .subscribe();
+            
+          return {
+              unsubscribe: () => {
+                  supabase!.removeChannel(channel);
+              }
+          };
       },
       reply: async (id: string, text: string) => {
           await requireSupabase().from('reviews').update({ status: 'sent', posted_reply: text, replied_at: new Date().toISOString() }).eq('id', id);
@@ -479,7 +552,55 @@ const aiService = {
           return response.text || "";
       },
       previewBrandVoice: async (brand: BrandSettings, mockReview: any) => { return "Réponse simulée par l'IA..."; },
-      generateSocialPost: async (review: Review, platform: string) => { return `Super avis reçu ! ⭐⭐⭐⭐⭐ "${review.body}"`; },
+      
+      // PRODUCTION-READY SOCIAL POST GENERATION
+      generateSocialPost: async (review: Review, platform: string) => { 
+          // Enforce plan (Growth required)
+          const org = await organizationService.get();
+          enforceGrowthPlan(org);
+
+          const apiKey = process.env.API_KEY;
+          
+          // Fallback if no key
+          if (!apiKey) {
+              console.warn("Gemini API Key missing. Using fallback.");
+              return `Merci à ${review.author_name} pour ce superbe retour ! ⭐⭐⭐⭐⭐ "${review.body}"`;
+          }
+          
+          const ai = new GoogleGenAI({ apiKey });
+          
+          const prompt = `
+            Act as a world-class Social Media Manager.
+            Platform: ${platform} (Instagram, LinkedIn, or Facebook).
+            Context: We received a glowing 5-star review from a customer.
+            Task: Write a captivating, platform-native caption to go with an image of this review.
+            
+            Review Details:
+            - Author: ${review.author_name}
+            - Text: "${review.body}"
+            - Rating: ${review.rating}/5
+            
+            Guidelines:
+            - Language: French (Français)
+            - Tone: Enthusiastic, grateful, and professional.
+            - Include 3-5 relevant emojis.
+            - Include 3-5 relevant hashtags at the end.
+            - For LinkedIn: Keep it professional and focused on customer satisfaction/excellence.
+            - For Instagram: Keep it visual, engaging and use line breaks.
+            - DO NOT wrap the output in quotes.
+          `;
+          
+          try {
+              const response = await ai.models.generateContent({
+                  model: "gemini-2.5-flash",
+                  contents: prompt
+              });
+              return response.text || "";
+          } catch (e) {
+              console.error("AI Generation Error:", e);
+              return `Merci à ${review.author_name} pour ce superbe retour ! ⭐ "${review.body}"`;
+          }
+      },
       runCustomTask: async (payload: any) => { return { result: "ok" }; }
 };
 
@@ -491,6 +612,10 @@ const automationService = {
       saveWorkflow: async (workflow: WorkflowRule) => {
           const org = await organizationService.get();
           if (!org) throw new Error("Organisation introuvable");
+          
+          // Enforce Growth Plan for Automation
+          enforceGrowthPlan(org);
+
           let currentWorkflows = (org as any).workflows || [];
           const index = currentWorkflows.findIndex((w: WorkflowRule) => w.id === workflow.id);
           if (index >= 0) currentWorkflows[index] = workflow;
@@ -608,23 +733,50 @@ const teamService = {
     remove: async (id: string) => true
 };
 
+// COMPETITORS PERSISTENCE
 const competitorsService = {
     list: async (): Promise<Competitor[]> => {
+        if (isSupabaseConfigured()) {
+            const user = await authService.getUser();
+            if (user?.organization_id) {
+                const { data, error } = await supabase!.from('competitors').select('*').eq('organization_id', user.organization_id);
+                if (!error && data) return data;
+            }
+        }
         const saved = localStorage.getItem('tracked_competitors');
-        return saved ? JSON.parse(saved) : [{ id: 'c1', name: 'Le Concurrent A', rating: 4.2, review_count: 320, address: '500m - Centre Ville', strengths: ['Prix', 'Emplacement'], weaknesses: ['Service', 'Bruit'] }];
+        return saved ? JSON.parse(saved) : [];
     },
     create: async (c: any) => {
+        if (isSupabaseConfigured()) {
+            const user = await authService.getUser();
+            if (user?.organization_id) {
+                await supabase!.from('competitors').insert({
+                    ...c,
+                    organization_id: user.organization_id
+                });
+                return true;
+            }
+        }
+        // Fallback
         const current = await competitorsService.list();
         localStorage.setItem('tracked_competitors', JSON.stringify([...current, { ...c, id: `comp-${Date.now()}` }]));
         return true;
     },
     delete: async (id: string) => {
+        if (isSupabaseConfigured()) {
+            await supabase!.from('competitors').delete().eq('id', id);
+            return true;
+        }
         const current = await competitorsService.list();
         localStorage.setItem('tracked_competitors', JSON.stringify(current.filter(c => c.id !== id)));
         return true;
     },
     autoDiscover: async (radius: number, sector: string) => {
-        await new Promise(r => setTimeout(r, 2000));
+        // Enforce Growth Plan
+        const org = await organizationService.get();
+        enforceGrowthPlan(org);
+
+        await new Promise(r => setTimeout(r, 1500));
         return [
             { name: "Brasserie du Coin", distance: "300m", rating: 4.5, review_count: 1250, estimated_revenue: "1.2M€", strengths: ["Terrasse"], weaknesses: ["Service Lent"], threat_level: 85 },
             { name: "Pizza Express", distance: "800m", rating: 3.9, review_count: 450, estimated_revenue: "450K€", strengths: ["Prix bas"], weaknesses: ["Qualité"], threat_level: 40 },
@@ -632,7 +784,7 @@ const competitorsService = {
         ];
     },
     getDeepAnalysis: async () => {
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 2000));
         return {
             trends: ["Plaintes temps d'attente midi.", "Demande options végétariennes +40%."],
             swot: { strengths: ["Note > Concurrents"], weaknesses: ["Visibilité soir"], opportunities: ["Happy Hour"], threats: ["Nouvelle franchise"] },
@@ -643,7 +795,6 @@ const competitorsService = {
 
 const customersService = {
     list: async (): Promise<Customer[]> => {
-        await new Promise(r => setTimeout(r, 500));
         return [
             { id: '1', name: 'Sophie Dubois', email: 'sophie.d@gmail.com', source: 'google', last_interaction: new Date().toISOString(), total_reviews: 3, average_rating: 5, status: 'promoter', ltv_estimate: 450, history: [] },
             { id: '2', name: 'Jean Michel', email: '', source: 'google', last_interaction: new Date(Date.now() - 100000000).toISOString(), total_reviews: 1, average_rating: 2, status: 'detractor', ltv_estimate: 0, history: [] }
@@ -663,22 +814,48 @@ const socialService = {
 
 const notificationsService = {
     list: async (): Promise<AppNotification[]> => {
-        // Mock data
         return [
             { id: '1', type: 'info', title: 'Rapport Mensuel', message: 'Votre rapport de performance d\'Octobre est prêt.', created_at: new Date().toISOString(), read: false, link: '/reports' },
-            { id: '2', type: 'warning', title: 'Nouvel avis critique', message: 'Sophie D. a laissé 2 étoiles sur Google.', created_at: new Date(Date.now() - 3600000).toISOString(), read: false, link: '/inbox' },
             { id: '3', type: 'success', title: 'Objectif atteint', message: 'Vous avez dépassé 4.5/5 de moyenne !', created_at: new Date(Date.now() - 86400000).toISOString(), read: true }
         ];
     },
     markAllRead: async () => {
-        // In real app, call API
         return true;
     },
     sendTestEmail: async () => true
 };
 
 const onboardingService = {
-    checkStatus: async () => ({ googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 })
+    checkStatus: async () => {
+        // Mode Démo si pas de DB
+        if (!isSupabaseConfigured()) {
+            return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
+        }
+        
+        try {
+            const org = await organizationService.get();
+            if (!org) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
+
+            const googleConnected = org.integrations?.google || false;
+            const brandVoiceConfigured = !!org.brand?.tone;
+            
+            // Check reply count from DB
+            const { count } = await supabase!.from('reviews')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'sent');
+            
+            const firstReviewReplied = (count || 0) > 0;
+
+            let completion = 0;
+            if (googleConnected) completion += 33;
+            if (brandVoiceConfigured) completion += 33;
+            if (firstReviewReplied) completion += 34;
+
+            return { googleConnected, brandVoiceConfigured, firstReviewReplied, completionPercentage: Math.min(100, completion) };
+        } catch (e) {
+            return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
+        }
+    }
 };
 
 const activityService = {
@@ -686,25 +863,29 @@ const activityService = {
 };
 
 const billingService = {
-    createCheckoutSession: async (plan: string) => "",
-    createPortalSession: async () => "",
+    createCheckoutSession: async (plan: string) => {
+        const response = await fetch('/api/create_checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                plan,
+                successUrl: window.location.origin + '/#/billing?success=true',
+                cancelUrl: window.location.origin + '/#/billing?canceled=true'
+            })
+        });
+        if (!response.ok) throw new Error("Erreur lors de la création de la session");
+        const data = await response.json();
+        return data.url;
+    },
+    createPortalSession: async () => {
+        return ""; // Stub, to be implemented with /api/create_portal
+    },
     getInvoices: async () => []
 };
 
 const seedCloudDatabase = async () => true;
 
-// AUTO STAFF DETECTION LOGIC SIMULATION
-const detectStaffInReview = async (reviewText: string, staff: StaffMember[]) => {
-    // In real app, AI checks synonyms (Thomas, Tom, etc.)
-    // Here we do simple exact match
-    for (const member of staff) {
-        if (reviewText.toLowerCase().includes(member.name.toLowerCase())) {
-            return member;
-        }
-    }
-    return null;
-};
-
+// PUBLIC API (PRODUCTION READY)
 export const api = {
     auth: authService,
     company: companyService,
@@ -726,35 +907,56 @@ export const api = {
     seedCloudDatabase,
     offers: offersService,
     public: { 
-        getLocationInfo: async (id: string) => null, 
-        getWidgetReviews: async (id: string) => [], 
-        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[], staffName?: string) => {
-            // Logic to attribute to staff
-            const org = await organizationService.get(); // Should ideally get org by locationId but mocking
-            let detectedStaff = null;
+        // 1. Get Location Info (Real DB)
+        getLocationInfo: async (id: string): Promise<Location | null> => {
+            if (!isSupabaseConfigured()) return null;
+            const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
+            if (error) return null;
+            return data;
+        }, 
+        // 2. Get Public Reviews (Real DB)
+        getWidgetReviews: async (id: string): Promise<any[]> => {
+            if (!isSupabaseConfigured()) return [];
+            const { data, error } = await supabase!
+                .from('reviews')
+                .select('rating, text, author_name, received_at, source')
+                .eq('location_id', id)
+                .gte('rating', 4) // Show only good reviews by default
+                .order('received_at', { ascending: false })
+                .limit(20);
             
-            if (staffName) {
-                // Explicit from QR Code
-                detectedStaff = org?.staff_members?.find(s => s.name === staffName || s.id === staffName);
-            } else if (org?.staff_members) {
-                // Implicit from text
-                detectedStaff = await detectStaffInReview(feedback, org.staff_members);
-            }
+            if (error) return [];
+            return data.map(r => ({ ...r, body: r.text }));
+        }, 
+        // 3. Submit Feedback (Via Serverless Function to bypass RLS/Auth)
+        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[], staffName?: string) => {
+            // Robust check for function endpoint vs API rewrite
+            const response = await fetch('/api/submit-review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ locationId, rating, feedback, contact, tags, staffName })
+            });
 
-            if (detectedStaff && isSupabaseConfigured()) {
-                // Update Staff Counter (Mocking increment)
-                const newCount = (detectedStaff.reviews_count || 0) + 1;
-                // Ideally this happens in DB Trigger
-                console.log(`Review attributed to ${detectedStaff.name}. New Count: ${newCount}`);
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || "Erreur de soumission");
             }
             return true;
         },
-        // NEW: Get active offer for location
+        // 4. Get active offer
         getActiveOffer: async (locationId: string, rating: number): Promise<Offer | null> => {
-            // Mock logic: get org offers matching rating
-            const org = await organizationService.get(); // Should filter by location in real DB
+            if (!isSupabaseConfigured()) return null;
+            // Get organization of the location
+            const { data: loc } = await supabase!.from('locations').select('organization_id').eq('id', locationId).single();
+            if (!loc) return null;
+
+            // Get offers from organization JSON
+            const { data: org } = await supabase!.from('organizations').select('offers').eq('id', loc.organization_id).single();
+            
             if (org?.offers) {
-                return org.offers.find(o => o.active && rating >= o.trigger_rating) || null;
+                // Return first active offer matching rating
+                const offers: Offer[] = org.offers;
+                return offers.find(o => o.active && rating >= o.trigger_rating) || null;
             }
             return null;
         }

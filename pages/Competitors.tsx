@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Competitor } from '../types';
+import { Competitor, Organization } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, useToast, Input } from '../components/ui';
 import { 
     Search, 
@@ -14,13 +14,13 @@ import {
     Target, 
     Radar, 
     CheckCircle2,
-    DollarSign,
-    Zap,
     BarChart3,
     Download,
     Lightbulb,
-    Shield
+    Shield,
+    Lock
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export const CompetitorsPage = () => {
     const [trackedCompetitors, setTrackedCompetitors] = useState<Competitor[]>([]);
@@ -29,15 +29,24 @@ export const CompetitorsPage = () => {
     const [loading, setLoading] = useState(false);
     const [marketData, setMarketData] = useState<any>(null);
     const [loadingInsights, setLoadingInsights] = useState(false);
+    const [org, setOrg] = useState<Organization | null>(null);
     
     // Scan settings
     const [scanRadius, setScanRadius] = useState(5);
     const [scanSector, setScanSector] = useState('');
     
     const toast = useToast();
+    const navigate = useNavigate();
 
     useEffect(() => {
-        loadTracked();
+        const init = async () => {
+            const organization = await api.organization.get();
+            setOrg(organization);
+            if (organization?.subscription_plan === 'pro') {
+                loadTracked();
+            }
+        };
+        init();
     }, []);
 
     const loadTracked = async () => {
@@ -99,10 +108,56 @@ export const CompetitorsPage = () => {
     };
 
     useEffect(() => {
-        if (activeTab === 'insights' && !marketData) {
+        if (activeTab === 'insights' && !marketData && org?.subscription_plan === 'pro') {
             loadInsights();
         }
     }, [activeTab]);
+
+    if (!org) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
+
+    // PAYWALL - PRO (GROWTH) PLAN ONLY
+    // We explicitly check if plan is NOT pro (so free or starter are blocked)
+    if (org.subscription_plan === 'free' || org.subscription_plan === 'starter') {
+        return (
+            <div className="max-w-5xl mx-auto mt-12 relative overflow-hidden rounded-2xl border border-slate-200 shadow-xl bg-white">
+                <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-8 text-center">
+                    <div className="bg-white p-4 rounded-full shadow-lg mb-6">
+                        <Lock className="h-8 w-8 text-indigo-600" />
+                    </div>
+                    <h2 className="text-3xl font-bold text-slate-900 mb-4">Fonctionnalité Growth</h2>
+                    <p className="text-slate-600 max-w-lg mb-8 text-lg">
+                        La veille concurrentielle et l'analyse de marché par IA sont réservées aux membres du plan Growth.
+                        Espionnez vos concurrents légalement et récupérez leurs clients déçus.
+                    </p>
+                    <Button size="lg" className="shadow-xl shadow-indigo-200" onClick={() => navigate('/billing')}>
+                        Passer au plan Growth
+                    </Button>
+                </div>
+                
+                {/* Blurred Background Content Preview */}
+                <div className="p-8 filter blur-sm pointer-events-none opacity-50">
+                    <div className="flex justify-between items-center mb-8">
+                        <h1 className="text-2xl font-bold">Veille Concurrentielle</h1>
+                        <div className="flex gap-2">
+                            <Button variant="outline">Ma Sélection</Button>
+                            <Button>Radar</Button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-6">
+                        {[1,2,3].map(i => (
+                            <Card key={i}>
+                                <CardContent className="p-6">
+                                    <div className="h-4 w-1/3 bg-slate-200 rounded mb-4"></div>
+                                    <div className="h-3 w-2/3 bg-slate-100 rounded mb-2"></div>
+                                    <div className="h-3 w-1/2 bg-slate-100 rounded"></div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">

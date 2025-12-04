@@ -94,7 +94,7 @@ const I18nContext = createContext<I18nContextType>({
   setLang: () => {},
 });
 
-export const I18nProvider = ({ children }: { children: React.ReactNode }) => {
+export const I18nProvider = ({ children }: { children?: React.ReactNode }) => {
   const [lang, setLang] = useState('en');
 
   useEffect(() => {

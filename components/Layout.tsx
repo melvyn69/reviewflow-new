@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User } from '../types';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => {
   const location = useLocation();
@@ -189,6 +190,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
           )}
         </nav>
 
+        {/* System Status Indicator */}
+        {!isSupabaseConfigured() && (
+            <div className="bg-amber-50 border-t border-amber-100 p-2 text-center">
+                <div className="text-[10px] font-bold text-amber-700 flex items-center justify-center gap-1">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    MODE DÉMO (Pas de DB)
+                </div>
+            </div>
+        )}
+
         <div className="p-4 border-t border-slate-200">
           <button 
             onClick={() => api.auth.logout().then(() => window.location.reload())}
@@ -338,7 +352,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   );
 };
 
-export const AppLayout = ({ children }: { children: React.ReactNode }) => {
+export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<User | undefined>(undefined);
 

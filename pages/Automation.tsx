@@ -384,17 +384,22 @@ export const AutomationPage = () => {
 
   if (loading) return <div className="p-12 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
-  if (org && org.subscription_plan === 'free') {
+  // PAYWALL - PRO (GROWTH) PLAN ONLY
+  if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
       return (
-          <div className="max-w-4xl mx-auto p-12 text-center bg-white rounded-2xl shadow-sm border border-slate-200 mt-12">
-              <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Zap className="h-8 w-8 text-slate-400" />
+          <div className="max-w-4xl mx-auto p-12 text-center bg-white rounded-2xl shadow-sm border border-slate-200 mt-12 relative overflow-hidden">
+              <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-[1px] z-0"></div>
+              <div className="relative z-10">
+                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Zap className="h-8 w-8 text-slate-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Automatisation Avancée</h2>
+                <p className="text-slate-500 mb-8 max-w-md mx-auto">
+                    Créez des règles personnalisées pour répondre automatiquement, alerter votre équipe ou trier vos avis. 
+                    <br/><strong>Fonctionnalité exclusive au plan Growth.</strong>
+                </p>
+                <Button onClick={() => navigate('/billing')} className="shadow-lg shadow-indigo-200">Passer au plan Growth</Button>
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Automatisation Avancée</h2>
-              <p className="text-slate-500 mb-8 max-w-md mx-auto">
-                  Créez des règles personnalisées pour répondre automatiquement, alerter votre équipe ou trier vos avis. Disponible dans le plan Pro.
-              </p>
-              <Button onClick={() => navigate('/billing')} className="shadow-lg shadow-indigo-200">Passer au plan Pro</Button>
           </div>
       );
   }

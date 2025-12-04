@@ -7,6 +7,19 @@ import { Organization } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useTranslation } from '../lib/i18n';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+const Confetti = () => (
+    <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
+        {[...Array(50)].map((_, i) => (
+            <div key={i} className="confetti" style={{ 
+                left: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                backgroundColor: ['#f2d74e', '#ef2964', '#00c09d', '#2d87b0'][Math.floor(Math.random() * 4)]
+            }}></div>
+        ))}
+    </div>
+);
 
 const PricingCard = ({ 
     title, 
@@ -67,7 +80,6 @@ const PricingCard = ({
 );
 
 const InvoiceTable = () => {
-    // ... (same as before)
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const toast = useToast();
@@ -119,12 +131,26 @@ export const BillingPage = () => {
     const [org, setOrg] = useState<Organization | null>(null);
     const [upgrading, setUpgrading] = useState<string | null>(null);
     const [error, setError] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
+    
     const toast = useToast();
     const { t } = useTranslation();
+    const location = useLocation();
+    const navigate = useNavigate();
 
     useEffect(() => {
+        // Handle Stripe Return
+        if (location.search.includes('success=true')) {
+            setShowSuccess(true);
+            toast.success("Paiement réussi ! Bienvenue dans le club.");
+            // Clear URL param without reload
+            window.history.replaceState({}, '', '#/billing');
+            // Force refresh data
+            api.auth.getUser().then(() => loadOrg());
+        }
+        
         loadOrg();
-    }, []);
+    }, [location.search]);
 
     const loadOrg = async () => {
         setError(false);
@@ -165,11 +191,13 @@ export const BillingPage = () => {
     const percentage = limit > 0 ? Math.min(100, (usage / limit) * 100) : 100;
 
     return (
-        <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+        <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 relative">
+            {showSuccess && <Confetti />}
+            
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Abonnement & Facturation</h1>
-                    <p className="text-slate-500">Vente B2B uniquement. TVA applicable selon le pays.</p>
+                    <p className="text-slate-500">Choisissez la puissance dont votre enseigne a besoin.</p>
                 </div>
                 {org.subscription_plan !== 'free' && (
                     <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url: string) => window.location.href = url)}>
@@ -197,7 +225,9 @@ export const BillingPage = () => {
                         </div>
                         <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[200px]">
                             <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold mb-1">Plan Actuel</div>
-                            <div className="text-2xl font-bold mb-1 capitalize">{org.subscription_plan}</div>
+                            <div className="text-2xl font-bold mb-1 capitalize">
+                                {org.subscription_plan === 'starter' ? 'Essential' : org.subscription_plan === 'pro' ? 'Growth' : org.subscription_plan}
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -207,45 +237,45 @@ export const BillingPage = () => {
             <div id="pricing" className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch pt-4">
                 <PricingCard 
                     title="Essential" 
-                    price="$49" 
+                    price="49€" 
                     current={org.subscription_plan === 'starter'}
                     loading={upgrading === 'starter'}
                     onUpgrade={() => handleUpgrade('starter')}
-                    subtext="Pour 1 établissement"
+                    subtext="Pour les indépendants"
                     features={[
                         "1 Établissement connecté",
                         "Réponses IA Illimitées",
                         "Alertes Email instantanées",
-                        "Analyses Sémantiques",
+                        "Collecte (QR Code & Funnel)",
                         "Support Email 24/7"
                     ]} 
                 />
                 <PricingCard 
                     title="Growth" 
-                    price="$79" 
+                    price="89€" 
                     variant="featured"
                     current={org.subscription_plan === 'pro'}
                     loading={upgrading === 'pro'}
                     onUpgrade={() => handleUpgrade('pro')}
-                    subtext="Jusqu'à 2 établissements"
+                    subtext="Pour les gérants exigeants"
                     features={[
-                        "2 Établissements connectés",
+                        "3 Établissements inclus",
                         "Automatisation (Workflows)",
-                        "Rapports PDF Marque Blanche",
                         "Veille Concurrentielle",
-                        "Support Prioritaire"
+                        "Social Studio (Image Gen)",
+                        "Rapports PDF Marque Blanche"
                     ]} 
                 />
                 <PricingCard 
                     title="Enterprise" 
                     price="Sur Devis" 
                     variant="enterprise"
-                    subtext="Réseaux & Franchises (+3 lieux)"
+                    subtext="Réseaux & Franchises"
                     onUpgrade={handleContactSales}
                     features={[
                         "Établissements Illimités",
                         "Dashboard Master (Vue Groupe)",
-                        "API Dédiée",
+                        "API Dédiée & Webhooks",
                         "Onboarding Personnalisé",
                         "Facturation centralisée"
                     ]} 
@@ -267,7 +297,7 @@ export const BillingPage = () => {
 
             <div className="text-center text-xs text-slate-400 flex items-center justify-center gap-2 pb-8">
                 <ShieldCheck className="h-4 w-4" />
-                Transactions sécurisées par Stripe. Factures disponibles avec TVA détaillée.
+                Transactions sécurisées par Stripe. TVA applicable selon votre pays.
             </div>
         </div>
     );

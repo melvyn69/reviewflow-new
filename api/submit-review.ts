@@ -46,10 +46,39 @@ export default async function handler(req: any, res: any) {
         }
     }
 
-    const { locationId, rating, feedback, contact, tags } = body || {};
+    const { locationId, rating, feedback, contact, tags, staffName } = body || {};
 
     if (!locationId || !rating) {
         return res.status(400).json({ error: 'Données manquantes (locationId, rating)' });
+    }
+
+    // --- STAFF ATTRIBUTION LOGIC ---
+    let staffAttributed = null;
+    let internalNoteText = '';
+
+    if (staffName) {
+        // 1. Get Org ID from Location
+        const { data: loc } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
+        
+        if (loc?.organization_id) {
+            // 2. Find Staff Member by Name in this Org
+            // Note: This assumes exact match or ID match. 
+            // In a real app, we might use the ID passed from the QR code directly.
+            const { data: staff } = await supabase
+                .from('staff_members')
+                .select('id, name, reviews_count')
+                .eq('organization_id', loc.organization_id)
+                .or(`name.eq.${staffName},id.eq.${staffName}`) // Try to match name OR id
+                .single();
+
+            if (staff) {
+                staffAttributed = staff.name; // Store name in review for display
+                internalNoteText = `Attribué automatiquement à ${staff.name} via QR Code.`;
+                
+                // Optional: Increment counter directly (better to use DB trigger, but doing it here for simplicity)
+                await supabase.from('staff_members').update({ reviews_count: (staff.reviews_count || 0) + 1 }).eq('id', staff.id);
+            }
+        }
     }
 
     const finalBody = feedback || '';
@@ -63,6 +92,8 @@ export default async function handler(req: any, res: any) {
         status: 'pending',
         received_at: new Date().toISOString(),
         language: 'fr',
+        staff_attributed_to: staffAttributed,
+        internal_notes: internalNoteText ? [{ id: Date.now().toString(), text: internalNoteText, author_name: 'Système', created_at: new Date().toISOString() }] : [],
         analysis: { 
             sentiment: rating >= 4 ? 'positive' : 'negative', 
             themes: tags || [], 
@@ -78,7 +109,7 @@ export default async function handler(req: any, res: any) {
         return res.status(500).json({ error: `Erreur Base de données: ${error.message}` });
     }
 
-    // --- ALERTE EMAIL (Nouveau) ---
+    // --- ALERTE EMAIL ---
     // Si la note est critique (<= 3), on envoie un email via Resend
     if (rating <= 3 && RESEND_KEY) {
         try {
@@ -99,6 +130,7 @@ export default async function handler(req: any, res: any) {
                             <p><strong>Message :</strong> ${finalBody || "Aucun message"}</p>
                             <p><strong>Contact client :</strong> ${contact || "Non renseigné"}</p>
                             <p><strong>Tags :</strong> ${(tags || []).join(', ')}</p>
+                            ${staffAttributed ? `<p><strong>Staff concerné :</strong> ${staffAttributed}</p>` : ''}
                             <br/>
                             <a href="https://reviewflow.vercel.app" style="background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Répondre maintenant</a>
                         `
@@ -108,7 +140,6 @@ export default async function handler(req: any, res: any) {
             }
         } catch (emailErr) {
             console.error("Erreur envoi email alerte:", emailErr);
-            // On ne bloque pas la réponse HTTP pour une erreur d'email secondaire
         }
     }
 
