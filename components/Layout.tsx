@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -23,7 +22,8 @@ import {
   Home, 
   PlusCircle, 
   Target, 
-  Gift
+  Gift,
+  Share2 // New Icon
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User } from '../types';
@@ -150,6 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
           <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Plateforme</div>
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Tableau de bord" exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label="Boîte de réception" onClick={onClose} />
+          <SidebarItem to="/social" icon={Share2} label="Social Studio" onClick={onClose} />
           <SidebarItem to="/analytics" icon={BarChart3} label="Statistiques" onClick={onClose} />
           <SidebarItem to="/competitors" icon={Target} label="Veille Concurrentielle" onClick={onClose} />
           <SidebarItem to="/team" icon={Users} label="Équipe & Classement" onClick={onClose} />
@@ -163,7 +164,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
           <SidebarItem to="/settings" icon={Settings} label="Paramètres" onClick={onClose} />
           <SidebarItem to="/help" icon={HelpCircle} label="Centre d'Aide" onClick={onClose} />
           
-          {/* Conditional Rendering for Super Admin */}
           {user?.role === 'super_admin' && (
             <>
                 <div className="px-3 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">

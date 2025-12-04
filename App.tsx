@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
@@ -25,6 +24,7 @@ import { BookDemoPage } from './pages/BookDemo';
 import { OnboardingPage } from './pages/Onboarding';
 import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
+import { SocialPage } from './pages/Social'; // Import
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
@@ -95,6 +95,7 @@ function AppRoutes() {
                     <Routes>
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
+                        <Route path="social" element={<SocialPage />} /> 
                         <Route path="analytics" element={<AnalyticsPage />} />
                         <Route path="competitors" element={<CompetitorsPage />} />
                         <Route path="automation" element={<AutomationPage />} />
