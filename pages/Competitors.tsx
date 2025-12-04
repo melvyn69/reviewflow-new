@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Competitor, Organization } from '../types';
@@ -34,6 +33,7 @@ export const CompetitorsPage = () => {
     // Scan settings
     const [scanRadius, setScanRadius] = useState(5);
     const [scanSector, setScanSector] = useState('');
+    const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'found' | 'error'>('idle');
     
     const toast = useToast();
     const navigate = useNavigate();
@@ -58,15 +58,30 @@ export const CompetitorsPage = () => {
 
     const handleScan = async () => {
         setLoading(true);
+        setLocationStatus('locating');
+        
         try {
-            // Fake delay for radar effect
-            await new Promise(r => setTimeout(r, 1500));
-            const results = await api.competitors.autoDiscover(scanRadius, scanSector);
+            // 1. Get Geolocation
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                if (!navigator.geolocation) reject(new Error("Géolocalisation non supportée"));
+                navigator.geolocation.getCurrentPosition(resolve, reject);
+            });
+            
+            const { latitude, longitude } = position.coords;
+            setLocationStatus('found');
+
+            // 2. Call API
+            const results = await api.competitors.autoDiscover(scanRadius, scanSector, latitude, longitude);
             setScannedResults(results);
             setActiveTab('scan');
             toast.success(`${results.length} concurrents détectés dans la zone.`);
         } catch (e: any) {
-            toast.error(e.message);
+            setLocationStatus('error');
+            if (e.code === 1) {
+                toast.error("Veuillez autoriser la géolocalisation pour scanner votre zone.");
+            } else {
+                toast.error(e.message || "Erreur de scan");
+            }
         } finally {
             setLoading(false);
         }
@@ -343,9 +358,9 @@ export const CompetitorsPage = () => {
                         <CardContent className="p-8">
                             <div className="flex flex-col md:flex-row gap-6 items-end">
                                 <div className="flex-1 w-full">
-                                    <label className="block text-sm font-medium text-slate-400 mb-2">Secteur d'activité (Optionnel)</label>
+                                    <label className="block text-sm font-medium text-slate-400 mb-2">Secteur d'activité (ex: Pizzeria)</label>
                                     <Input 
-                                        placeholder="ex: Pizzeria, Garage, Coiffeur..." 
+                                        placeholder="Mot-clé (facultatif)" 
                                         className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                                         value={scanSector}
                                         onChange={e => setScanSector(e.target.value)}
@@ -369,9 +384,10 @@ export const CompetitorsPage = () => {
                                     className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-500 border-none shadow-lg shadow-indigo-900/50"
                                     onClick={handleScan}
                                     isLoading={loading}
+                                    disabled={locationStatus === 'locating'}
                                     icon={Radar}
                                 >
-                                    Scanner la zone
+                                    {locationStatus === 'locating' ? 'Géolocalisation...' : 'Scanner ma zone'}
                                 </Button>
                             </div>
                         </CardContent>
@@ -386,7 +402,7 @@ export const CompetitorsPage = () => {
                                             <div>
                                                 <h3 className="font-bold text-lg text-slate-900">{result.name}</h3>
                                                 <p className="text-xs text-slate-500 flex items-center gap-1">
-                                                    <MapPin className="h-3 w-3" /> {result.distance || 'Proche'}
+                                                    <MapPin className="h-3 w-3" /> {result.address || 'Proche'}
                                                 </p>
                                             </div>
                                             <div className={`px-2 py-1 rounded text-xs font-bold ${result.threat_level > 80 ? 'bg-red-100 text-red-700' : result.threat_level > 50 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
@@ -402,10 +418,6 @@ export const CompetitorsPage = () => {
                                             <div>
                                                 <div className="text-slate-400 text-xs">Volume</div>
                                                 <div className="font-bold text-slate-900">{result.review_count} avis</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-slate-400 text-xs">CA Est.</div>
-                                                <div className="font-bold text-slate-900">{result.estimated_revenue}</div>
                                             </div>
                                         </div>
 

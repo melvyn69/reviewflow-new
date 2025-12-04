@@ -1,7 +1,3 @@
-
-
-
-
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -878,17 +874,77 @@ const competitorsService = {
         localStorage.setItem('tracked_competitors', JSON.stringify(current.filter(c => c.id !== id)));
         return true;
     },
-    autoDiscover: async (radius: number, sector: string) => {
+    autoDiscover: async (radius: number, sector: string, lat?: number, lng?: number) => {
         // Enforce Growth Plan
         const org = await organizationService.get();
         enforceGrowthPlan(org);
 
-        await new Promise(r => setTimeout(r, 1500));
-        return [
-            { name: "Brasserie du Coin", distance: "300m", rating: 4.5, review_count: 1250, estimated_revenue: "1.2M€", strengths: ["Terrasse"], weaknesses: ["Service Lent"], threat_level: 85 },
-            { name: "Pizza Express", distance: "800m", rating: 3.9, review_count: 450, estimated_revenue: "450K€", strengths: ["Prix bas"], weaknesses: ["Qualité"], threat_level: 40 },
-            { name: "Sushi World", distance: "1.2km", rating: 4.8, review_count: 89, estimated_revenue: "N/A", strengths: ["Fraîcheur"], weaknesses: ["Prix élevés"], threat_level: 60 }
-        ];
+        if (!lat || !lng) {
+            // If no geolocation provided, throw error or fallback to mock if demo mode enabled
+            if (isSupabaseConfigured()) {
+                throw new Error("Géolocalisation requise pour le scan.");
+            }
+            // Mock fallback
+            await new Promise(r => setTimeout(r, 1500));
+            return [
+                { name: "Brasserie du Coin (Démo)", distance: "300m", rating: 4.5, review_count: 1250, estimated_revenue: "1.2M€", strengths: ["Terrasse"], weaknesses: ["Service Lent"], threat_level: 85 },
+                { name: "Pizza Express (Démo)", distance: "800m", rating: 3.9, review_count: 450, estimated_revenue: "450K€", strengths: ["Prix bas"], weaknesses: ["Qualité"], threat_level: 40 },
+            ];
+        }
+
+        const { data: { session } } = await supabase!.auth.getSession();
+        if (!session) throw new Error("Unauthorized");
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch_places`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                latitude: lat,
+                longitude: lng,
+                radius: radius,
+                keyword: sector
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || "Erreur de scan");
+        }
+
+        const data = await response.json();
+        
+        // Enrich data locally for UI consistency (since API just returns raw list)
+        return data.results.map((place: any) => {
+            // Generate simulated qualitative data based on real quantitative data
+            const strengths = [];
+            const weaknesses = [];
+            
+            if (place.rating >= 4.5) strengths.push("Excellente Réputation");
+            else if (place.rating >= 4.0) strengths.push("Bonne Qualité");
+            else weaknesses.push("Satisfaction Moyenne");
+
+            if (place.review_count > 500) strengths.push("Forte Visibilité");
+            else if (place.review_count < 50) weaknesses.push("Faible Visibilité");
+
+            // If empty, fill with generic
+            if (strengths.length === 0) strengths.push("Standard");
+            if (weaknesses.length === 0) weaknesses.push("Standard");
+
+            return {
+                name: place.name,
+                distance: "Proche", // Vicinity is provided but distance needs calc, simpler to say Near
+                address: place.address, // Added address
+                rating: place.rating,
+                review_count: place.review_count,
+                estimated_revenue: "N/A", // Google doesn't provide revenue
+                strengths: strengths,
+                weaknesses: weaknesses,
+                threat_level: place.threat_level
+            };
+        });
     },
     getDeepAnalysis: async () => {
         await new Promise(r => setTimeout(r, 2000));
