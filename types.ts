@@ -36,6 +36,17 @@ export interface SavedReply {
 
 export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'beauty' | 'health' | 'services' | 'automotive' | 'legal' | 'real_estate' | 'other';
 
+export interface StaffMember {
+    id: string;
+    name: string;
+    role: string; // "Serveur", "Caissier", etc.
+    avatar?: string;
+    email?: string;
+    location_id?: string;
+    reviews_count: number;
+    average_rating: number;
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -59,8 +70,9 @@ export interface Organization {
   brand?: BrandSettings;
   notification_settings?: NotificationSettings;
   saved_replies?: SavedReply[];
-  workflows?: WorkflowRule[]; // Stocké en JSONB
+  workflows?: WorkflowRule[]; 
   stripe_customer_id?: string;
+  staff_members?: StaffMember[]; 
 }
 
 export interface Location {
@@ -135,6 +147,8 @@ export interface Review {
   assigned_to?: string;
   posted_reply?: string;
   replied_at?: string;
+  staff_attributed_to?: string; // ID du staff
+  staff_name_detected?: string; // Nom détecté par l'IA
 }
 
 export interface ThemeWeight {
@@ -172,10 +186,7 @@ export interface Competitor {
   weaknesses: string[];
 }
 
-// --- AUTOMATION ENGINE TYPES ---
-
-export type TriggerType = 'review_created'; // Extension possible: 'review_updated'
-
+export type TriggerType = 'review_created'; 
 export type Operator = 'equals' | 'gte' | 'lte' | 'contains' | 'not_contains';
 
 export interface Condition {
@@ -188,10 +199,10 @@ export interface Condition {
 export type ActionType = 'generate_ai_reply' | 'auto_reply' | 'email_alert' | 'add_tag';
 
 export interface ActionConfig {
-  tone?: string; // pour generate_ai_reply
-  delay_minutes?: number; // pour auto_reply
-  email_to?: string; // pour email_alert
-  tag_name?: string; // pour add_tag
+  tone?: string; 
+  delay_minutes?: number; 
+  email_to?: string; 
+  tag_name?: string; 
 }
 
 export interface Action {
@@ -256,6 +267,6 @@ export interface Customer {
   total_reviews: number;
   average_rating: number;
   status: 'promoter' | 'passive' | 'detractor';
-  ltv_estimate?: number; // Lifetime Value estimée
+  ltv_estimate?: number; 
   history?: CustomerInteraction[];
 }

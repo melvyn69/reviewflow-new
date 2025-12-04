@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Review } from '../types';
+import { Organization, Review, StaffMember } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, User, Users } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { SocialShareModal } from '../components/SocialShareModal';
 import { QRCodeSVG } from 'qrcode.react';
@@ -24,6 +24,7 @@ export const CollectPage = () => {
   const [qrBgColor, setQrBgColor] = useState('#ffffff');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('all'); // NEW: Staff selection
   
   // Widget State
   const [widgetType, setWidgetType] = useState<'carousel' | 'list' | 'badge'>('carousel');
@@ -74,9 +75,19 @@ export const CollectPage = () => {
   };
 
   const selectedLocation = org?.locations.find(l => l.id === selectedLocationId);
-  const reviewLink = selectedLocation 
+  
+  // URL Construction logic
+  let reviewLink = selectedLocation 
     ? `${window.location.origin}/#/feedback/${selectedLocation.id}` 
     : '';
+  
+  if (selectedStaffId !== 'all') {
+      const staff = org?.staff_members?.find(s => s.id === selectedStaffId);
+      if (staff) {
+          // Use name normalized or ID
+          reviewLink += `?staff=${encodeURIComponent(staff.name)}`;
+      }
+  }
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(reviewLink);
@@ -231,6 +242,21 @@ export const CollectPage = () => {
                       </div>
                       
                       <div className="w-full space-y-4 mb-6">
+                          
+                          {/* Staff Selection */}
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
+                                  <Users className="h-3 w-3" /> Pour qui est ce QR Code ?
+                              </label>
+                              <Select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)}>
+                                  <option value="all">Établissement (Générique)</option>
+                                  {org.staff_members?.map(m => (
+                                      <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+                                  ))}
+                              </Select>
+                              <p className="text-[10px] text-slate-400 mt-1">Sélectionner un employé permet d'attribuer l'avis pour le challenge d'équipe.</p>
+                          </div>
+
                           <div className="grid grid-cols-2 gap-4">
                               <div>
                                   <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Palette className="h-3 w-3"/> Couleur QR</label>

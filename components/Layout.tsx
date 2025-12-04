@@ -150,7 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
           <SidebarItem to="/inbox" icon={Inbox} label="Boîte de réception" onClick={onClose} />
           <SidebarItem to="/analytics" icon={BarChart3} label="Statistiques" onClick={onClose} />
           <SidebarItem to="/competitors" icon={Target} label="Veille Concurrentielle" onClick={onClose} />
-          <SidebarItem to="/customers" icon={Users} label="Base Clients" onClick={onClose} />
+          <SidebarItem to="/team" icon={Users} label="Équipe & Classement" onClick={onClose} />
           <SidebarItem to="/collect" icon={QrCode} label="Collecte d'avis" onClick={onClose} />
           <SidebarItem to="/reports" icon={FileText} label="Rapports" onClick={onClose} />
           <SidebarItem to="/automation" icon={Workflow} label="Automatisation" onClick={onClose} />

@@ -22,6 +22,7 @@ import { SuperAdminPage } from './pages/SuperAdmin';
 import { CompetitorsPage } from './pages/Competitors';
 import { BookDemoPage } from './pages/BookDemo';
 import { OnboardingPage } from './pages/Onboarding';
+import { TeamPage } from './pages/Team';
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
@@ -97,6 +98,7 @@ function AppRoutes() {
                         <Route path="automation" element={<AutomationPage />} />
                         <Route path="collect" element={<CollectPage />} />
                         <Route path="customers" element={<CustomersPage />} />
+                        <Route path="team" element={<TeamPage />} />
                         <Route path="reports" element={<ReportsPage />} />
                         <Route path="settings" element={<SettingsPage />} />
                         <Route path="billing" element={<BillingPage />} />

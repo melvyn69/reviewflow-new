@@ -42,6 +42,8 @@ export const ReviewFunnel = () => {
     
     // Identifier un client via lien de campagne (ex: ?cid=123)
     const customerId = searchParams.get('cid');
+    // Identifier un membre du staff pour la gamification
+    const staffName = searchParams.get('staff');
     
     const [locationInfo, setLocationInfo] = useState<{
         name: string, 
@@ -99,9 +101,9 @@ export const ReviewFunnel = () => {
             }).catch(() => {});
         }
         
-        // Enregistrement stat
+        // Enregistrement stat avec attribution staff si présent
         if (locationId) {
-            api.public.submitFeedback(locationId, rating, "Avis positif (Click)", contact, [])
+            api.public.submitFeedback(locationId, rating, "Avis positif (Click)", contact, [], staffName || undefined)
                 .catch(err => console.error(err));
         }
 
@@ -130,7 +132,7 @@ export const ReviewFunnel = () => {
         if (!locationId) return;
         setLoading(true);
         try {
-            await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags);
+            await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags, staffName || undefined);
             setStep('success');
         } catch (error: any) {
             toast.error(`Erreur: ${error.message || "Problème technique"}`);
@@ -188,6 +190,10 @@ export const ReviewFunnel = () => {
                                 ))}
                             </div>
                             <p className="text-xs text-slate-400">Touchez une étoile pour noter</p>
+                            
+                            {staffName && (
+                                <p className="text-xs text-slate-300 mt-8 italic">Servi par {staffName}</p>
+                            )}
                         </div>
                     )}
 
