@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Review, StaffMember } from '../types';
+import { Organization, Review } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, User, Users, Sliders } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
-import { SocialShareModal } from '../components/SocialShareModal';
 import { QRCodeSVG } from 'qrcode.react';
 
 export const CollectPage = () => {
@@ -16,14 +14,11 @@ export const CollectPage = () => {
   const [recipient, setRecipient] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
-  const [topReviews, setTopReviews] = useState<Review[]>([]);
-  const [selectedReviewForPost, setSelectedReviewForPost] = useState<Review | null>(null);
   
   // QR Customization
   const [qrColor, setQrColor] = useState('#000000');
   const [qrBgColor, setQrBgColor] = useState('#ffffff');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('all');
   
   // Widget Customization State
@@ -42,7 +37,6 @@ export const CollectPage = () => {
     }, 5000); 
 
     loadOrg();
-    loadTopReviews();
     
     return () => clearTimeout(timer);
   }, []);
@@ -64,11 +58,6 @@ export const CollectPage = () => {
         console.error("Load failed", e);
         setLoadingError(true);
     }
-  };
-
-  const loadTopReviews = async () => {
-      const reviews = await api.reviews.list({ rating: '5' });
-      setTopReviews(reviews.slice(0, 3));
   };
 
   const useDemoData = () => {
@@ -122,7 +111,6 @@ export const CollectPage = () => {
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
-          setLogoFile(file);
           const reader = new FileReader();
           reader.onloadend = () => {
               setLogoUrl(reader.result as string);
@@ -160,7 +148,7 @@ export const CollectPage = () => {
       if (loadingError) {
           return (
               <div className="p-12 text-center flex flex-col items-center justify-center h-96">
-                  <AlertCircle className="h-10 w-10 text-amber-500 mb-4" />
+                  <div className="h-10 w-10 text-amber-500 mb-4">⚠️</div>
                   <h3 className="text-lg font-bold text-slate-900 mb-2">Chargement difficile</h3>
                   <p className="text-slate-500 mb-6">Nous n'arrivons pas à joindre la base de données. Voulez-vous voir la démo ?</p>
                   <Button onClick={useDemoData}>Charger les données de démo</Button>
@@ -169,14 +157,14 @@ export const CollectPage = () => {
       }
       return (
           <div className="p-12 text-center flex flex-col items-center justify-center h-96">
-              <Loader2 className="h-8 w-8 text-indigo-600 animate-spin mb-4" />
+              <span className="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full mb-4"></span>
               <p className="text-slate-500">Chargement de vos établissements...</p>
           </div>
       );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Acquisition & Diffusion</h1>
@@ -353,7 +341,7 @@ export const CollectPage = () => {
           </div>
       )}
 
-      {/* ... campaigns tab ... */}
+      {/* Campaigns Tab */}
       {activeTab === 'campaigns' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
               <div className="lg:col-span-2 space-y-6">
@@ -419,7 +407,7 @@ export const CollectPage = () => {
           </div>
       )}
 
-      {/* ... widgets tab (NEW WYSIWYG EDITOR) ... */}
+      {/* Widget Builder Tab */}
       {activeTab === 'widgets' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
               <div className="space-y-6">
@@ -546,6 +534,7 @@ export const CollectPage = () => {
           </div>
       )}
 
+      {/* Social Tab */}
       {activeTab === 'social' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
               <div className="space-y-6">
@@ -597,4 +586,22 @@ export const CollectPage = () => {
 
                   <Card className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-none">
                       <CardContent className="p-6">
-                          <h3 className
+                          <h3 className="font-bold text-lg flex items-center gap-2 mb-2">
+                              <Sparkles className="h-5 w-5 text-yellow-400" />
+                              Auto-Post IA
+                          </h3>
+                          <p className="text-indigo-100 text-sm mb-4">
+                              Laissez l'IA publier automatiquement vos meilleurs avis 5 étoiles en Stories Instagram.
+                          </p>
+                          <div className="flex items-center justify-between bg-white/10 p-3 rounded-lg backdrop-blur-sm">
+                              <span className="text-sm font-medium">Activer l'auto-post</span>
+                              <Toggle checked={false} onChange={() => toast.info("Fonctionnalité disponible en plan Pro")} />
+                          </div>
+                      </CardContent>
+                  </Card>
+              </div>
+          </div>
+      )}
+    </div>
+  );
+};
