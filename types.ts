@@ -76,6 +76,24 @@ export interface Coupon {
     customer_email?: string;
 }
 
+export interface ApiKey {
+    id: string;
+    key: string; // sk_...
+    name: string; // "Clé Zapier"
+    created_at: string;
+    last_used?: string;
+}
+
+export interface WebhookConfig {
+    id: string;
+    url: string;
+    events: ('review.created' | 'review.updated')[];
+    active: boolean;
+    secret: string; // whsec_...
+    last_triggered?: string;
+    status?: 'success' | 'failure';
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -103,6 +121,8 @@ export interface Organization {
   stripe_customer_id?: string;
   staff_members?: StaffMember[]; 
   offers?: Offer[];
+  api_keys?: ApiKey[];
+  webhooks?: WebhookConfig[];
 }
 
 export interface Location {
@@ -177,8 +197,8 @@ export interface Review {
   assigned_to?: string;
   posted_reply?: string;
   replied_at?: string;
-  staff_attributed_to?: string; // ID du staff
-  staff_name_detected?: string; // Nom détecté par l'IA
+  staff_attributed_to?: string;
+  staff_name_detected?: string;
 }
 
 export interface ThemeWeight {

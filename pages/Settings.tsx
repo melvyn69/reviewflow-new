@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings } from '../types';
+import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle } from '../components/ui';
 import { 
     Building2, 
@@ -37,7 +38,12 @@ import {
     Search,
     UploadCloud,
     FileText,
-    Link as LinkIcon
+    Link as LinkIcon,
+    Code,
+    Key,
+    Webhook,
+    Copy,
+    Zap
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -413,6 +419,10 @@ export const SettingsPage = () => {
       marketing_emails: false
   });
 
+  // API & Webhooks
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [keyName, setKeyName] = useState('');
+
   useEffect(() => {
     // Tentative de capture du token au chargement si retour de login
     api.organization.saveGoogleTokens().then((success) => {
@@ -647,6 +657,42 @@ export const SettingsPage = () => {
       }
   };
 
+  // API Handlers
+  const handleGenerateKey = async () => {
+      if (!keyName) return;
+      await api.organization.generateApiKey(keyName);
+      setKeyName('');
+      loadData();
+      toast.success("Clé API générée");
+  };
+
+  const handleRevokeKey = async (id: string) => {
+      if (confirm("Révoquer cette clé API ? Toutes les requêtes l'utilisant échoueront.")) {
+          await api.organization.revokeApiKey(id);
+          loadData();
+          toast.success("Clé révoquée");
+      }
+  };
+
+  const handleAddWebhook = async () => {
+      if (!webhookUrl) return;
+      await api.organization.saveWebhook(webhookUrl, ['review.created']);
+      setWebhookUrl('');
+      loadData();
+      toast.success("Webhook ajouté");
+  };
+
+  const handleTestWebhook = async (id: string) => {
+      const ok = await api.organization.testWebhook(id);
+      if (ok) toast.success("Test Webhook réussi !");
+      else toast.error("Échec du test Webhook");
+  };
+
+  const handleDeleteWebhook = async (id: string) => {
+      await api.organization.deleteWebhook(id);
+      loadData();
+  };
+
   if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
   return (
@@ -660,13 +706,13 @@ export const SettingsPage = () => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex border-b border-slate-200 overflow-x-auto">
-            {['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team'].map((tab) => (
+            {['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team', 'developer'].map((tab) => (
                 <button 
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap capitalize ${activeTab === tab ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
                 >
-                    {tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'Identité & IA' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'organization' ? 'Entreprise' : tab === 'notifications' ? 'Notifications' : tab}
+                    {tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'Identité & IA' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'organization' ? 'Entreprise' : tab === 'developer' ? 'Dév & API' : tab}
                 </button>
             ))}
         </div>
@@ -900,6 +946,22 @@ export const SettingsPage = () => {
                             </div>
                         </CardContent>
                     </Card>
+                    
+                    {/* ZAPIER PROMO CARD */}
+                    <div className="p-5 rounded-xl border border-orange-200 bg-orange-50 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 bg-orange-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                                Zap
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-orange-900">Automation (Zapier, Make, Slack)</h4>
+                                <p className="text-xs text-orange-700">Connectez vos outils externes via API & Webhooks.</p>
+                            </div>
+                        </div>
+                        <Button size="sm" variant="outline" className="border-orange-300 text-orange-800 hover:bg-orange-100" onClick={() => setActiveTab('developer')}>
+                            Configurer
+                        </Button>
+                    </div>
 
                     <div>
                         <h3 className="font-bold text-lg text-slate-900 mb-4 flex items-center gap-2">
@@ -930,6 +992,110 @@ export const SettingsPage = () => {
                             <IntegrationCard type="social" icon={Facebook} title="Facebook" description="Posts page pro." connected={org?.integrations.facebook_posting} />
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* --- ONGLET DEVELOPER (NOUVEAU) --- */}
+            {activeTab === 'developer' && (
+                <div className="space-y-8 animate-in fade-in">
+                    <div className="bg-slate-900 text-white p-6 rounded-xl flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <Code className="h-6 w-6 text-indigo-400" />
+                                API & Webhooks
+                            </h2>
+                            <p className="text-indigo-200 text-sm mt-1">
+                                Intégrez Reviewflow à votre écosystème (CRM, POS, Slack).
+                            </p>
+                        </div>
+                        <Button variant="outline" className="text-white border-white/20 hover:bg-white/10" onClick={() => window.open('https://docs.reviewflow.com', '_blank')}>
+                            Documentation
+                        </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* API KEYS */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2"><Key className="h-5 w-5 text-slate-500" /> Clés API</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    {org?.api_keys?.map(key => (
+                                        <div key={key.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                            <div>
+                                                <div className="font-mono text-sm font-bold text-slate-700">{key.name}</div>
+                                                <div className="font-mono text-xs text-slate-400 mt-1 flex items-center gap-2">
+                                                    {key.key.substring(0, 12)}...
+                                                    <Copy className="h-3 w-3 cursor-pointer hover:text-indigo-600" onClick={() => { navigator.clipboard.writeText(key.key); toast.success("Copié !") }} />
+                                                </div>
+                                            </div>
+                                            <button onClick={() => handleRevokeKey(key.id)} className="text-red-500 text-xs hover:underline">Révoquer</button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2 border-t border-slate-100 pt-4">
+                                    <Input placeholder="Nom de la clé (ex: Zapier)" value={keyName} onChange={e => setKeyName(e.target.value)} className="text-sm" />
+                                    <Button size="sm" onClick={handleGenerateKey} disabled={!keyName}>Générer</Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* WEBHOOKS */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2"><Webhook className="h-5 w-5 text-slate-500" /> Webhooks</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    {org?.webhooks?.map(hook => (
+                                        <div key={hook.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <div className="font-mono text-xs text-slate-600 break-all">{hook.url}</div>
+                                                <div className="flex gap-2">
+                                                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded">Actif</span>
+                                                    <Trash2 className="h-3 w-3 text-slate-400 cursor-pointer hover:text-red-600" onClick={() => handleDeleteWebhook(hook.id)} />
+                                                </div>
+                                            </div>
+                                            <div className="flex justify-between items-center mt-2">
+                                                <div className="flex gap-1">
+                                                    {hook.events.map(e => <Badge key={e} variant="neutral" className="text-[10px]">{e}</Badge>)}
+                                                </div>
+                                                <button onClick={() => handleTestWebhook(hook.id)} className="text-[10px] text-indigo-600 hover:underline">Tester</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="border-t border-slate-100 pt-4 space-y-2">
+                                    <Input placeholder="URL de destination (https://...)" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} className="text-sm" />
+                                    <Button size="sm" className="w-full" onClick={handleAddWebhook} disabled={!webhookUrl}>Ajouter un Webhook</Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* QUICK START */}
+                    <Card className="bg-slate-50 border-slate-200">
+                        <CardHeader>
+                            <CardTitle>Exemple : Demander un avis après achat (Node.js)</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <pre className="bg-slate-900 text-slate-300 p-4 rounded-lg text-xs font-mono overflow-x-auto">
+{`const axios = require('axios');
+
+await axios.post('https://api.reviewflow.com/v1/request-review', {
+  location_id: 'loc_123456',
+  customer: {
+    name: 'Jean Dupont',
+    email: 'jean@gmail.com',
+    phone: '+33612345678'
+  }
+}, {
+  headers: { 'Authorization': 'Bearer sk_live_...' }
+});`}
+                            </pre>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
 

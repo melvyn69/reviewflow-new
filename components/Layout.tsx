@@ -135,9 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
         <div className="p-6 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
-              <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
+              <span className="text-white font-bold text-lg">R</span>
             </div>
             <span className="font-bold text-lg text-slate-900">Reviewflow</span>
           </div>
@@ -274,7 +272,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
             >
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full border-2 border-white"></span>
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
                 )}
             </button>
 

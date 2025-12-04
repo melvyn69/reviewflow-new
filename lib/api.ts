@@ -1,5 +1,3 @@
-
-
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -17,7 +15,10 @@ import {
   Competitor,
   StaffMember,
   Offer,
-  Coupon
+  Coupon,
+  ApiKey,
+  WebhookConfig,
+  AppNotification
 } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
@@ -159,7 +160,9 @@ const organizationService = {
                   notification_settings: org.notification_settings || INITIAL_ORG.notification_settings,
                   locations: locations || [],
                   staff_members: staff,
-                  offers: org.offers || []
+                  offers: org.offers || [],
+                  api_keys: org.api_keys || [],
+                  webhooks: org.webhooks || []
               } as Organization;
           } catch (e) { return null; }
       },
@@ -220,7 +223,6 @@ const organizationService = {
       addStaffMember: async (name: string, role: string, avatarFile?: File) => {
           const org = await organizationService.get();
           if (org) {
-              // In real app, upload avatarFile to Storage
               const newMember: StaffMember = {
                   id: `staff-${Date.now()}`,
                   name,
@@ -243,9 +245,59 @@ const organizationService = {
           }
       },
       sendCongratulationEmail: async (staffId: string) => {
-          // Simulate email sending
           await new Promise(r => setTimeout(r, 1000));
           return true;
+      },
+      // API KEYS MANAGEMENT
+      generateApiKey: async (name: string) => {
+          const org = await organizationService.get();
+          if (org) {
+              const newKey: ApiKey = {
+                  id: `key-${Date.now()}`,
+                  name,
+                  key: `sk_live_${Math.random().toString(36).substr(2, 24)}`,
+                  created_at: new Date().toISOString()
+              };
+              const updatedKeys = [...(org.api_keys || []), newKey];
+              await organizationService.update({ api_keys: updatedKeys });
+              return newKey;
+          }
+          return null;
+      },
+      revokeApiKey: async (id: string) => {
+          const org = await organizationService.get();
+          if (org && org.api_keys) {
+              const updatedKeys = org.api_keys.filter(k => k.id !== id);
+              await organizationService.update({ api_keys: updatedKeys });
+          }
+      },
+      // WEBHOOKS MANAGEMENT
+      saveWebhook: async (url: string, events: any[]) => {
+          const org = await organizationService.get();
+          if (org) {
+              const newHook: WebhookConfig = {
+                  id: `wh-${Date.now()}`,
+                  url,
+                  events,
+                  active: true,
+                  secret: `whsec_${Math.random().toString(36).substr(2, 18)}`
+              };
+              const updatedHooks = [...(org.webhooks || []), newHook];
+              await organizationService.update({ webhooks: updatedHooks });
+              return newHook;
+          }
+          return null;
+      },
+      deleteWebhook: async (id: string) => {
+          const org = await organizationService.get();
+          if (org && org.webhooks) {
+              const updatedHooks = org.webhooks.filter(h => h.id !== id);
+              await organizationService.update({ webhooks: updatedHooks });
+          }
+      },
+      testWebhook: async (id: string) => {
+          await new Promise(r => setTimeout(r, 1500));
+          return true; // Simulating success
       }
 };
 
@@ -610,8 +662,18 @@ const socialService = {
 };
 
 const notificationsService = {
-    list: async () => [],
-    markAllRead: async () => true,
+    list: async (): Promise<AppNotification[]> => {
+        // Mock data
+        return [
+            { id: '1', type: 'info', title: 'Rapport Mensuel', message: 'Votre rapport de performance d\'Octobre est prêt.', created_at: new Date().toISOString(), read: false, link: '/reports' },
+            { id: '2', type: 'warning', title: 'Nouvel avis critique', message: 'Sophie D. a laissé 2 étoiles sur Google.', created_at: new Date(Date.now() - 3600000).toISOString(), read: false, link: '/inbox' },
+            { id: '3', type: 'success', title: 'Objectif atteint', message: 'Vous avez dépassé 4.5/5 de moyenne !', created_at: new Date(Date.now() - 86400000).toISOString(), read: true }
+        ];
+    },
+    markAllRead: async () => {
+        // In real app, call API
+        return true;
+    },
     sendTestEmail: async () => true
 };
 
