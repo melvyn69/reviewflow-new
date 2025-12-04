@@ -1,5 +1,4 @@
 
-
 export interface User {
   id: string;
   email: string;
@@ -13,18 +12,18 @@ export interface User {
 
 export interface BrandSettings {
   description: string;
-  tone: string; // ex: "professionnel et chaleureux"
+  tone: string;
   use_emojis: boolean;
-  language_style: 'formal' | 'casual'; // vouvoiement vs tutoiement
+  language_style: 'formal' | 'casual';
   signature: string;
-  knowledge_base?: string; // Faits et informations clés sur l'entreprise
+  knowledge_base?: string;
 }
 
 export interface NotificationSettings {
   email_alerts: boolean;
-  alert_threshold: number; // 1-5 (Notify if rating <= threshold)
+  alert_threshold: number;
   weekly_digest: boolean;
-  digest_day: string; // 'monday', 'friday'
+  digest_day: string;
   marketing_emails: boolean;
 }
 
@@ -39,11 +38,11 @@ export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'beauty' | 'healt
 
 export interface Organization {
   id: string;
-  name: string; // Nom Commercial (Utilisé pour l'IA et l'affichage)
-  legal_name?: string; // Raison Sociale (Utilisé pour Stripe)
+  name: string;
+  legal_name?: string;
   siret?: string;
   vat_number?: string;
-  address?: string; // Siège social
+  address?: string;
   industry?: IndustryType;
   created_at: string;
   locations: Location[];
@@ -52,15 +51,15 @@ export interface Organization {
   integrations: {
     google: boolean;
     facebook: boolean;
-    instagram_posting: boolean; // New: For Marketing
-    facebook_posting: boolean; // New: For Marketing
+    instagram_posting: boolean;
+    facebook_posting: boolean;
     linkedin_posting: boolean;
     tiktok_posting: boolean;
   };
   brand?: BrandSettings;
   notification_settings?: NotificationSettings;
   saved_replies?: SavedReply[];
-  workflows?: WorkflowRule[];
+  workflows?: WorkflowRule[]; // Stocké en JSONB
   stripe_customer_id?: string;
 }
 
@@ -83,8 +82,6 @@ export interface Location {
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';
 export type ReviewSource = 'google' | 'facebook' | 'tripadvisor' | 'yelp' | 'direct' | 'trustpilot' | 'yellowpages';
 export type Sentiment = 'positive' | 'neutral' | 'negative';
-
-// --- STABLE DATA CONTRACTS (AI ENGINE OUTPUTS) ---
 
 export interface ReviewAnalysis {
   sentiment: Sentiment;
@@ -109,6 +106,7 @@ export interface AIReplyData {
   reasons_for_validation?: string[];
   suggested_delay_hours?: number;
   created_at?: string;
+  model_used?: string;
 }
 
 export interface InternalNote {
@@ -122,20 +120,16 @@ export interface Review {
   id: string;
   source: ReviewSource;
   location_id: string;
-  rating: number; // 1-5
+  rating: number;
   language: string;
   title?: string;
   body: string;
   author_name: string;
   received_at: string;
   status: ReviewStatus;
-  
-  // Nested structured data from AI
   analysis?: ReviewAnalysis;
   ai_reply?: AIReplyData;
   internal_notes?: InternalNote[];
-  
-  // Final decision/action
   assigned_to?: string;
   posted_reply?: string;
   replied_at?: string;
@@ -143,11 +137,11 @@ export interface Review {
 
 export interface ThemeWeight {
   name: string;
-  weight: number; // 0-1
+  weight: number;
 }
 
 export interface AnalyticsSummary {
-  period: string; // e.g. "last_30_days"
+  period: string;
   total_reviews: number;
   average_rating: number;
   response_rate: number;
@@ -158,14 +152,12 @@ export interface AnalyticsSummary {
     negative: number;
   };
   volume_by_date: { date: string; count: number }[];
-  
-  // Stable fields for AI Analytics
   top_themes_positive: ThemeWeight[];
   top_themes_negative: ThemeWeight[];
   top_keywords: { keyword: string; count: number }[];
   problems_summary?: string;
   strengths_summary?: string;
-  global_rating?: number; // Redundant but often returned by AI
+  global_rating?: number;
 }
 
 export interface Competitor {
@@ -178,7 +170,33 @@ export interface Competitor {
   weaknesses: string[];
 }
 
-export type TriggerType = 'review_created' | 'review_updated';
+// --- AUTOMATION ENGINE TYPES ---
+
+export type TriggerType = 'review_created'; // Extension possible: 'review_updated'
+
+export type Operator = 'equals' | 'gte' | 'lte' | 'contains' | 'not_contains';
+
+export interface Condition {
+  id: string;
+  field: 'rating' | 'source' | 'content';
+  operator: Operator;
+  value: any;
+}
+
+export type ActionType = 'generate_ai_reply' | 'auto_reply' | 'email_alert' | 'add_tag';
+
+export interface ActionConfig {
+  tone?: string; // pour generate_ai_reply
+  delay_minutes?: number; // pour auto_reply
+  email_to?: string; // pour email_alert
+  tag_name?: string; // pour add_tag
+}
+
+export interface Action {
+  id: string;
+  type: ActionType;
+  config: ActionConfig;
+}
 
 export interface WorkflowRule {
   id: string;
@@ -187,17 +205,8 @@ export interface WorkflowRule {
   trigger: TriggerType;
   conditions: Condition[];
   actions: Action[];
-}
-
-export interface Condition {
-  field: string;
-  operator: 'equals' | 'contains' | 'gte' | 'lte' | 'in';
-  value: any;
-}
-
-export interface Action {
-  type: 'assign' | 'notify' | 'generate_ai_reply' | 'auto_reply' | 'schedule_reply' | 'publish_social';
-  config: Record<string, any>;
+  last_triggered?: string;
+  run_count?: number;
 }
 
 export interface ReportConfig {

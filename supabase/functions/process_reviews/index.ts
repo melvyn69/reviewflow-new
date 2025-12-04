@@ -1,280 +1,168 @@
-// Follow this setup guide to deploy: https://supabase.com/docs/guides/functions/deploy
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai'
 
 declare const Deno: any
-
-// --- Types simples pour clarifier ce qu'on manipule ---
-
-type Operator = 'equals' | 'contains' | 'gte' | 'lte' | 'in'
-
-interface WorkflowCondition {
-  field: string
-  operator: Operator
-  value: any
-}
-
-interface WorkflowAction {
-  type: 'generate_ai_reply' | 'auto_reply'
-}
-
-interface Brand {
-  tone?: string
-  language_style?: 'casual' | 'formal'
-  knowledge_base?: string
-}
-
-interface Workflow {
-  enabled: boolean
-  conditions?: WorkflowCondition[]
-  actions?: WorkflowAction[]
-}
-
-interface Organization {
-  id: string
-  name: string
-  industry?: string
-  workflows?: Workflow[]
-  brand?: Brand
-}
-
-interface Location {
-  id: string
-  organization?: Organization
-}
-
-interface Review {
-  id: string
-  rating: number
-  text: string
-  author_name?: string
-  status: string
-  location?: Location
-  // autres champs possibles, mais pas nécessaires ici
-}
-
-// --- CORS ---
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// --- Helper pour évaluer les conditions d’un workflow ---
+// Helper: Check condition matches
+const checkCondition = (condition: any, review: any) => {
+    let reviewValue;
+    switch (condition.field) {
+        case 'rating': reviewValue = review.rating; break;
+        case 'source': reviewValue = review.source; break;
+        case 'content': reviewValue = review.text || review.body || ''; break;
+        default: return false;
+    }
 
-const evaluateCondition = (review: Review, condition: WorkflowCondition): boolean => {
-  const { field, operator, value } = condition
-  const reviewValue: any = (review as any)[field]
-
-  switch (operator) {
-    case 'equals':
-      return reviewValue == value
-    case 'contains':
-      return typeof reviewValue === 'string' && typeof value === 'string' && reviewValue.includes(value)
-    case 'gte':
-      return typeof reviewValue === 'number' && reviewValue >= value
-    case 'lte':
-      return typeof reviewValue === 'number' && reviewValue <= value
-    case 'in':
-      return Array.isArray(value) && value.includes(reviewValue)
-    default:
-      return false
-  }
+    switch (condition.operator) {
+        case 'equals': return reviewValue == condition.value;
+        case 'gte': return reviewValue >= condition.value;
+        case 'lte': return reviewValue <= condition.value;
+        case 'contains': return String(reviewValue).toLowerCase().includes(String(condition.value).toLowerCase());
+        case 'not_contains': return !String(reviewValue).toLowerCase().includes(String(condition.value).toLowerCase());
+        default: return false;
+    }
 }
 
-// --- Fonction principale Edge ---
-
 Deno.serve(async (req: Request) => {
-  // Pré-flight CORS
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  // On ne veut accepter que POST (ou GET si tu préfères)
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return new Response('Method not allowed', {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 405,
-    })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    // ⚠️ IMPORTANT : utiliser la SERVICE_ROLE KEY uniquement côté serveur / Edge Function
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const apiKey = Deno.env.get('API_KEY') // Google AI key
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const geminiKey = Deno.env.get('API_KEY')!
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars')
-    }
+    if (!geminiKey) throw new Error("API_KEY (Gemini) missing")
 
-    if (!apiKey) {
-      throw new Error('Missing Google API Key (API_KEY)')
-    }
+    const supabase = createClient(supabaseUrl, serviceRoleKey)
+    const ai = new GoogleGenerativeAI(geminiKey)
+    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
-    const supabaseClient = createClient(supabaseUrl, serviceRoleKey)
-
-    // 1. Récupérer les avis en attente (pending) + organisation liée
-    const { data: reviews, error: fetchError } = await supabaseClient
+    // 1. Fetch pending reviews with org data
+    const { data: reviews, error: fetchError } = await supabase
       .from('reviews')
       .select('*, location:locations(organization:organizations(*))')
       .eq('status', 'pending')
-      .limit(20) // batch raisonnable
+      .limit(50) // Process in batches
 
     if (fetchError) throw fetchError
+    if (!reviews || reviews.length === 0) return new Response(JSON.stringify({ message: 'Nothing to process', processed: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-    if (!reviews || reviews.length === 0) {
-      return new Response(
-        JSON.stringify({ message: 'No pending reviews to process' }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
-    }
+    let processedCount = 0
+    let actionsCount = 0
 
-    // 2. Init Google Generative AI
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // 2. Process each review
+    for (const review of reviews) {
+        const org = review.location?.organization
+        if (!org) continue
 
-    const results: any[] = []
+        const workflows = org.workflows || []
+        let matched = false
+        let finalStatus = 'pending'
+        let replyText = ''
+        let aiModelUsed = ''
 
-    // 3. Traitement de chaque avis
-    for (const rawReview of reviews as Review[]) {
-      const review = rawReview as Review
+        // Evaluate Workflows
+        for (const wf of workflows) {
+            if (!wf.enabled) continue
+            
+            // Check all conditions (AND logic)
+            const allMatch = wf.conditions.every((c: any) => checkCondition(c, review))
+            
+            if (allMatch) {
+                matched = true
+                console.log(`Review ${review.id} matched workflow ${wf.name}`)
 
-      const org: Organization | undefined = review.location?.organization
-      if (!org) {
-        console.warn(`Review ${review.id} n'a pas d'organisation liée, skip`)
-        continue
-      }
+                // Execute Actions
+                for (const action of wf.actions) {
+                    actionsCount++
+                    
+                    // A. AI Generation / Auto Reply
+                    if (action.type === 'generate_ai_reply' || action.type === 'auto_reply') {
+                        const brand = org.brand || {}
+                        const tone = action.config?.tone || brand.tone || 'professionnel'
+                        
+                        const prompt = `
+                            Rôle: Service client de "${org.name}" (${org.industry || 'commerce'}).
+                            Ton: ${tone}.
+                            Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
+                            Contexte: ${brand.knowledge_base || ''}
+                            
+                            Réponds à cet avis ${review.rating}/5 de ${review.author_name}: "${review.text}"
+                            Réponse courte, polie, sans guillemets.
+                        `
+                        
+                        try {
+                            const result = await model.generateContent(prompt)
+                            replyText = result.response.text()
+                            aiModelUsed = 'gemini-1.5-flash'
+                            
+                            if (action.type === 'auto_reply') {
+                                finalStatus = 'sent' // In reality, we would call the GMB API here
+                            } else {
+                                finalStatus = 'draft'
+                            }
+                        } catch (e) {
+                            console.error("AI Error", e)
+                        }
+                    }
 
-      const workflows: Workflow[] = (org.workflows as any) || []
-      const brand: Brand = org.brand || { tone: 'professionnel', language_style: 'formal' }
+                    // B. Email Alert (Mock)
+                    if (action.type === 'email_alert') {
+                        console.log(`[Email] Sending alert to ${action.config?.email_to} for review ${review.id}`)
+                        // Here we would call Resend API
+                    }
 
-      let actionTaken = false
-      let replyText = ''
-      let status: 'pending' | 'draft' | 'sent' = 'pending'
-
-      // --- A. Vérification des workflows personnalisés ---
-      for (const wf of workflows) {
-        if (!wf || !wf.enabled) continue
-
-        const conditions = wf.conditions || []
-        const actions = wf.actions || []
-
-        const match = conditions.length === 0
-          ? true // si pas de conditions, le workflow matche toujours
-          : conditions.every((c) => evaluateCondition(review, c))
-
-        if (!match) continue
-
-        // Workflow matche → on applique les actions
-        for (const action of actions) {
-          if (!action?.type) continue
-
-          if (action.type === 'generate_ai_reply' || action.type === 'auto_reply') {
-            const prompt = `
-Rôle: Tu es le service client pour "${org.name}" (${org.industry || 'commerce'}).
-Ton: ${brand.tone || 'professionnel'}.
-Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
-Contexte marque: ${brand.knowledge_base || 'Réponds de manière claire, concise et bienveillante.'}
-
-Tâche: Rédige une réponse à cet avis client Google.
-Note: ${review.rating}/5
-Auteur: ${review.author_name || 'Client'}
-Avis: "${review.text}"
-
-Contraintes:
-- Réponse courte (2-4 phrases).
-- Ton positif, poli, et professionnel.
-- Si l'avis est négatif (< 3), commence par présenter des excuses et propose un contact (sans inventer d'e-mail).
-            `.trim()
-
-            try {
-              const aiResult = await model.generateContent(prompt)
-              replyText = aiResult.response.text().trim()
-
-              // auto_reply = on considère que c'est déjà envoyé
-              status = action.type === 'auto_reply' ? 'sent' : 'draft'
-              actionTaken = true
-            } catch (e) {
-              console.error(`AI Error for review ${review.id}:`, e)
+                    // C. Tagging
+                    if (action.type === 'add_tag') {
+                        // Would update tags column in DB
+                    }
+                }
+                
+                // Stop after first matching workflow to prevent conflicts? 
+                // For now, yes.
+                break 
             }
-          }
         }
 
-        // On s'arrête au premier workflow qui matche pour éviter les conflits
-        if (actionTaken) break
-      }
+        // 3. Update DB
+        if (matched && replyText) {
+            const updatePayload: any = {
+                status: finalStatus,
+                ai_reply: {
+                    text: replyText,
+                    tone: 'automated',
+                    model_used: aiModelUsed,
+                    created_at: new Date().toISOString(),
+                    needs_manual_validation: finalStatus === 'draft'
+                }
+            }
+            
+            if (finalStatus === 'sent') {
+                updatePayload.posted_reply = replyText
+                updatePayload.replied_at = new Date().toISOString()
+            }
 
-      // --- B. Logique par défaut si aucun workflow n'a pris la main ---
-      if (!actionTaken && typeof review.rating === 'number' && review.rating >= 4) {
-        const defaultPrompt = `
-Rédige une courte réponse (2-3 phrases) en français pour remercier ce client de son avis positif.
-Auteur: ${review.author_name || 'Client'}
-Note: ${review.rating}/5
-Avis: "${review.text}"
-
-Style: poli, chaleureux, professionnel. Utilise le "vous".
-        `.trim()
-
-        try {
-          const defaultResult = await model.generateContent(defaultPrompt)
-          replyText = defaultResult.response.text().trim()
-          status = 'draft'
-          actionTaken = true
-        } catch (e) {
-          console.error(`AI Error (default) for review ${review.id}:`, e)
+            await supabase.from('reviews').update(updatePayload).eq('id', review.id)
+            processedCount++
+        } else if (!matched) {
+            // No rule matched -> Keep pending or move to manual? 
+            // Let's verify if default AI is enabled (could be a setting). 
+            // For now, we leave it pending.
         }
-      }
-
-      // --- C. Mise à jour en base ---
-      if (actionTaken && replyText) {
-        const payload: any = {
-          status,
-          ai_reply: {
-            text: replyText,
-            created_at: new Date().toISOString(),
-            needs_manual_validation: status === 'draft',
-          },
-        }
-
-        if (status === 'sent') {
-          payload.posted_reply = replyText
-          payload.replied_at = new Date().toISOString()
-        }
-
-        const { error: updateError } = await supabaseClient
-          .from('reviews')
-          .update(payload)
-          .eq('id', review.id)
-
-        if (updateError) {
-          console.error(`Update error for review ${review.id}:`, updateError)
-          results.push({ id: review.id, status: 'error', message: updateError.message })
-        } else {
-          results.push({ id: review.id, status: 'processed', outcome: status })
-        }
-      } else {
-        results.push({ id: review.id, status: 'skipped', reason: 'no_matching_workflow_or_logic' })
-      }
     }
 
     return new Response(
-      JSON.stringify({
-        processed: results.filter((r) => r.status === 'processed').length,
-        reviews_count: (reviews as Review[]).length,
-        details: results,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ processed: processedCount, actions: actionsCount }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+
   } catch (error: any) {
-    console.error('process_reviews error:', error)
-    return new Response(JSON.stringify({ error: error.message || 'Unknown error' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
-    })
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })

@@ -19,31 +19,35 @@ Une application complète pour centraliser, analyser et automatiser la gestion d
 - **IA** : Google Gemini API (via `@google/genai`).
 - **Outils** : jsPDF (Rapports), qrcode.react (QR Codes).
 
-## 🌍 Guide de Déploiement (Production)
+## 🌍 Guide de Mise en Production (Obligatoire)
 
-Pour mettre cette application en ligne et la vendre à vos clients :
+Pour que l'application fonctionne réellement (stockage des avis, authentification), suivez ces étapes :
 
-### 1. Configuration Supabase (Backend)
+### 1. Configuration Supabase (Base de Données)
 
 1. Créez un projet sur [Supabase](https://supabase.com).
-2. Allez dans **SQL Editor** et exécutez le script contenu dans `supabase/schema.sql`.
-3. Allez dans **Project Settings > API** et récupérez l'URL et la clé ANON.
-4. Mettez à jour `lib/supabase.ts` avec ces clés (si ce n'est pas déjà fait).
+2. Allez dans l'onglet **SQL Editor**.
+3. Ouvrez le fichier `supabase/schema.sql` de ce projet, copiez tout le contenu.
+4. Collez-le dans l'éditeur SQL de Supabase et cliquez sur **Run**.
+   *Cela va créer les tables, la sécurité RLS et les triggers.*
 
-### 2. Configuration Google Auth
+### 2. Variables d'Environnement
 
-1. Allez dans la console [Google Cloud](https://console.cloud.google.com).
-2. Créez un projet et configurez l'écran de consentement OAuth (External).
-3. Créez des identifiants **OAuth Client ID** (Web App).
-4. Ajoutez l'URL de votre site (ex: `https://mon-app.vercel.app`) dans "Authorized redirect URIs".
-5. Copiez le Client ID et le Secret dans Supabase (**Auth > Providers > Google**).
+Créez un fichier `.env` à la racine (ou configurez Vercel) avec :
 
-### 3. Déploiement Vercel (Hébergement)
+```env
+VITE_SUPABASE_URL=votre_url_supabase
+VITE_SUPABASE_ANON_KEY=votre_cle_anon_supabase
+VITE_API_KEY=votre_cle_google_gemini_ai
+VITE_STRIPE_PUBLIC_KEY=votre_cle_publique_stripe
+```
 
-1. Créez un compte sur [Vercel](https://vercel.com).
-2. Importez votre dépôt GitHub (contenant ce code).
-3. Vercel détectera automatiquement que c'est du React (Vite).
-4. Cliquez sur **Deploy**.
+### 3. Configuration Auth (Google)
+
+1. Dans Supabase > Authentication > Providers, activez **Google**.
+2. Créez un projet sur [Google Cloud Console](https://console.cloud.google.com).
+3. Configurez les ID OAuth et ajoutez l'URL de votre site en "Redirect URI".
+4. Copiez les Client ID/Secret dans Supabase.
 
 ### 4. Automatisation (Edge Functions)
 
@@ -52,12 +56,11 @@ Pour que l'IA réponde la nuit (24/7) :
 1. Installez le CLI Supabase.
 2. Déployez la fonction : `supabase functions deploy process_reviews`.
 3. Ajoutez votre clé Gemini : `supabase secrets set API_KEY=votre_cle_api`.
-4. Le script `supabase/config.toml` s'occupera de la planification (Cron).
 
 ## 📝 Notes pour le développeur
 
 - Le fichier `lib/api.ts` contient toute la logique métier.
-- Le mode "Démo" est activé par défaut si Supabase n'est pas connecté.
+- L'application bascule automatiquement en "Mode Démo" si Supabase n'est pas configuré.
 - Pour tester le paiement, utilisez les cartes de test Stripe (4242 4242...).
 
 ---

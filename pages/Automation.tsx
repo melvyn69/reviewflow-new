@@ -1,64 +1,264 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { WorkflowRule, Organization } from '../types';
-import { Card, CardContent, Button, Toggle, Badge, useToast, Input } from '../components/ui';
-import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, AlertTriangle, Clock, Settings, Shield, Activity, Share2, Lock } from 'lucide-react';
+import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
+import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select } from '../components/ui';
+import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const WorkflowItem: React.FC<{ workflow: WorkflowRule }> = ({ workflow }) => {
-  const [enabled, setEnabled] = useState(workflow.enabled);
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
-  return (
-    <Card className="mb-4 hover:shadow-md transition-shadow">
-      <CardContent className="p-5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-            <Zap className="h-5 w-5" />
-          </div>
-          <div>
-             <h3 className="font-semibold text-slate-900">{workflow.name}</h3>
-             <div className="flex items-center gap-2 text-sm text-slate-500 mt-0.5">
-               <span className="capitalize">{workflow.trigger === 'review_created' ? 'Nouvel avis' : 'Avis modifié'}</span>
-               <span>•</span>
-               <span>{workflow.conditions.length} conditions</span>
-               <span>•</span>
-               <span>{workflow.actions.length} actions</span>
-             </div>
-          </div>
+const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule | null, onSave: (w: WorkflowRule) => void, onCancel: () => void }) => {
+    const [name, setName] = useState(workflow?.name || 'Nouveau Workflow');
+    const [trigger, setTrigger] = useState<TriggerType>(workflow?.trigger || 'review_created');
+    const [conditions, setConditions] = useState<Condition[]>(workflow?.conditions || []);
+    const [actions, setActions] = useState<Action[]>(workflow?.actions || []);
+    const [saving, setSaving] = useState(false);
+
+    const handleAddCondition = () => {
+        setConditions([...conditions, { id: generateId(), field: 'rating', operator: 'equals', value: 5 }]);
+    };
+
+    const handleRemoveCondition = (id: string) => {
+        setConditions(conditions.filter(c => c.id !== id));
+    };
+
+    const updateCondition = (id: string, field: string, value: any) => {
+        setConditions(conditions.map(c => c.id === id ? { ...c, [field]: value } : c));
+    };
+
+    const handleAddAction = () => {
+        setActions([...actions, { id: generateId(), type: 'generate_ai_reply', config: { tone: 'professionnel' } }]);
+    };
+
+    const handleRemoveAction = (id: string) => {
+        setActions(actions.filter(a => a.id !== id));
+    };
+
+    const updateAction = (id: string, field: string, value: any) => {
+        setActions(actions.map(a => {
+            if (a.id === id) {
+                if (field === 'type') {
+                    // Reset config when type changes
+                    return { ...a, type: value, config: {} };
+                }
+                if (field === 'config') {
+                    return { ...a, config: { ...a.config, ...value } };
+                }
+            }
+            return a;
+        }));
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        const rule: WorkflowRule = {
+            id: workflow?.id || generateId(),
+            name,
+            enabled: true,
+            trigger: trigger as any,
+            conditions,
+            actions
+        };
+        await onSave(rule);
+        setSaving(false);
+    };
+
+    return (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+            <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold text-slate-900">{workflow ? 'Modifier le Workflow' : 'Créer un Workflow'}</h2>
+                <div className="flex gap-2">
+                    <Button variant="ghost" onClick={onCancel}>Annuler</Button>
+                    <Button icon={Save} onClick={handleSave} isLoading={saving}>Enregistrer</Button>
+                </div>
+            </div>
+
+            <Card>
+                <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold text-slate-700 flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-indigo-600" /> DÉCLENCHEUR
+                </div>
+                <CardContent className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Nom du workflow</label>
+                            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Réponse 5 étoiles" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Quand...</label>
+                            <Select value={trigger} onChange={(e) => setTrigger(e.target.value as any)}>
+                                <option value="review_created">Nouvel avis reçu</option>
+                                {/* Future: <option value="review_updated">Avis modifié</option> */}
+                            </Select>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold text-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Settings className="h-4 w-4 text-indigo-600" /> CONDITIONS (SI)
+                    </div>
+                    <Button size="xs" variant="outline" icon={Plus} onClick={handleAddCondition}>Ajouter</Button>
+                </div>
+                <CardContent className="p-6 space-y-4">
+                    {conditions.length === 0 && <p className="text-sm text-slate-400 italic text-center">Aucune condition (Le workflow s'exécutera toujours).</p>}
+                    
+                    {conditions.map((cond, index) => (
+                        <div key={cond.id} className="flex flex-col sm:flex-row gap-3 items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm relative group">
+                            {index > 0 && <div className="absolute -top-5 left-8 text-xs font-bold text-slate-400 bg-white px-2 py-0.5 border rounded">ET</div>}
+                            
+                            <Select 
+                                className="w-full sm:w-1/3" 
+                                value={cond.field} 
+                                onChange={(e) => updateCondition(cond.id, 'field', e.target.value)}
+                            >
+                                <option value="rating">Note (Étoiles)</option>
+                                <option value="source">Source (Google, etc.)</option>
+                                <option value="content">Contenu du message</option>
+                            </Select>
+
+                            <Select 
+                                className="w-full sm:w-1/4" 
+                                value={cond.operator} 
+                                onChange={(e) => updateCondition(cond.id, 'operator', e.target.value)}
+                            >
+                                <option value="equals">Est égal à</option>
+                                <option value="gte">Supérieur ou égal à</option>
+                                <option value="lte">Inférieur ou égal à</option>
+                                <option value="contains">Contient</option>
+                                <option value="not_contains">Ne contient pas</option>
+                            </Select>
+
+                            <div className="flex-1 w-full">
+                                {cond.field === 'rating' ? (
+                                    <Select value={cond.value} onChange={(e) => updateCondition(cond.id, 'value', parseInt(e.target.value))}>
+                                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} ★</option>)}
+                                    </Select>
+                                ) : cond.field === 'source' ? (
+                                    <Select value={cond.value} onChange={(e) => updateCondition(cond.id, 'value', e.target.value)}>
+                                        <option value="google">Google</option>
+                                        <option value="facebook">Facebook</option>
+                                        <option value="tripadvisor">TripAdvisor</option>
+                                    </Select>
+                                ) : (
+                                    <Input 
+                                        value={cond.value} 
+                                        onChange={(e) => updateCondition(cond.id, 'value', e.target.value as any)}
+                                        placeholder="Mot-clé..."
+                                    />
+                                )}
+                            </div>
+
+                            <button onClick={() => handleRemoveCondition(cond.id)} className="text-slate-400 hover:text-red-500 p-2">
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ))}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold text-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <ArrowRight className="h-4 w-4 text-indigo-600" /> ACTIONS (ALORS)
+                    </div>
+                    <Button size="xs" variant="outline" icon={Plus} onClick={handleAddAction}>Ajouter</Button>
+                </div>
+                <CardContent className="p-6 space-y-4">
+                    {actions.length === 0 && <p className="text-sm text-red-400 italic text-center">Ajoutez au moins une action.</p>}
+
+                    {actions.map((action, index) => (
+                        <div key={action.id} className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 relative">
+                            <div className="flex justify-between mb-3">
+                                <Select 
+                                    className="w-full sm:w-1/2 font-bold" 
+                                    value={action.type} 
+                                    onChange={(e) => updateAction(action.id, 'type', e.target.value)}
+                                >
+                                    <option value="generate_ai_reply">Générer brouillon IA</option>
+                                    <option value="auto_reply">Répondre automatiquement (Auto-pilot)</option>
+                                    <option value="email_alert">M'envoyer une alerte email</option>
+                                    <option value="add_tag">Ajouter un tag interne</option>
+                                </Select>
+                                <button onClick={() => handleRemoveAction(action.id)} className="text-slate-400 hover:text-red-500">
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <div className="pl-4 border-l-2 border-indigo-200">
+                                {(action.type === 'generate_ai_reply' || action.type === 'auto_reply') && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">Ton de la réponse</label>
+                                            <Select 
+                                                size="sm" 
+                                                value={action.config.tone || 'professionnel'} 
+                                                onChange={(e) => updateAction(action.id, 'config', { tone: e.target.value })}
+                                            >
+                                                <option value="professionnel">Professionnel</option>
+                                                <option value="enthusiastic">Enthousiaste</option>
+                                                <option value="empathic">Empathique</option>
+                                                <option value="apologetic">Excusant (Désolé)</option>
+                                            </Select>
+                                        </div>
+                                        {action.type === 'auto_reply' && (
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 mb-1">Délai avant envoi</label>
+                                                <Select 
+                                                    size="sm"
+                                                    value={action.config.delay_minutes || 0}
+                                                    onChange={(e) => updateAction(action.id, 'config', { delay_minutes: parseInt(e.target.value) })}
+                                                >
+                                                    <option value={0}>Immédiat</option>
+                                                    <option value={15}>15 minutes</option>
+                                                    <option value={60}>1 heure</option>
+                                                    <option value={120}>2 heures</option>
+                                                </Select>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {action.type === 'email_alert' && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Destinataire</label>
+                                        <Input 
+                                            placeholder="manager@entreprise.com" 
+                                            value={action.config.email_to || ''}
+                                            onChange={(e) => updateAction(action.id, 'config', { email_to: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+
+                                {action.type === 'add_tag' && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Nom du tag</label>
+                                        <Input 
+                                            placeholder="Ex: Urgent, VIP, Spam..." 
+                                            value={action.config.tag_name || ''}
+                                            onChange={(e) => updateAction(action.id, 'config', { tag_name: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </CardContent>
+            </Card>
         </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-medium ${enabled ? 'text-indigo-600' : 'text-slate-400'}`}>
-              {enabled ? 'Actif' : 'Inactif'}
-            </span>
-            <Toggle checked={enabled} onChange={setEnabled} />
-          </div>
-          <button className="text-slate-400 hover:text-slate-600">
-            <MoreVertical className="h-5 w-5" />
-          </button>
-        </div>
-      </CardContent>
-    </Card>
-  );
+    );
 };
 
 export const AutomationPage = () => {
   const [workflows, setWorkflows] = useState<WorkflowRule[]>([]);
   const [org, setOrg] = useState<Organization | null>(null);
-  const [showBuilder, setShowBuilder] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
+  const [editingWorkflow, setEditingWorkflow] = useState<WorkflowRule | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [lastRunResult, setLastRunResult] = useState<{processed: number, actions: number, alerts: number} | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
   
-  // Builder State
-  const [builderName, setBuilderName] = useState('Nouveau Workflow');
-  const [builderAction, setBuilderAction] = useState('notify');
-  const [builderPlatform, setBuilderPlatform] = useState('instagram');
-  const [builderConditionRating, setBuilderConditionRating] = useState(5);
-  const [builderConditionOperator, setBuilderConditionOperator] = useState('gte');
-
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -68,308 +268,138 @@ export const AutomationPage = () => {
 
   const loadData = async () => {
       setLoading(true);
-      const [workflowsData, orgData] = await Promise.all([
+      const [wfs, organization] = await Promise.all([
           api.automation.getWorkflows(),
           api.organization.get()
       ]);
-      setWorkflows(workflowsData);
-      setOrg(orgData);
+      setWorkflows(wfs);
+      setOrg(organization);
       setLoading(false);
   };
 
-  const handleCreateWorkflow = async () => {
-    setIsCreating(true);
-    
-    const newWorkflow: WorkflowRule = {
-        id: `wf-${Date.now()}`,
-        name: builderName,
-        enabled: true,
-        trigger: 'review_created',
-        conditions: [{ field: 'rating', operator: builderConditionOperator as any, value: builderConditionRating}],
-        actions: [{ 
-            type: builderAction as any, 
-            config: builderAction === 'publish_social' ? { platform: builderPlatform } : {}
-        }]
-    };
-
-    // Sauvegarde réelle en DB
-    try {
-        await api.automation.create(newWorkflow);
-        
-        // Rafraîchir la liste
-        const updated = await api.automation.getWorkflows();
-        setWorkflows(updated);
-
-        setIsCreating(false);
-        setShowBuilder(false);
-        toast.success("Workflow créé et activé !");
-    } catch (e) {
-        toast.error("Erreur lors de la création");
-        setIsCreating(false);
-    }
-  };
-
-  const handleRunAutomation = async () => {
-      setIsRunning(true);
-      setLastRunResult(null);
-      try {
-          const result = await api.automation.run();
-          setLastRunResult(result);
-          if (result.actions > 0 || result.alerts > 0) {
-              toast.success(`${result.actions} actions effectuées (Réponses/Posts) et ${result.alerts} alertes.`);
-          } else {
-              toast.info("Analyse terminée : Aucun avis ne correspond aux règles.");
-          }
-      } catch (e) {
-          console.error(e);
-          toast.error("Erreur lors de l'exécution");
-      } finally {
-          setIsRunning(false);
+  const handleDelete = async (id: string) => {
+      if(confirm("Supprimer ce workflow ?")) {
+          await api.automation.deleteWorkflow(id);
+          loadData();
+          toast.success("Workflow supprimé");
       }
   };
 
-  if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
+  const handleSaveWorkflow = async (workflow: WorkflowRule) => {
+      try {
+          await api.automation.saveWorkflow(workflow);
+          setIsEditing(false);
+          setEditingWorkflow(null);
+          loadData();
+          toast.success("Workflow sauvegardé !");
+      } catch (e: any) {
+          toast.error("Erreur sauvegarde: " + e.message);
+      }
+  };
 
-  // UPGRADE WALL
-  if (org && org.subscription_plan !== 'pro') {
+  const handleToggle = async (workflow: WorkflowRule) => {
+      const updated = { ...workflow, enabled: !workflow.enabled };
+      // Optimistic update
+      setWorkflows(workflows.map(w => w.id === workflow.id ? updated : w));
+      try {
+          await api.automation.saveWorkflow(updated);
+      } catch (e) {
+          toast.error("Erreur mise à jour");
+          loadData(); // Revert
+      }
+  };
+
+  const handleRunManually = async () => {
+      setIsRunning(true);
+      const res = await api.automation.run();
+      setIsRunning(false);
+      if (res.processed > 0) {
+          toast.success(`${res.processed} avis traités, ${res.actions} actions effectuées.`);
+      } else {
+          toast.info("Aucun avis ne correspond aux critères.");
+      }
+  };
+
+  if (loading) return <div className="p-12 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
+
+  if (org && org.subscription_plan === 'free') {
       return (
-          <div className="max-w-5xl mx-auto h-[80vh] flex items-center justify-center">
-              <div className="text-center max-w-md p-8 bg-white rounded-2xl shadow-xl border border-slate-200">
-                  <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <Lock className="h-8 w-8 text-slate-400" />
-                  </div>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-2">Fonctionnalité Pro</h2>
-                  <p className="text-slate-500 mb-8">
-                      L'automatisation des réponses et la publication sur les réseaux sociaux sont réservées aux membres Pro.
-                  </p>
-                  <Button size="lg" className="w-full shadow-lg shadow-indigo-200" onClick={() => navigate('/billing')}>
-                      Passer au plan Pro
-                  </Button>
-                  <p className="mt-4 text-xs text-slate-400">À partir de 79€/mois • Annulation à tout moment</p>
+          <div className="max-w-4xl mx-auto p-12 text-center bg-white rounded-2xl shadow-sm border border-slate-200 mt-12">
+              <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Zap className="h-8 w-8 text-slate-400" />
               </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Automatisation Avancée</h2>
+              <p className="text-slate-500 mb-8 max-w-md mx-auto">
+                  Créez des règles personnalisées pour répondre automatiquement, alerter votre équipe ou trier vos avis. Disponible dans le plan Pro.
+              </p>
+              <Button onClick={() => navigate('/billing')} className="shadow-lg shadow-indigo-200">Passer au plan Pro</Button>
           </div>
       );
   }
 
-  if (showBuilder) {
-    return (
-      <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" onClick={() => setShowBuilder(false)}>← Retour</Button>
-          <h1 className="text-2xl font-bold text-slate-900">Créer un Workflow</h1>
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-             <div className="p-4 border-b border-slate-200 font-semibold bg-slate-50 rounded-t-xl">1. Nom & Déclencheur</div>
-             <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Nom du Workflow</label>
-                        <Input value={builderName} onChange={(e) => setBuilderName(e.target.value)} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Quand ceci arrive :</label>
-                        <select className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border bg-white">
-                            <option value="review_created">Nouvel Avis Reçu</option>
-                            <option value="review_updated">Avis Mis à jour</option>
-                        </select>
-                    </div>
-                </div>
-             </CardContent>
-          </Card>
-
-          <Card>
-            <div className="p-4 border-b border-slate-200 font-semibold bg-slate-50 rounded-t-xl">2. Conditions</div>
-            <CardContent>
-              <div className="space-y-4">
-                  <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Si la note est...</label>
-                      <div className="flex gap-4 items-center">
-                          <select 
-                            className="block w-48 rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 sm:text-sm px-3 py-2 border bg-white"
-                            value={builderConditionOperator}
-                            onChange={(e) => setBuilderConditionOperator(e.target.value)}
-                          >
-                              <option value="gte">Supérieur ou égal à</option>
-                              <option value="lte">Inférieur ou égal à</option>
-                              <option value="equals">Égal à</option>
-                          </select>
-                          <select 
-                            className="block w-24 rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 sm:text-sm px-3 py-2 border bg-white"
-                            value={builderConditionRating}
-                            onChange={(e) => setBuilderConditionRating(parseInt(e.target.value))}
-                          >
-                              <option value={5}>5 ★</option>
-                              <option value={4}>4 ★</option>
-                              <option value={3}>3 ★</option>
-                              <option value={2}>2 ★</option>
-                              <option value={1}>1 ★</option>
-                          </select>
-                      </div>
-                  </div>
-                  <div className="p-4 bg-slate-50 border border-slate-200 border-dashed rounded-lg text-center">
-                    <Button variant="outline" size="sm" icon={Plus}>Ajouter une autre Condition</Button>
-                  </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-             <div className="p-4 border-b border-slate-200 font-semibold bg-slate-50 rounded-t-xl">3. Actions</div>
-             <CardContent>
-               <div className="space-y-4">
-                   <div>
-                       <label className="block text-sm font-medium text-slate-700 mb-2">Effectuer cette action :</label>
-                       <select 
-                            className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border mb-4 bg-white"
-                            value={builderAction}
-                            onChange={(e) => setBuilderAction(e.target.value)}
-                        >
-                            <option value="notify">Envoyer une alerte Email</option>
-                            <option value="generate_ai_reply">Générer un brouillon de réponse IA</option>
-                            <option value="auto_reply">Répondre automatiquement (Auto-Pilot)</option>
-                            <option value="publish_social">Publier sur les Réseaux Sociaux (Marketing)</option>
-                       </select>
-
-                       {builderAction === 'publish_social' && (
-                           <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 animate-in fade-in slide-in-from-top-2">
-                               <label className="block text-sm font-bold text-indigo-900 mb-2 flex items-center gap-2">
-                                   <Share2 className="h-4 w-4" /> Destination
-                               </label>
-                               <div className="flex gap-4">
-                                   <label className="flex items-center gap-2 cursor-pointer">
-                                       <input 
-                                            type="radio" 
-                                            name="platform" 
-                                            value="instagram" 
-                                            checked={builderPlatform === 'instagram'}
-                                            onChange={() => setBuilderPlatform('instagram')}
-                                            className="text-indigo-600 focus:ring-indigo-500"
-                                       />
-                                       <span className="text-sm">Instagram</span>
-                                   </label>
-                                   <label className="flex items-center gap-2 cursor-pointer">
-                                       <input 
-                                            type="radio" 
-                                            name="platform" 
-                                            value="facebook"
-                                            checked={builderPlatform === 'facebook'}
-                                            onChange={() => setBuilderPlatform('facebook')}
-                                            className="text-indigo-600 focus:ring-indigo-500"
-                                       />
-                                       <span className="text-sm">Facebook</span>
-                                   </label>
-                               </div>
-                               <p className="text-xs text-indigo-700 mt-2">
-                                   L'IA générera automatiquement un visuel et une légende optimisée pour ce réseau.
-                               </p>
-                           </div>
-                       )}
-                   </div>
-               </div>
-             </CardContent>
-          </Card>
-
-          <div className="flex justify-end gap-3">
-             <Button variant="ghost" onClick={() => setShowBuilder(false)}>Annuler</Button>
-             <Button variant="primary" icon={Play} onClick={handleCreateWorkflow} isLoading={isCreating}>Sauvegarder & Activer</Button>
-          </div>
-        </div>
-      </div>
-    );
+  if (isEditing) {
+      return <WorkflowEditor workflow={editingWorkflow} onSave={handleSaveWorkflow} onCancel={() => { setIsEditing(false); setEditingWorkflow(null); }} />;
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Automatisation</h1>
-          <p className="text-slate-500">Gérez le pilote automatique de votre relation client.</p>
+          <p className="text-slate-500">Pilote automatique et règles de gestion intelligentes.</p>
         </div>
         <div className="flex gap-3">
-            <Button 
-                variant="secondary" 
-                icon={Play} 
-                onClick={handleRunAutomation} 
-                isLoading={isRunning}
-                className="shadow-sm border-indigo-200 text-indigo-700 bg-indigo-50"
-            >
-                Exécuter les règles maintenant
-            </Button>
-            <Button onClick={() => setShowBuilder(true)} icon={Plus}>Nouveau Workflow</Button>
+            <Button variant="secondary" icon={Play} onClick={handleRunManually} isLoading={isRunning}>Exécuter</Button>
+            <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }}>Créer un Workflow</Button>
         </div>
       </div>
-
-      {/* System Status Panel */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2 bg-slate-900 text-white border-slate-800">
-              <CardContent className="p-6 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/30">
-                          <Activity className="h-6 w-6" />
-                      </div>
-                      <div>
-                          <h3 className="font-bold text-lg">Pilote Automatique Actif</h3>
-                          <p className="text-slate-400 text-sm">Le système surveille vos avis 24h/24 et 7j/7.</p>
-                      </div>
-                  </div>
-                  <div className="text-right hidden sm:block">
-                      <div className="text-2xl font-bold text-green-400">100%</div>
-                      <div className="text-xs text-slate-500 uppercase tracking-wider">Uptime</div>
-                  </div>
-              </CardContent>
-          </Card>
-
-          <Card>
-              <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-slate-900 flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-slate-400" />
-                          Fréquence
-                      </h4>
-                      <Badge variant="neutral">10 min</Badge>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-                      <div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: '30%' }}></div>
-                  </div>
-                  <p className="text-xs text-slate-500">Prochaine exécution dans 7 minutes.</p>
-              </CardContent>
-          </Card>
-      </div>
-
-      {lastRunResult && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      <h4 className="font-bold text-green-800 text-sm">Exécution manuelle terminée</h4>
-                  </div>
-                  <ul className="text-sm text-green-700 list-disc list-inside ml-7">
-                      <li>{lastRunResult.processed} avis analysés</li>
-                      <li>{lastRunResult.actions} actions (Réponses ou Posts)</li>
-                      <li>{lastRunResult.alerts} alertes envoyées</li>
-                  </ul>
-              </div>
-          </div>
-      )}
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Règles de Workflow</h2>
-        </div>
-        {workflows.map(wf => (
-          <WorkflowItem key={wf.id} workflow={wf} />
-        ))}
-        {workflows.length === 0 && <div className="text-slate-400 italic text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200">Aucun workflow configuré. Créez-en un pour commencer l'automatisation.</div>}
-      </div>
-      
-      {/* Footer Hint */}
-      <div className="flex items-start gap-3 p-4 bg-indigo-50 rounded-lg border border-indigo-100 text-sm text-indigo-800">
-          <Shield className="h-5 w-5 shrink-0 mt-0.5" />
-          <p>
-              <strong>Sécurité activée :</strong> Par défaut, toutes les réponses automatiques sont enregistrées en tant que "Brouillon" pour validation humaine. Vous pouvez changer ce comportement dans les réglages avancés de chaque règle.
-          </p>
+          {workflows.length === 0 && (
+              <div className="p-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                  <p className="text-slate-500 mb-4">Aucun workflow configuré.</p>
+                  <Button variant="outline" onClick={() => { setEditingWorkflow(null); setIsEditing(true); }}>Créer votre première règle</Button>
+              </div>
+          )}
+
+          {workflows.map(wf => (
+              <Card key={wf.id} className="hover:shadow-md transition-shadow group">
+                  <CardContent className="p-5 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                          <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${wf.enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                              <Zap className="h-6 w-6" />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-slate-900 text-lg">{wf.name}</h3>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                  {wf.conditions.map((c, i) => (
+                                      <Badge key={i} variant="neutral" className="text-[10px]">
+                                          {c.field} {c.operator === 'equals' ? '=' : c.operator} {c.value}
+                                      </Badge>
+                                  ))}
+                                  <ArrowRight className="h-3 w-3 text-slate-300 self-center" />
+                                  {wf.actions.map((a, i) => (
+                                      <Badge key={i} variant="default" className="text-[10px]">
+                                          {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type}
+                                      </Badge>
+                                  ))}
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-2">
+                              <span className={`text-sm font-medium ${wf.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{wf.enabled ? 'Actif' : 'Pause'}</span>
+                              <Toggle checked={wf.enabled} onChange={() => handleToggle(wf)} />
+                          </div>
+                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button size="xs" variant="ghost" icon={Settings} onClick={() => { setEditingWorkflow(wf); setIsEditing(true); }}>Éditer</Button>
+                              <button onClick={() => handleDelete(wf.id)} className="p-2 text-slate-400 hover:text-red-500 rounded"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                      </div>
+                  </CardContent>
+              </Card>
+          ))}
       </div>
     </div>
   );

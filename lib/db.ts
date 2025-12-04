@@ -265,12 +265,12 @@ export const INITIAL_WORKFLOWS: WorkflowRule[] = [
     enabled: true,
     trigger: 'review_created',
     conditions: [
-      { field: 'rating', operator: 'equals', value: 5 },
-      { field: 'source', operator: 'equals', value: 'google' }
+      { id: 'c1', field: 'rating', operator: 'equals', value: 5 },
+      { id: 'c2', field: 'source', operator: 'equals', value: 'google' }
     ],
     actions: [
-      { type: 'generate_ai_reply', config: { tone: 'enthusiastic' } },
-      { type: 'auto_reply', config: { delay_minutes: 15 } }
+      { id: 'a1', type: 'generate_ai_reply', config: { tone: 'enthusiastic' } },
+      { id: 'a2', type: 'auto_reply', config: { delay_minutes: 15 } }
     ]
   }
 ];
