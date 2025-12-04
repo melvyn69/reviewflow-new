@@ -1,5 +1,6 @@
 
 
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -22,7 +23,6 @@ import {
   WebhookConfig,
   AppNotification
 } from '../types';
-import { GoogleGenAI } from '@google/genai';
 
 // --- SERVICE HELPER ---
 
@@ -577,16 +577,37 @@ const googleService = {
 };
 
 const aiService = {
+      // SECURE AI GENERATION VIA EDGE FUNCTION
       generateReply: async (review: Review, options: any) => {
-          const apiKey = process.env.API_KEY; 
-          if (!apiKey) throw new Error("Clé API manquante");
-          const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents: `Rédige une réponse à cet avis ${review.rating}/5: "${review.body}". Ton: ${options.tone}.`,
+          if (!isSupabaseConfigured()) {
+              // Fallback for demo mode
+              return "Réponse générée par l'IA (Mode Démo)";
+          }
+
+          const { data: { session } } = await supabase!.auth.getSession();
+          if (!session) throw new Error("Unauthorized");
+
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai_generate`, {
+              method: 'POST',
+              headers: { 
+                  'Authorization': `Bearer ${session.access_token}`,
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                  task: 'generate_reply',
+                  context: { review, ...options }
+              })
           });
-          return response.text || "";
+
+          if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.error || "Erreur de génération IA");
+          }
+
+          const data = await response.json();
+          return data.text || "";
       },
+      
       previewBrandVoice: async (brand: BrandSettings, mockReview: any) => { return "Réponse simulée par l'IA..."; },
       
       // PRODUCTION-READY SOCIAL POST GENERATION
@@ -595,47 +616,32 @@ const aiService = {
           const org = await organizationService.get();
           enforceGrowthPlan(org);
 
-          const apiKey = process.env.API_KEY;
-          
-          // Fallback if no key
-          if (!apiKey) {
-              console.warn("Gemini API Key missing. Using fallback.");
+          if (!isSupabaseConfigured()) {
               return `Merci à ${review.author_name} pour ce superbe retour ! ⭐⭐⭐⭐⭐ "${review.body}"`;
           }
-          
-          const ai = new GoogleGenAI({ apiKey });
-          
-          const prompt = `
-            Act as a world-class Social Media Manager.
-            Platform: ${platform} (Instagram, LinkedIn, or Facebook).
-            Context: We received a glowing 5-star review from a customer.
-            Task: Write a captivating, platform-native caption to go with an image of this review.
-            
-            Review Details:
-            - Author: ${review.author_name}
-            - Text: "${review.body}"
-            - Rating: ${review.rating}/5
-            
-            Guidelines:
-            - Language: French (Français)
-            - Tone: Enthusiastic, grateful, and professional.
-            - Include 3-5 relevant emojis.
-            - Include 3-5 relevant hashtags at the end.
-            - For LinkedIn: Keep it professional and focused on customer satisfaction/excellence.
-            - For Instagram: Keep it visual, engaging and use line breaks.
-            - DO NOT wrap the output in quotes.
-          `;
-          
-          try {
-              const response = await ai.models.generateContent({
-                  model: "gemini-2.5-flash",
-                  contents: prompt
-              });
-              return response.text || "";
-          } catch (e) {
-              console.error("AI Generation Error:", e);
-              return `Merci à ${review.author_name} pour ce superbe retour ! ⭐ "${review.body}"`;
+
+          const { data: { session } } = await supabase!.auth.getSession();
+          if (!session) throw new Error("Unauthorized");
+
+          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai_generate`, {
+              method: 'POST',
+              headers: { 
+                  'Authorization': `Bearer ${session.access_token}`,
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                  task: 'social_post',
+                  context: { review, platform }
+              })
+          });
+
+          if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.error || "Erreur de génération IA");
           }
+
+          const data = await response.json();
+          return data.text || "";
       },
       runCustomTask: async (payload: any) => { return { result: "ok" }; }
 };
