@@ -49,13 +49,59 @@ VITE_STRIPE_PUBLIC_KEY=votre_cle_publique_stripe
 3. Configurez les ID OAuth et ajoutez l'URL de votre site en "Redirect URI".
 4. Copiez les Client ID/Secret dans Supabase.
 
-### 4. Automatisation (Edge Functions)
+### 4. Déploiement des Edge Functions
 
-Pour que l'IA réponde la nuit (24/7) :
+Pour que le backend fonctionne :
 
-1. Installez le CLI Supabase.
-2. Déployez la fonction : `supabase functions deploy process_reviews`.
-3. Ajoutez votre clé Gemini : `supabase secrets set API_KEY=votre_cle_api`.
+1. Installez Supabase CLI : `npm install -g supabase`.
+2. Connectez-vous : `supabase login`.
+3. Liez votre projet : `supabase link --project-ref votre-ref-projet`.
+4. Ajoutez vos secrets de production :
+   ```bash
+   supabase secrets set GOOGLE_CLIENT_ID=votre_id GOOGLE_CLIENT_SECRET=votre_secret
+   supabase secrets set PROJECT_URL=https://votre-ref.supabase.co
+   supabase secrets set SERVICE_ROLE=votre_cle_service_role_supabase
+   ```
+5. Déployez les fonctions :
+   ```bash
+   supabase functions deploy fetch_google_reviews --no-verify-jwt
+   supabase functions deploy fetch_google_locations --no-verify-jwt
+   supabase functions deploy cron_sync_reviews --no-verify-jwt
+   supabase functions deploy process_reviews --no-verify-jwt
+   ```
+
+### 5. Activation de l'Automatisation (CRON)
+
+Pour que les avis se mettent à jour automatiquement toutes les heures sans action utilisateur :
+
+1. Allez dans le Dashboard Supabase > **SQL Editor**.
+2. Créez une nouvelle requête (New Query).
+3. Copiez-collez le code suivant (remplacez les valeurs `<...>` par les vôtres) :
+
+```sql
+-- 1. Active l'extension de planification
+create extension if not exists pg_cron;
+
+-- 2. Nettoyage (au cas où)
+select cron.unschedule('sync-google-reviews-hourly');
+
+-- 3. Planification du job (Toutes les heures à la minute 0)
+-- REMPLACEZ <PROJECT_REF> par votre ID de projet (ex: abcdefghijklm)
+-- REMPLACEZ <SERVICE_ROLE_KEY> par votre clé secrète Supabase (Settings > API > service_role)
+select cron.schedule(
+  'sync-google-reviews-hourly',
+  '0 * * * *', 
+  $$
+  select
+    net.http_post(
+        url:='https://<PROJECT_REF>.supabase.co/functions/v1/cron_sync_reviews',
+        headers:='{"Content-Type": "application/json", "Authorization": "Bearer <SERVICE_ROLE_KEY>"}'::jsonb,
+        body:='{}'::jsonb
+    ) as request_id;
+  $$
+);
+```
+4. Cliquez sur **Run**.
 
 ## 📝 Notes pour le développeur
 
