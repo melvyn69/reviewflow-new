@@ -3,10 +3,23 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
 import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select } from '../components/ui';
-import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings } from 'lucide-react';
+import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const WorkflowTemplateCard = ({ title, description, icon: Icon, color, onClick }: any) => (
+    <div 
+        onClick={onClick}
+        className="flex flex-col p-4 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+    >
+        <div className={`h-10 w-10 rounded-lg ${color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+            <Icon className="h-5 w-5 text-white" />
+        </div>
+        <h4 className="font-bold text-slate-900 text-sm mb-1">{title}</h4>
+        <p className="text-xs text-slate-500 leading-relaxed">{description}</p>
+    </div>
+);
 
 const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule | null, onSave: (w: WorkflowRule) => void, onCancel: () => void }) => {
     const [name, setName] = useState(workflow?.name || 'Nouveau Workflow');
@@ -318,6 +331,57 @@ export const AutomationPage = () => {
       }
   };
 
+  const applyTemplate = (template: any) => {
+      const newWf: WorkflowRule = {
+          id: generateId(),
+          name: template.title,
+          enabled: true,
+          trigger: 'review_created',
+          conditions: template.conditions,
+          actions: template.actions
+      };
+      setEditingWorkflow(newWf);
+      setIsEditing(true);
+  };
+
+  const TEMPLATES = [
+      {
+          title: "Win-Back VIP",
+          description: "Générer une réponse enthousiaste et taguer les avis 5 étoiles pour fidélisation.",
+          icon: Gift,
+          color: "bg-purple-500",
+          conditions: [{ id: generateId(), field: 'rating', operator: 'equals', value: 5 }],
+          actions: [
+              { id: generateId(), type: 'generate_ai_reply', config: { tone: 'enthusiastic' } },
+              { id: generateId(), type: 'add_tag', config: { tag_name: 'VIP' } }
+          ]
+      },
+      {
+          title: "Gestion de Crise",
+          description: "Alerte email immédiate et brouillon d'excuse pour tout avis négatif.",
+          icon: AlertTriangle,
+          color: "bg-red-500",
+          conditions: [{ id: generateId(), field: 'rating', operator: 'lte', value: 2 }],
+          actions: [
+              { id: generateId(), type: 'email_alert', config: { email_to: 'manager@exemple.com' } },
+              { id: generateId(), type: 'generate_ai_reply', config: { tone: 'apologetic' } }
+          ]
+      },
+      {
+          title: "Pilote Automatique",
+          description: "Répondre automatiquement aux avis positifs sans texte (Note seule).",
+          icon: CheckCircle2,
+          color: "bg-green-500",
+          conditions: [
+              { id: generateId(), field: 'rating', operator: 'gte', value: 4 },
+              { id: generateId(), field: 'content', operator: 'equals', value: '' } // Contenu vide
+          ],
+          actions: [
+              { id: generateId(), type: 'auto_reply', config: { delay_minutes: 60, tone: 'professionnel' } }
+          ]
+      }
+  ];
+
   if (loading) return <div className="p-12 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
   if (org && org.subscription_plan === 'free') {
@@ -344,19 +408,31 @@ export const AutomationPage = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Automatisation</h1>
-          <p className="text-slate-500">Pilote automatique et règles de gestion intelligentes.</p>
+          <p className="text-slate-500">Gagnez du temps avec des scénarios intelligents.</p>
         </div>
         <div className="flex gap-3">
-            <Button variant="secondary" icon={Play} onClick={handleRunManually} isLoading={isRunning}>Exécuter</Button>
-            <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }}>Créer un Workflow</Button>
+            <Button variant="secondary" icon={Play} onClick={handleRunManually} isLoading={isRunning}>Tester</Button>
+            <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }}>Créer Manuellement</Button>
         </div>
       </div>
 
+      {/* Templates Gallery */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          {TEMPLATES.map((tpl, i) => (
+              <WorkflowTemplateCard key={i} {...tpl} onClick={() => applyTemplate(tpl)} />
+          ))}
+      </div>
+
       <div className="space-y-4">
+          <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2 mt-8 mb-4">
+              <Zap className="h-5 w-5 text-indigo-600" />
+              Vos Scénarios Actifs
+          </h3>
+          
           {workflows.length === 0 && (
               <div className="p-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <p className="text-slate-500 mb-4">Aucun workflow configuré.</p>
-                  <Button variant="outline" onClick={() => { setEditingWorkflow(null); setIsEditing(true); }}>Créer votre première règle</Button>
+                  <p className="text-slate-500 mb-4">Aucune règle active.</p>
+                  <p className="text-xs text-slate-400">Cliquez sur un modèle ci-dessus pour commencer.</p>
               </div>
           )}
 

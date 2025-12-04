@@ -635,7 +635,26 @@ const competitorsService = {
 };
 
 const customersService = {
-    list: async () => []
+    list: async (): Promise<Customer[]> => {
+        // En prod, ceci viendrait d'une table 'customers' déduite des avis
+        await new Promise(r => setTimeout(r, 500));
+        return [
+            { id: '1', name: 'Sophie Dubois', email: 'sophie.d@gmail.com', source: 'google', last_interaction: new Date().toISOString(), total_reviews: 3, average_rating: 5, status: 'promoter', ltv_estimate: 450, history: [
+                { id: 'h1', type: 'review', date: new Date().toISOString(), details: 'Avis 5 étoiles laissé', sentiment: 'positive' },
+                { id: 'h2', type: 'email_sent', date: new Date(Date.now() - 86400000).toISOString(), details: 'Email de remerciement envoyé' }
+            ] },
+            { id: '2', name: 'Jean Michel', email: '', source: 'google', last_interaction: new Date(Date.now() - 100000000).toISOString(), total_reviews: 1, average_rating: 2, status: 'detractor', ltv_estimate: 0, history: [
+                { id: 'h3', type: 'review', date: new Date(Date.now() - 100000000).toISOString(), details: 'Avis critique sur le prix', sentiment: 'negative' }
+            ] },
+            { id: '3', name: 'Emilie Blanc', email: 'emilie.b@outlook.fr', source: 'facebook', last_interaction: new Date(Date.now() - 200000000).toISOString(), total_reviews: 2, average_rating: 4, status: 'passive', ltv_estimate: 120, history: [] },
+            { id: '4', name: 'Marc L.', email: '', source: 'tripadvisor', last_interaction: new Date(Date.now() - 5000000).toISOString(), total_reviews: 5, average_rating: 4.8, status: 'promoter', ltv_estimate: 800, history: [] },
+        ];
+    },
+    getCustomerDetails: async (id: string) => {
+        // Mock simple fetch
+        const list = await customersService.list();
+        return list.find(c => c.id === id);
+    }
 };
 
 const adminService = {

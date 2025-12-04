@@ -236,6 +236,14 @@ export interface AppNotification {
   link?: string;
 }
 
+export interface CustomerInteraction {
+    id: string;
+    type: 'review' | 'email_sent' | 'coupon_used' | 'note';
+    date: string;
+    details: string;
+    sentiment?: 'positive' | 'negative' | 'neutral';
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -246,4 +254,6 @@ export interface Customer {
   total_reviews: number;
   average_rating: number;
   status: 'promoter' | 'passive' | 'detractor';
+  ltv_estimate?: number; // Lifetime Value estimée
+  history?: CustomerInteraction[];
 }

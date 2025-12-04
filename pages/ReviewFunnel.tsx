@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 
 const POSITIVE_TAGS = ['Accueil', 'Rapidité', 'Propreté', 'Qualité', 'Ambiance', 'Conseil'];
 const NEGATIVE_TAGS = ['Attente', 'Service', 'Prix', 'Bruit', 'Hygiène', 'Qualité'];
@@ -17,14 +18,19 @@ const Confetti = () => (
 
 export const ReviewFunnel = () => {
     const { locationId } = useParams();
+    const [searchParams] = useSearchParams();
     const toast = useToast();
     
-    const [step, setStep] = useState<'rating' | 'details' | 'redirecting' | 'success'>('rating');
+    // Steps: rating -> capture (VIP) -> redirecting -> success
+    const [step, setStep] = useState<'rating' | 'capture' | 'details' | 'redirecting' | 'success'>('rating');
     const [rating, setRating] = useState(0);
     const [feedback, setFeedback] = useState('');
     const [contact, setContact] = useState('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
+    
+    // Identifier un client via lien de campagne (ex: ?cid=123)
+    const customerId = searchParams.get('cid');
     
     const [locationInfo, setLocationInfo] = useState<{name: string, city: string, googleUrl?: string} | null>(null);
 
@@ -35,7 +41,6 @@ export const ReviewFunnel = () => {
                     if (info) {
                         setLocationInfo(info as any);
                     } else {
-                        // Fallback si l'ID est introuvable (évite l'écran blanc)
                         setLocationInfo({ name: "Établissement", city: "", googleUrl: "" });
                     }
                 })
@@ -48,30 +53,47 @@ export const ReviewFunnel = () => {
         
         if (score >= 4) {
             // FLUX POSITIF
-            setStep('redirecting');
-            
-            // Enregistrement silencieux pour les stats
-            if (locationId) {
-                api.public.submitFeedback(locationId, score, "Avis positif rapide (Stars only)", "", [])
-                    .catch(err => console.error("Erreur save stats:", err));
+            // Si on connait déjà le client (via lien campagne), on redirige direct
+            // Sinon, on tente de capturer son email (Lead Magnet)
+            if (customerId) {
+                launchRedirect();
+            } else {
+                setStep('capture');
             }
-            
-            // Tentative de redirection
-            setTimeout(() => {
-                if (locationInfo?.googleUrl && locationInfo.googleUrl.startsWith('http')) {
-                    window.location.href = locationInfo.googleUrl;
-                } else {
-                    // Si pas de lien, on reste sur l'écran de succès sans erreur
-                    console.log("Lien Google non configuré, redirection annulée.");
-                }
-            }, 2000);
-
         } else {
             // FLUX NÉGATIF : Formulaire interne
             setTimeout(() => {
                 setStep('details');
             }, 300);
         }
+    };
+
+    const launchRedirect = () => {
+        setStep('redirecting');
+        
+        // Enregistrement silencieux pour les stats
+        if (locationId) {
+            api.public.submitFeedback(locationId, rating, "Avis positif (Redirection)", contact, [])
+                .catch(err => console.error("Erreur save stats:", err));
+        }
+        
+        // Tentative de redirection
+        setTimeout(() => {
+            if (locationInfo?.googleUrl && locationInfo.googleUrl.startsWith('http')) {
+                window.location.href = locationInfo.googleUrl;
+            } else {
+                console.log("Lien Google non configuré.");
+            }
+        }, 2500);
+    };
+
+    const handleCaptureSubmit = async () => {
+        // On sauvegarde le contact avant de rediriger
+        launchRedirect();
+    };
+
+    const handleSkipCapture = () => {
+        launchRedirect();
     };
 
     const toggleTag = (tag: string) => {
@@ -90,7 +112,6 @@ export const ReviewFunnel = () => {
             setStep('success');
         } catch (error: any) {
             console.error("Feedback submission error", error);
-            // Afficher le message d'erreur réel pour le débogage
             toast.error(`Erreur: ${error.message || "Problème technique"}`);
         } finally {
             setLoading(false);
@@ -99,7 +120,6 @@ export const ReviewFunnel = () => {
 
     if (!locationInfo) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="h-10 w-10 animate-spin text-indigo-600"/></div>;
 
-    // Vérification pour l'affichage conditionnel du message de redirection
     const hasGoogleLink = locationInfo.googleUrl && locationInfo.googleUrl.length > 5;
 
     return (
@@ -147,18 +167,57 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
+                    {/* STEP 1.5: CAPTURE (Smart Gate) */}
+                    {step === 'capture' && (
+                        <div className="animate-in slide-in-from-right-8 duration-300">
+                            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-6">
+                                <Gift className="h-8 w-8 text-indigo-600 mx-auto mb-2" />
+                                <h3 className="font-bold text-indigo-900">Merci pour cette note !</h3>
+                                <p className="text-sm text-indigo-700 mt-1">
+                                    Laissez votre email pour rejoindre notre Club VIP et tenter de gagner une surprise mensuelle.
+                                </p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                    <Input 
+                                        placeholder="votre@email.com" 
+                                        className="pl-10 h-12 rounded-xl border-slate-300"
+                                        value={contact}
+                                        onChange={(e) => setContact(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <Button 
+                                    className="w-full h-12 rounded-xl shadow-lg shadow-indigo-200" 
+                                    onClick={handleCaptureSubmit}
+                                    disabled={!contact.includes('@')}
+                                >
+                                    Rejoindre & Publier mon avis
+                                </Button>
+                                <button 
+                                    onClick={handleSkipCapture}
+                                    className="text-xs text-slate-400 hover:text-slate-600 underline"
+                                >
+                                    Non merci, publier directement
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* STEP 2: REDIRECTING (Positive) */}
                     {step === 'redirecting' && (
                         <div className="animate-in zoom-in-95 duration-500 py-8">
                              <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-6 animate-bounce">
                                 <Heart className="h-12 w-12 fill-current" />
                             </div>
-                            <h2 className="text-2xl font-bold text-slate-900 mb-4">Merci, c'est génial !</h2>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-4">C'est génial !</h2>
                             
                             {hasGoogleLink ? (
                                 <>
                                     <p className="text-slate-600 mb-8 text-lg">
-                                        Nous vous redirigeons vers Google pour partager votre expérience...
+                                        Redirection vers Google pour confirmer votre étoile...
                                     </p>
                                     <div className="flex justify-center">
                                         <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
@@ -170,10 +229,7 @@ export const ReviewFunnel = () => {
                             ) : (
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                     <p className="text-slate-600 mb-2">
-                                        Nous sommes ravis que vous ayez apprécié !
-                                    </p>
-                                    <p className="text-xs text-slate-400 italic">
-                                        (La redirection Google n'est pas encore configurée par l'établissement)
+                                        Merci infiniment pour votre soutien.
                                     </p>
                                     <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retour</Button>
                                 </div>
