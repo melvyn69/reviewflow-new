@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Review, StaffMember } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, User, Users } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle } from '../components/ui';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Code, Eye, Moon, Sun, Star, Loader2, AlertCircle, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, User, Users, Sliders } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { SocialShareModal } from '../components/SocialShareModal';
 import { QRCodeSVG } from 'qrcode.react';
@@ -24,11 +24,15 @@ export const CollectPage = () => {
   const [qrBgColor, setQrBgColor] = useState('#ffffff');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('all'); // NEW: Staff selection
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('all');
   
-  // Widget State
+  // Widget Customization State
   const [widgetType, setWidgetType] = useState<'carousel' | 'list' | 'badge'>('carousel');
   const [widgetTheme, setWidgetTheme] = useState<'light' | 'dark'>('light');
+  const [widgetPrimaryColor, setWidgetPrimaryColor] = useState('#4f46e5');
+  const [widgetShowDate, setWidgetShowDate] = useState(true);
+  const [widgetShowBorder, setWidgetShowBorder] = useState(true);
+  const [widgetBorderRadius, setWidgetBorderRadius] = useState(12);
   
   const toast = useToast();
 
@@ -84,7 +88,6 @@ export const CollectPage = () => {
   if (selectedStaffId !== 'all') {
       const staff = org?.staff_members?.find(s => s.id === selectedStaffId);
       if (staff) {
-          // Use name normalized or ID
           reviewLink += `?staff=${encodeURIComponent(staff.name)}`;
       }
   }
@@ -94,15 +97,24 @@ export const CollectPage = () => {
     toast.success("Lien copié !");
   };
 
+  // Generate dynamic iframe URL based on all customization options
+  const getWidgetUrl = () => {
+      const baseUrl = window.location.origin + window.location.pathname;
+      const params = new URLSearchParams({
+          theme: widgetTheme,
+          type: widgetType,
+          color: widgetPrimaryColor.replace('#', ''),
+          showDate: widgetShowDate.toString(),
+          border: widgetShowBorder.toString(),
+          radius: widgetBorderRadius.toString()
+      });
+      return `${baseUrl}#/widget/${selectedLocationId}?${params.toString()}`;
+  };
+
   const handleCopyWidgetCode = () => {
-      // Génère le code iframe réel qui pointe vers la nouvelle route WidgetPage
-      const appUrl = window.location.origin + window.location.pathname; // Base URL
-      const iframeSrc = `${appUrl}#/widget/${selectedLocationId}?theme=${widgetTheme}&type=${widgetType}`;
-      
-      const height = widgetType === 'badge' ? '60px' : widgetType === 'list' ? '600px' : '250px';
-      
-      const code = `<iframe src="${iframeSrc}" width="100%" height="${height}" frameborder="0" style="border:none; overflow:hidden; border-radius:12px;"></iframe>`;
-      
+      const iframeSrc = getWidgetUrl();
+      const height = widgetType === 'badge' ? '60px' : widgetType === 'list' ? '600px' : '280px';
+      const code = `<iframe src="${iframeSrc}" width="100%" height="${height}" frameborder="0" style="border:none; overflow:hidden; border-radius:${widgetBorderRadius}px;"></iframe>`;
       navigator.clipboard.writeText(code);
       toast.success("Code HTML copié !");
   };
@@ -120,7 +132,6 @@ export const CollectPage = () => {
   };
 
   const handleDownloadQr = () => {
-    // Basic download for now - real impl would canvas draw the SVG
     toast.success("Téléchargement lancé (SVG)");
     const svg = document.getElementById("qr-code-svg");
     if (svg) {
@@ -200,7 +211,7 @@ export const CollectPage = () => {
             onClick={() => setActiveTab('widgets')}
             className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === 'widgets' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
         >
-            Widgets Site Web
+            Widget Studio
         </button>
         <button
             onClick={() => setActiveTab('social')}
@@ -408,92 +419,125 @@ export const CollectPage = () => {
           </div>
       )}
 
-      {/* ... widgets tab ... */}
+      {/* ... widgets tab (NEW WYSIWYG EDITOR) ... */}
       {activeTab === 'widgets' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
               <div className="space-y-6">
                   <Card>
                       <CardHeader>
-                          <CardTitle>Configuration</CardTitle>
+                          <CardTitle className="flex items-center gap-2">
+                              <Sliders className="h-5 w-5 text-indigo-600" />
+                              Personnalisation
+                          </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-6">
                           <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-2">Type de Widget</label>
-                              <div className="space-y-2">
-                                  <div onClick={() => setWidgetType('carousel')} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${widgetType === 'carousel' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
-                                      <Layout className="h-5 w-5 text-indigo-600" />
-                                      <div>
-                                          <div className="font-medium text-sm text-slate-900">Carrousel</div>
-                                          <div className="text-xs text-slate-500">Défilement horizontal</div>
-                                      </div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">Style d'affichage</label>
+                              <div className="grid grid-cols-3 gap-2">
+                                  <div onClick={() => setWidgetType('carousel')} className={`flex flex-col items-center justify-center p-3 rounded-lg border cursor-pointer transition-all text-center ${widgetType === 'carousel' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                      <Layout className="h-5 w-5 text-indigo-600 mb-1" />
+                                      <span className="text-xs font-medium">Carrousel</span>
                                   </div>
-                                  <div onClick={() => setWidgetType('list')} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${widgetType === 'list' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
-                                      <Layout className="h-5 w-5 text-indigo-600 rotate-90" />
-                                      <div>
-                                          <div className="font-medium text-sm text-slate-900">Liste Verticale</div>
-                                          <div className="text-xs text-slate-500">Tous les avis</div>
-                                      </div>
+                                  <div onClick={() => setWidgetType('list')} className={`flex flex-col items-center justify-center p-3 rounded-lg border cursor-pointer transition-all text-center ${widgetType === 'list' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                      <Layout className="h-5 w-5 text-indigo-600 rotate-90 mb-1" />
+                                      <span className="text-xs font-medium">Liste</span>
                                   </div>
-                                  <div onClick={() => setWidgetType('badge')} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${widgetType === 'badge' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
-                                      <CheckCircle2 className="h-5 w-5 text-indigo-600" />
-                                      <div>
-                                          <div className="font-medium text-sm text-slate-900">Badge</div>
-                                          <div className="text-xs text-slate-500">Note globale compacte</div>
-                                      </div>
+                                  <div onClick={() => setWidgetType('badge')} className={`flex flex-col items-center justify-center p-3 rounded-lg border cursor-pointer transition-all text-center ${widgetType === 'badge' ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                      <CheckCircle2 className="h-5 w-5 text-indigo-600 mb-1" />
+                                      <span className="text-xs font-medium">Badge</span>
                                   </div>
                               </div>
                           </div>
+
                           <div>
-                              <label className="block text-sm font-medium text-slate-700 mb-2">Thème</label>
-                              <div className="flex gap-2">
-                                  <button onClick={() => setWidgetTheme('light')} className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-lg border text-sm font-medium transition-all ${widgetTheme === 'light' ? 'bg-white text-slate-900 border-indigo-600 ring-1 ring-indigo-600' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                                      <Sun className="h-4 w-4" /> Clair
-                                  </button>
-                                  <button onClick={() => setWidgetTheme('dark')} className={`flex-1 flex items-center justify-center gap-2 p-2 rounded-lg border text-sm font-medium transition-all ${widgetTheme === 'dark' ? 'bg-slate-900 text-white border-slate-700 ring-1 ring-slate-700' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                                      <Moon className="h-4 w-4" /> Sombre
-                                  </button>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">Apparence</label>
+                              <div className="space-y-4">
+                                  <div className="flex items-center justify-between">
+                                      <div className="text-sm text-slate-600">Thème Sombre</div>
+                                      <Toggle checked={widgetTheme === 'dark'} onChange={(v) => setWidgetTheme(v ? 'dark' : 'light')} />
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                      <div className="text-sm text-slate-600">Couleur Principale</div>
+                                      <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1">
+                                          <input type="color" value={widgetPrimaryColor} onChange={e => setWidgetPrimaryColor(e.target.value)} className="h-6 w-6 rounded border-none cursor-pointer p-0 bg-transparent" />
+                                      </div>
+                                  </div>
+
+                                  <div>
+                                      <div className="flex justify-between text-sm text-slate-600 mb-1">
+                                          <span>Arrondi</span>
+                                          <span className="text-xs text-slate-400">{widgetBorderRadius}px</span>
+                                      </div>
+                                      <input 
+                                        type="range" min="0" max="24" step="2" 
+                                        value={widgetBorderRadius} 
+                                        onChange={(e) => setWidgetBorderRadius(parseInt(e.target.value))}
+                                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                      />
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">Options</label>
+                              <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                      <div className="text-sm text-slate-600">Afficher la date</div>
+                                      <Toggle checked={widgetShowDate} onChange={setWidgetShowDate} />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                      <div className="text-sm text-slate-600">Bordure visible</div>
+                                      <Toggle checked={widgetShowBorder} onChange={setWidgetShowBorder} />
+                                  </div>
                               </div>
                           </div>
                       </CardContent>
                   </Card>
+                  
                   <Card>
                       <CardHeader>
-                          <CardTitle>Intégration</CardTitle>
+                          <CardTitle>Code d'Intégration</CardTitle>
                       </CardHeader>
                       <CardContent>
-                          <p className="text-xs text-slate-500 mb-3">Copiez ce code et collez-le dans le HTML de votre site web (Wordpress, Wix, etc.).</p>
                           <div className="bg-slate-900 rounded-lg p-3 relative group">
-                              <code className="text-xs font-mono text-green-400 block overflow-x-auto whitespace-pre-wrap">
-                                  {`<iframe src="${window.location.origin + window.location.pathname}#/widget/${selectedLocationId}?theme=${widgetTheme}&type=${widgetType}" width="100%" height="${widgetType === 'badge' ? '60px' : widgetType === 'list' ? '600px' : '250px'}" frameborder="0" style="border:none; overflow:hidden; border-radius:12px;"></iframe>`}
+                              <code className="text-xs font-mono text-green-400 block overflow-x-auto whitespace-pre-wrap break-all">
+                                  {`<iframe src="${getWidgetUrl()}" width="100%" height="${widgetType === 'badge' ? '60px' : widgetType === 'list' ? '600px' : '280px'}" frameborder="0" style="border:none; overflow:hidden; border-radius:${widgetBorderRadius}px;"></iframe>`}
                               </code>
                               <button 
                                 onClick={handleCopyWidgetCode}
-                                className="absolute top-2 right-2 p-1.5 bg-white/10 hover:bg-white/20 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-2 right-2 p-1.5 bg-white/10 hover:bg-white/20 rounded text-white transition-opacity"
                                 title="Copier"
                               >
                                   <Copy className="h-4 w-4" />
                               </button>
                           </div>
+                          <p className="text-xs text-slate-500 mt-2">Copiez ce code et collez-le sur votre site (Wordpress, Wix, etc.).</p>
                       </CardContent>
                   </Card>
               </div>
+
               <div className="lg:col-span-2">
-                  <Card className="h-full flex flex-col">
-                      <CardHeader className="border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                          <CardTitle className="flex items-center gap-2">
-                              <Eye className="h-5 w-5 text-slate-400" />
-                              Aperçu en direct
-                          </CardTitle>
-                          <Badge variant="neutral">Mode: {widgetType}</Badge>
+                  <Card className="h-full flex flex-col border-none shadow-xl bg-slate-50">
+                      <CardHeader className="border-b border-slate-200 bg-white rounded-t-xl flex flex-row justify-between items-center py-4">
+                          <div className="flex items-center gap-2">
+                              <Eye className="h-5 w-5 text-indigo-600" />
+                              <CardTitle>Aperçu en direct</CardTitle>
+                          </div>
+                          <div className="flex gap-1">
+                              <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                              <div className="w-3 h-3 rounded-full bg-amber-400"></div>
+                              <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                          </div>
                       </CardHeader>
-                      <CardContent className={`flex-1 flex items-center justify-center p-8 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] ${widgetTheme === 'dark' ? 'bg-slate-900' : 'bg-slate-100'}`}>
+                      <CardContent className="flex-1 flex items-center justify-center p-8 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] overflow-hidden">
                           {/* Live Iframe Preview */}
-                          <div className="w-full max-w-lg">
+                          <div className={`w-full max-w-lg transition-all duration-500 ${widgetType === 'badge' ? 'max-w-xs' : ''}`}>
                               <iframe 
-                                src={`${window.location.origin + window.location.pathname}#/widget/${selectedLocationId}?theme=${widgetTheme}&type=${widgetType}`}
+                                src={getWidgetUrl()}
                                 width="100%"
-                                height={widgetType === 'badge' ? '60px' : widgetType === 'list' ? '400px' : '250px'}
-                                style={{ border: 'none', overflow: 'hidden', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                height={widgetType === 'badge' ? '60px' : widgetType === 'list' ? '600px' : '280px'}
+                                style={{ border: 'none', overflow: 'hidden', borderRadius: `${widgetBorderRadius}px`, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' }}
                               ></iframe>
                           </div>
                       </CardContent>
@@ -553,60 +597,4 @@ export const CollectPage = () => {
 
                   <Card className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-none">
                       <CardContent className="p-6">
-                          <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                              <Sparkles className="h-5 w-5" /> Conseil Pro
-                          </h3>
-                          <p className="text-indigo-100 text-sm leading-relaxed mb-4">
-                              Les avis avec du texte émotionnel ("Incroyable", "Merci", "J'adore") obtiennent 3x plus d'engagement sur Instagram.
-                          </p>
-                      </CardContent>
-                  </Card>
-              </div>
-
-              <div className="space-y-6">
-                  <Card className="h-full flex flex-col">
-                      <CardHeader>
-                          <CardTitle>Pépites à Partager</CardTitle>
-                          <p className="text-sm text-slate-500">Vos meilleurs avis récents, prêts à être publiés.</p>
-                      </CardHeader>
-                      <CardContent className="flex-1">
-                          {topReviews.length === 0 ? (
-                              <div className="text-center py-12 text-slate-400">
-                                  <Star className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                                  <p>Aucun avis 5 étoiles récent.</p>
-                              </div>
-                          ) : (
-                              <div className="space-y-4">
-                                  {topReviews.map(review => (
-                                      <div key={review.id} className="p-4 border border-slate-200 rounded-xl hover:border-indigo-300 transition-colors bg-white">
-                                          <div className="flex justify-between items-start mb-2">
-                                              <div className="flex items-center gap-2">
-                                                  <div className="h-6 w-6 bg-indigo-100 rounded-full flex items-center justify-center text-[10px] font-bold text-indigo-700">
-                                                      {review.author_name.charAt(0)}
-                                                  </div>
-                                                  <span className="font-medium text-sm text-slate-900">{review.author_name}</span>
-                                              </div>
-                                              <div className="flex text-amber-400">
-                                                  {[1,2,3,4,5].map(i => <Star key={i} className="h-3 w-3 fill-current" />)}
-                                              </div>
-                                          </div>
-                                          <p className="text-sm text-slate-600 italic mb-4 line-clamp-3">"{review.body}"</p>
-                                          <Button size="sm" className="w-full" icon={Share2} onClick={() => setSelectedReviewForPost(review)}>
-                                              Générer le Post
-                                          </Button>
-                                      </div>
-                                  ))}
-                              </div>
-                          )}
-                      </CardContent>
-                  </Card>
-              </div>
-          </div>
-      )}
-
-      {selectedReviewForPost && (
-          <SocialShareModal review={selectedReviewForPost} onClose={() => setSelectedReviewForPost(null)} />
-      )}
-    </div>
-  );
-};
+                          <h3 className
