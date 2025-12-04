@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Competitor, Organization } from '../types';
@@ -70,14 +71,15 @@ export const CompetitorsPage = () => {
             const { latitude, longitude } = position.coords;
             setLocationStatus('found');
 
-            // 2. Call API
+            // 2. Call API via Wrapper
+            // Note: le wrapper `api.competitors.autoDiscover` gère maintenant l'appel à la Edge Function
             const results = await api.competitors.autoDiscover(scanRadius, scanSector, latitude, longitude);
             setScannedResults(results);
             setActiveTab('scan');
             toast.success(`${results.length} concurrents détectés dans la zone.`);
         } catch (e: any) {
             setLocationStatus('error');
-            if (e.code === 1) {
+            if (e.code === 1) { // PERMISSION_DENIED
                 toast.error("Veuillez autoriser la géolocalisation pour scanner votre zone.");
             } else {
                 toast.error(e.message || "Erreur de scan");
@@ -131,7 +133,6 @@ export const CompetitorsPage = () => {
     if (!org) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
     // PAYWALL - PRO (GROWTH) PLAN ONLY
-    // We explicitly check if plan is NOT pro (so free or starter are blocked)
     if (org.subscription_plan === 'free' || org.subscription_plan === 'starter') {
         return (
             <div className="max-w-5xl mx-auto mt-12 relative overflow-hidden rounded-2xl border border-slate-200 shadow-xl bg-white">

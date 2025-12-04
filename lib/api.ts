@@ -1,3 +1,4 @@
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -358,10 +359,8 @@ const offersService = {
             await organizationService.update({ offers: updatedOffers });
         }
     },
-    // VALIDATION RÉELLE EN DB
     validate: async (code: string) => {
         if (!isSupabaseConfigured()) {
-             // Fallback démo si pas de DB
              if (code.startsWith("INVALID")) return { valid: false, reason: "Code inconnu" };
              return { valid: true, discount: "Code Démo Valide (DB Non Connectée)" };
         }
@@ -380,7 +379,6 @@ const offersService = {
             const expires = new Date(coupon.expires_at);
             if (expires < new Date()) return { valid: false, reason: `Expiré depuis le ${expires.toLocaleDateString()}` };
 
-            // On marque le coupon comme utilisé
             await supabase!.from('coupons').update({ status: 'redeemed' }).eq('id', coupon.id);
 
             return { valid: true, discount: `${coupon.offer_title} - ${coupon.discount_detail}` };
@@ -388,9 +386,7 @@ const offersService = {
             return { valid: false, reason: "Erreur technique de validation" };
         }
     },
-    // GÉNÉRATION RÉELLE EN DB
     generateCoupon: async (offerId: string, email?: string): Promise<Coupon | null> => {
-        // Fallback for demo
         if (!isSupabaseConfigured()) {
              const code = `DEMO-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
              return {
@@ -403,7 +399,6 @@ const offersService = {
              };
         }
 
-        // Real logic
         const org = await organizationService.get();
         const offer = org?.offers?.find(o => o.id === offerId);
         if (!offer) return null;
@@ -445,7 +440,6 @@ const reviewsService = {
             try {
                 let query = supabase!.from('reviews').select('*', { count: 'exact' });
                 
-                // Filtering
                 if (filters.status && filters.status !== 'Tout') {
                     query = query.eq('status', filters.status.toLowerCase());
                 }
@@ -462,10 +456,8 @@ const reviewsService = {
                     query = query.ilike('text', `%${filters.search}%`);
                 }
 
-                // Sorting
                 query = query.order('received_at', { ascending: false });
 
-                // Pagination (Scalability)
                 const page = filters.page || 0;
                 const limit = filters.limit || 20;
                 const from = page * limit;
@@ -484,7 +476,6 @@ const reviewsService = {
           }
           return result;
       },
-      // Real-time subscription to review updates
       subscribe: (callback: (payload: any) => void) => {
           if (!isSupabaseConfigured()) return { unsubscribe: () => {} };
           
@@ -502,13 +493,11 @@ const reviewsService = {
           };
       },
       reply: async (id: string, text: string) => {
-          // Si pas de backend, on simule
           if (!isSupabaseConfigured()) {
               console.log("Mock Reply:", text);
               return true;
           }
 
-          // Appel de la Edge Function sécurisée pour poster sur Google
           const { data: { session } } = await supabase!.auth.getSession();
           if (!session) throw new Error("Unauthorized");
 
@@ -597,10 +586,8 @@ const googleService = {
 };
 
 const aiService = {
-      // SECURE AI GENERATION VIA EDGE FUNCTION
       generateReply: async (review: Review, options: any) => {
           if (!isSupabaseConfigured()) {
-              // Fallback for demo mode
               return "Réponse générée par l'IA (Mode Démo)";
           }
 
@@ -627,12 +614,8 @@ const aiService = {
           const data = await response.json();
           return data.text || "";
       },
-      
       previewBrandVoice: async (brand: BrandSettings, mockReview: any) => { return "Réponse simulée par l'IA..."; },
-      
-      // PRODUCTION-READY SOCIAL POST GENERATION
       generateSocialPost: async (review: Review, platform: string) => { 
-          // Enforce plan (Growth required)
           const org = await organizationService.get();
           enforceGrowthPlan(org);
 
@@ -675,7 +658,6 @@ const automationService = {
           const org = await organizationService.get();
           if (!org) throw new Error("Organisation introuvable");
           
-          // Enforce Growth Plan for Automation
           enforceGrowthPlan(org);
 
           let currentWorkflows = (org as any).workflows || [];
@@ -802,7 +784,6 @@ const teamService = {
             
         if (error) return [];
         
-        // Map DB users to User type
         return data.map((u: any) => ({
             id: u.id,
             email: u.email,
@@ -813,7 +794,6 @@ const teamService = {
             organization_id: u.organization_id
         }));
     },
-    // REAL SUPABASE INVITE
     invite: async (email: string, role: string) => {
         const { data: { session } } = await supabase!.auth.getSession();
         if (!session) throw new Error("Unauthorized");
@@ -836,7 +816,6 @@ const teamService = {
     remove: async (id: string) => true
 };
 
-// COMPETITORS PERSISTENCE
 const competitorsService = {
     list: async (): Promise<Competitor[]> => {
         if (isSupabaseConfigured()) {
@@ -860,7 +839,6 @@ const competitorsService = {
                 return true;
             }
         }
-        // Fallback
         const current = await competitorsService.list();
         localStorage.setItem('tracked_competitors', JSON.stringify([...current, { ...c, id: `comp-${Date.now()}` }]));
         return true;
@@ -874,17 +852,17 @@ const competitorsService = {
         localStorage.setItem('tracked_competitors', JSON.stringify(current.filter(c => c.id !== id)));
         return true;
     },
+    // NOUVELLE VERSION CONNECTÉE A L'EDGE FUNCTION
     autoDiscover: async (radius: number, sector: string, lat?: number, lng?: number) => {
         // Enforce Growth Plan
         const org = await organizationService.get();
         enforceGrowthPlan(org);
 
         if (!lat || !lng) {
-            // If no geolocation provided, throw error or fallback to mock if demo mode enabled
             if (isSupabaseConfigured()) {
                 throw new Error("Géolocalisation requise pour le scan.");
             }
-            // Mock fallback
+            // Fallback for purely local dev without backend
             await new Promise(r => setTimeout(r, 1500));
             return [
                 { name: "Brasserie du Coin (Démo)", distance: "300m", rating: 4.5, review_count: 1250, estimated_revenue: "1.2M€", strengths: ["Terrasse"], weaknesses: ["Service Lent"], threat_level: 85 },
@@ -895,6 +873,7 @@ const competitorsService = {
         const { data: { session } } = await supabase!.auth.getSession();
         if (!session) throw new Error("Unauthorized");
 
+        // Appel de la Edge Function 'fetch_places'
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch_places`, {
             method: 'POST',
             headers: { 
@@ -916,9 +895,9 @@ const competitorsService = {
 
         const data = await response.json();
         
-        // Enrich data locally for UI consistency (since API just returns raw list)
+        // Enrich data locally for UI consistency
         return data.results.map((place: any) => {
-            // Generate simulated qualitative data based on real quantitative data
+            // Generate simulated qualitative data based on real quantitative data to keep UI rich
             const strengths = [];
             const weaknesses = [];
             
@@ -929,17 +908,16 @@ const competitorsService = {
             if (place.review_count > 500) strengths.push("Forte Visibilité");
             else if (place.review_count < 50) weaknesses.push("Faible Visibilité");
 
-            // If empty, fill with generic
             if (strengths.length === 0) strengths.push("Standard");
             if (weaknesses.length === 0) weaknesses.push("Standard");
 
             return {
                 name: place.name,
-                distance: "Proche", // Vicinity is provided but distance needs calc, simpler to say Near
-                address: place.address, // Added address
+                distance: "Proche", 
+                address: place.address,
                 rating: place.rating,
                 review_count: place.review_count,
-                estimated_revenue: "N/A", // Google doesn't provide revenue
+                estimated_revenue: "N/A", // Not available in API
                 strengths: strengths,
                 weaknesses: weaknesses,
                 threat_level: place.threat_level
@@ -961,7 +939,6 @@ const customersService = {
         if (!isSupabaseConfigured()) return [];
         
         try {
-            // Aggregate customers from Reviews
             const { data: reviews, error } = await supabase!
                 .from('reviews')
                 .select('author_name, rating, received_at, source, customer_email, status');
@@ -996,12 +973,10 @@ const customersService = {
                 }
                 if (r.customer_email && !cust.email) cust.email = r.customer_email;
                 
-                // Status logic
                 if (cust.average_rating >= 4.5) cust.status = 'promoter';
                 else if (cust.average_rating <= 3) cust.status = 'detractor';
                 else cust.status = 'passive';
                 
-                // LTV Mock calculation (e.g. 50€ per review/visit)
                 cust.ltv_estimate = cust.total_reviews * 50; 
             });
 
@@ -1038,7 +1013,6 @@ const notificationsService = {
 
 const onboardingService = {
     checkStatus: async () => {
-        // Mode Démo si pas de DB
         if (!isSupabaseConfigured()) {
             return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
         }
@@ -1050,7 +1024,6 @@ const onboardingService = {
             const googleConnected = org.integrations?.google || false;
             const brandVoiceConfigured = !!org.brand?.tone;
             
-            // Check reply count from DB
             const { count } = await supabase!.from('reviews')
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'sent');
@@ -1088,7 +1061,6 @@ const billingService = {
         const data = await response.json();
         return data.url;
     },
-    // REAL PORTAL SESSION
     createPortalSession: async () => {
         const { data: { session } } = await supabase!.auth.getSession();
         if (!session) throw new Error("Unauthorized");
@@ -1114,7 +1086,7 @@ const billingService = {
 
 const seedCloudDatabase = async () => true;
 
-// PUBLIC API (PRODUCTION READY)
+// PUBLIC API
 export const api = {
     auth: authService,
     company: companyService,
@@ -1136,30 +1108,26 @@ export const api = {
     seedCloudDatabase,
     offers: offersService,
     public: { 
-        // 1. Get Location Info (Real DB)
         getLocationInfo: async (id: string): Promise<Location | null> => {
             if (!isSupabaseConfigured()) return null;
             const { data, error } = await supabase!.from('locations').select('*').eq('id', id).single();
             if (error) return null;
             return data;
         }, 
-        // 2. Get Public Reviews (Real DB)
         getWidgetReviews: async (id: string): Promise<any[]> => {
             if (!isSupabaseConfigured()) return [];
             const { data, error } = await supabase!
                 .from('reviews')
                 .select('rating, text, author_name, received_at, source')
                 .eq('location_id', id)
-                .gte('rating', 4) // Show only good reviews by default
+                .gte('rating', 4)
                 .order('received_at', { ascending: false })
                 .limit(20);
             
             if (error) return [];
             return data.map(r => ({ ...r, body: r.text }));
         }, 
-        // 3. Submit Feedback (Via Serverless Function to bypass RLS/Auth)
         submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[], staffName?: string) => {
-            // Robust check for function endpoint vs API rewrite
             const response = await fetch('/api/submit-review', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1172,18 +1140,14 @@ export const api = {
             }
             return true;
         },
-        // 4. Get active offer
         getActiveOffer: async (locationId: string, rating: number): Promise<Offer | null> => {
             if (!isSupabaseConfigured()) return null;
-            // Get organization of the location
             const { data: loc } = await supabase!.from('locations').select('organization_id').eq('id', locationId).single();
             if (!loc) return null;
 
-            // Get offers from organization JSON
             const { data: org } = await supabase!.from('organizations').select('offers').eq('id', loc.organization_id).single();
             
             if (org?.offers) {
-                // Return first active offer matching rating
                 const offers: Offer[] = org.offers;
                 return offers.find(o => o.active && rating >= o.trigger_rating) || null;
             }

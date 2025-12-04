@@ -17,6 +17,7 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    // On utilise une clé spécifique si elle existe, sinon on fallback sur la clé générique
     const googlePlacesKey = Deno.env.get('GOOGLE_PLACES_API_KEY') || Deno.env.get('API_KEY')!
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -38,6 +39,7 @@ Deno.serve(async (req: Request) => {
     const searchRadius = (radius || 5) * 1000;
     const typeQuery = keyword ? `&keyword=${encodeURIComponent(keyword)}` : '&type=establishment';
     
+    // Note: Utilisation de l'API Places Nearby Search
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${searchRadius}${typeQuery}&key=${googlePlacesKey}`;
     
     console.log(`Fetching places: ${latitude},${longitude} r=${searchRadius} q=${keyword}`);
@@ -81,7 +83,7 @@ Deno.serve(async (req: Request) => {
     competitors.sort((a: any, b: any) => b.threat_level - a.threat_level);
 
     return new Response(
-      JSON.stringify({ success: true, results: competitors.slice(0, 15) }), // Limit to top 15
+      JSON.stringify({ success: true, results: competitors.slice(0, 15) }), // Limit to top 15 results
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
