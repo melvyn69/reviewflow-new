@@ -1,4 +1,5 @@
 
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -392,6 +393,20 @@ const offersService = {
     },
     // GÉNÉRATION RÉELLE EN DB
     generateCoupon: async (offerId: string, email?: string): Promise<Coupon | null> => {
+        // Fallback for demo
+        if (!isSupabaseConfigured()) {
+             const code = `DEMO-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+             return {
+                id: 'demo-coupon',
+                code,
+                offer_title: 'Offre Démo',
+                discount_detail: 'Remise test',
+                expires_at: new Date().toISOString(),
+                status: 'active'
+             };
+        }
+
+        // Real logic
         const org = await organizationService.get();
         const offer = org?.offers?.find(o => o.id === offerId);
         if (!offer) return null;
