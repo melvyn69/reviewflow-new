@@ -77,6 +77,8 @@ export interface Location {
   connection_status?: 'connected' | 'disconnected' | 'pending';
   platform_rating?: number;
   google_review_url?: string;
+  facebook_review_url?: string;
+  tripadvisor_review_url?: string;
 }
 
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';

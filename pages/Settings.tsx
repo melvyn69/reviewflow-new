@@ -93,6 +93,8 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
         phone: location?.phone || '',
         website: location?.website || '',
         google_review_url: location?.google_review_url || '',
+        facebook_review_url: location?.facebook_review_url || '',
+        tripadvisor_review_url: location?.tripadvisor_review_url || '',
         description: location?.description || ''
     });
     const [saving, setSaving] = useState(false);
@@ -151,12 +153,26 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                                 <Input value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} placeholder="https://monsite.com" />
                             </div>
                         </div>
-                        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                            <label className="block text-sm font-bold text-indigo-900 mb-1">Lien Google Avis (Public)</label>
-                            <Input value={formData.google_review_url} onChange={e => setFormData({...formData, google_review_url: e.target.value})} placeholder="https://g.page/r/..." className="bg-white" />
-                            <p className="text-xs text-indigo-700 mt-1">Indispensable pour le QR Code et la redirection Funnel.</p>
+                        
+                        <div className="space-y-3 pt-2">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Liens de Collecte (Review Funnel)</h4>
+                            <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                                <label className="block text-xs font-bold text-indigo-900 mb-1">Google Avis (Prioritaire)</label>
+                                <Input value={formData.google_review_url} onChange={e => setFormData({...formData, google_review_url: e.target.value})} placeholder="https://g.page/r/..." className="bg-white text-xs" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">Facebook</label>
+                                    <Input value={formData.facebook_review_url} onChange={e => setFormData({...formData, facebook_review_url: e.target.value})} placeholder="https://facebook.com/..." className="text-xs" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-700 mb-1">TripAdvisor</label>
+                                    <Input value={formData.tripadvisor_review_url} onChange={e => setFormData({...formData, tripadvisor_review_url: e.target.value})} placeholder="https://tripadvisor.com/..." className="text-xs" />
+                                </div>
+                            </div>
                         </div>
-                        <div>
+
+                        <div className="pt-2">
                             <label className="block text-sm font-medium text-slate-700 mb-1">Description courte</label>
                             <textarea 
                                 className="w-full p-2 border border-slate-200 rounded-lg text-sm" 

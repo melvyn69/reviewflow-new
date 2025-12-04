@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Review, ReviewStatus, InternalNote, SavedReply, Location } from '../types';
 import { Card, CardContent, Skeleton, useToast } from '../components/ui';
 import { SocialShareModal } from '../components/SocialShareModal';
+import { InboxFocusMode } from '../components/InboxFocusMode';
 import { 
   Star, 
   MessageCircle, 
@@ -25,7 +25,8 @@ import {
   Flag,
   Trash2,
   Store,
-  ShieldCheck
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import { Button, Badge } from '../components/ui';
 import { useNavigate, useLocation as useRouterLocation } from 'react-router-dom';
@@ -173,6 +174,9 @@ export const InboxPage = () => {
 
   const [showShareModal, setShowShareModal] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  
+  // Focus Mode State
+  const [showFocusMode, setShowFocusMode] = useState(false);
 
   const [aiTone, setAiTone] = useState<'professional' | 'friendly' | 'empathic'>('professional');
   const [aiLength, setAiLength] = useState<'short' | 'medium' | 'long'>('medium');
@@ -189,7 +193,6 @@ export const InboxPage = () => {
       long: 'Long'
   };
 
-  // On mount: check for deep link and load locations
   useEffect(() => {
     const init = async () => {
         const org = await api.organization.get();
@@ -213,7 +216,6 @@ export const InboxPage = () => {
 
   const loadReviews = async () => {
     setLoading(true);
-    // On pourrait filtrer côté API, mais ici on filtre côté client pour l'exemple location
     const data = await api.reviews.list({
         status: statusFilter,
         source: sourceFilter,
@@ -228,7 +230,6 @@ export const InboxPage = () => {
 
     setReviews(filtered);
     
-    // Deep Link Logic
     if (targetReviewId && !selectedReview) {
         const target = filtered.find(r => r.id === targetReviewId);
         if (target) {
@@ -260,7 +261,6 @@ export const InboxPage = () => {
       navigate('/inbox'); 
   };
 
-  // ... (rest of the logic: handleGenerateReply, handleSendReply, etc. remains same) ...
   const handleGenerateReply = async () => {
     if (!selectedReview) return;
     setIsGenerating(true);
@@ -274,7 +274,6 @@ export const InboxPage = () => {
         });
         setReplyText(draftText);
     } catch (error: any) {
-        console.error("Erreur UI Génération:", error);
         if (error.message.includes('LIMIT_REACHED')) {
             setLimitReached(true);
         } else {
@@ -379,8 +378,20 @@ export const InboxPage = () => {
       setShowActionsMenu(false);
   };
 
+  const pendingCount = reviews.filter(r => r.status === 'pending').length;
+
   return (
     <div className="flex h-[calc(100vh-8rem)] -m-4 md:-m-8 overflow-hidden bg-white">
+      
+      {/* Focus Mode Overlay */}
+      {showFocusMode && (
+          <InboxFocusMode 
+              reviews={reviews} 
+              onClose={() => { setShowFocusMode(false); loadReviews(); }} 
+              onUpdate={loadReviews}
+          />
+      )}
+
       <div className={`flex-1 flex flex-col min-w-0 border-r border-slate-200 transition-all duration-300 ${selectedReview ? 'hidden lg:flex lg:w-1/2' : 'w-full'}`}>
         
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col gap-4">
@@ -388,6 +399,17 @@ export const InboxPage = () => {
             <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 Boîte de réception <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{reviews.length}</span>
             </h1>
+            
+            {pendingCount > 0 && (
+                <Button 
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 animate-pulse"
+                    size="sm"
+                    icon={Zap}
+                    onClick={() => setShowFocusMode(true)}
+                >
+                    Mode Focus ({pendingCount})
+                </Button>
+            )}
           </div>
           
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center">
@@ -395,7 +417,6 @@ export const InboxPage = () => {
                  <Badge variant="neutral" onClick={() => navigate('/inbox')} className="mr-2 cursor-pointer shrink-0">Recherche: {searchQuery} <span className="ml-1 opacity-50">×</span></Badge>
              )}
              
-             {/* Location Filter */}
              {locations.length > 1 && (
                  <FilterSelect 
                     label="Lieu" 
@@ -459,7 +480,6 @@ export const InboxPage = () => {
                     <SourceIcon source={review.source} />
                   </div>
                   
-                  {/* Location Badge (Improved) */}
                   <div className="flex items-center gap-1.5 mt-2 mb-2">
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
                           <Store className="h-3 w-3" />
@@ -495,6 +515,7 @@ export const InboxPage = () => {
         </div>
       </div>
 
+      {/* Right Column: Review Details (Same as before) */}
       {selectedReview ? (
         <div className="fixed inset-0 z-50 lg:static lg:z-auto flex-1 w-full lg:w-1/2 flex flex-col bg-slate-50/50 min-w-0">
           <div className="px-4 md:px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center h-[73px]">

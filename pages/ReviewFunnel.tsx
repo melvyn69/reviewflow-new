@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail } from 'lucide-react';
+import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail, Facebook } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { useParams, useSearchParams } from 'react-router-dom';
@@ -15,6 +15,17 @@ const Confetti = () => (
         ))}
     </div>
 );
+
+// Platform Icons
+const GoogleIcon = () => (
+    <svg viewBox="0 0 48 48" className="w-8 h-8">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+        <path fill="#34A853" d="M24 48c6.48 0 11.95-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+    </svg>
+);
+const TripAdvisorIcon = () => <div className="font-serif font-bold text-green-600 text-3xl tracking-tighter">TA</div>;
 
 export const ReviewFunnel = () => {
     const { locationId } = useParams();
@@ -32,19 +43,32 @@ export const ReviewFunnel = () => {
     // Identifier un client via lien de campagne (ex: ?cid=123)
     const customerId = searchParams.get('cid');
     
-    const [locationInfo, setLocationInfo] = useState<{name: string, city: string, googleUrl?: string} | null>(null);
+    const [locationInfo, setLocationInfo] = useState<{
+        name: string, 
+        city: string, 
+        googleUrl?: string, 
+        facebookUrl?: string, 
+        tripadvisorUrl?: string
+    } | null>(null);
 
     useEffect(() => {
         if (locationId) {
             api.public.getLocationInfo(locationId)
                 .then((info) => {
                     if (info) {
-                        setLocationInfo(info as any);
+                        // Cast for compatibility with updated Location type
+                        setLocationInfo({
+                            name: info.name,
+                            city: info.city,
+                            googleUrl: (info as any).google_review_url || (info as any).googleUrl,
+                            facebookUrl: (info as any).facebook_review_url,
+                            tripadvisorUrl: (info as any).tripadvisor_review_url
+                        });
                     } else {
-                        setLocationInfo({ name: "Établissement", city: "", googleUrl: "" });
+                        setLocationInfo({ name: "Établissement", city: "" });
                     }
                 })
-                .catch(() => setLocationInfo({ name: "Établissement", city: "", googleUrl: "" }));
+                .catch(() => setLocationInfo({ name: "Établissement", city: "" }));
         }
     }, [locationId]);
 
@@ -53,47 +77,45 @@ export const ReviewFunnel = () => {
         
         if (score >= 4) {
             // FLUX POSITIF
-            // Si on connait déjà le client (via lien campagne), on redirige direct
-            // Sinon, on tente de capturer son email (Lead Magnet)
             if (customerId) {
-                launchRedirect();
+                // Client déjà connu, on zappe la capture
+                setStep('redirecting');
             } else {
                 setStep('capture');
             }
         } else {
-            // FLUX NÉGATIF : Formulaire interne
+            // FLUX NÉGATIF
             setTimeout(() => {
                 setStep('details');
             }, 300);
         }
     };
 
-    const launchRedirect = () => {
-        setStep('redirecting');
-        
-        // Enregistrement silencieux pour les stats
-        if (locationId) {
-            api.public.submitFeedback(locationId, rating, "Avis positif (Redirection)", contact, [])
-                .catch(err => console.error("Erreur save stats:", err));
+    const handleRedirect = (url: string) => {
+        // AUTO-COPY FEATURE
+        if (feedback.length > 5) {
+            navigator.clipboard.writeText(feedback).then(() => {
+                toast.success("Texte copié ! Collez-le sur la plateforme.", 3000);
+            }).catch(() => {});
         }
         
-        // Tentative de redirection
+        // Enregistrement stat
+        if (locationId) {
+            api.public.submitFeedback(locationId, rating, "Avis positif (Click)", contact, [])
+                .catch(err => console.error(err));
+        }
+
         setTimeout(() => {
-            if (locationInfo?.googleUrl && locationInfo.googleUrl.startsWith('http')) {
-                window.location.href = locationInfo.googleUrl;
-            } else {
-                console.log("Lien Google non configuré.");
-            }
-        }, 2500);
+            window.location.href = url;
+        }, 1000);
     };
 
     const handleCaptureSubmit = async () => {
-        // On sauvegarde le contact avant de rediriger
-        launchRedirect();
+        setStep('redirecting');
     };
 
     const handleSkipCapture = () => {
-        launchRedirect();
+        setStep('redirecting');
     };
 
     const toggleTag = (tag: string) => {
@@ -111,7 +133,6 @@ export const ReviewFunnel = () => {
             await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags);
             setStep('success');
         } catch (error: any) {
-            console.error("Feedback submission error", error);
             toast.error(`Erreur: ${error.message || "Problème technique"}`);
         } finally {
             setLoading(false);
@@ -120,7 +141,10 @@ export const ReviewFunnel = () => {
 
     if (!locationInfo) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="h-10 w-10 animate-spin text-indigo-600"/></div>;
 
-    const hasGoogleLink = locationInfo.googleUrl && locationInfo.googleUrl.length > 5;
+    const hasGoogle = locationInfo.googleUrl && locationInfo.googleUrl.length > 5;
+    const hasFacebook = locationInfo.facebookUrl && locationInfo.facebookUrl.length > 5;
+    const hasTripAdvisor = locationInfo.tripadvisorUrl && locationInfo.tripadvisorUrl.length > 5;
+    const hasMultiplePlatforms = [hasGoogle, hasFacebook, hasTripAdvisor].filter(Boolean).length > 1;
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -179,6 +203,15 @@ export const ReviewFunnel = () => {
                             </div>
 
                             <div className="space-y-4">
+                                <div className="text-left">
+                                    <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Votre message (sera copié)</label>
+                                    <textarea 
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[80px]"
+                                        placeholder="Ce que vous avez aimé..."
+                                        value={feedback}
+                                        onChange={e => setFeedback(e.target.value)}
+                                    />
+                                </div>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                                     <Input 
@@ -186,7 +219,6 @@ export const ReviewFunnel = () => {
                                         className="pl-10 h-12 rounded-xl border-slate-300"
                                         value={contact}
                                         onChange={(e) => setContact(e.target.value)}
-                                        autoFocus
                                     />
                                 </div>
                                 <Button 
@@ -206,32 +238,81 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
-                    {/* STEP 2: REDIRECTING (Positive) */}
+                    {/* STEP 2: REDIRECTING (Positive Multi-Platform) */}
                     {step === 'redirecting' && (
-                        <div className="animate-in zoom-in-95 duration-500 py-8">
+                        <div className="animate-in zoom-in-95 duration-500 py-4">
                              <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-6 animate-bounce">
                                 <Heart className="h-12 w-12 fill-current" />
                             </div>
-                            <h2 className="text-2xl font-bold text-slate-900 mb-4">C'est génial !</h2>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">C'est génial !</h2>
+                            <p className="text-slate-600 mb-8">
+                                Votre avis nous aide énormément. Sur quelle plateforme souhaitez-vous le partager ?
+                            </p>
                             
-                            {hasGoogleLink ? (
-                                <>
-                                    <p className="text-slate-600 mb-8 text-lg">
-                                        Redirection vers Google pour confirmer votre étoile...
-                                    </p>
-                                    <div className="flex justify-center">
-                                        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                            {/* Multi Platform Choice */}
+                            <div className="space-y-3">
+                                {hasGoogle && (
+                                    <button 
+                                        onClick={() => handleRedirect(locationInfo.googleUrl!)}
+                                        className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all group text-left"
+                                    >
+                                        <div className="h-12 w-12 flex items-center justify-center bg-white rounded-full border border-slate-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
+                                            <GoogleIcon />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-900">Google Avis</h4>
+                                            <p className="text-xs text-slate-500">Le plus utile pour nous</p>
+                                        </div>
+                                        <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-indigo-500" />
+                                    </button>
+                                )}
+
+                                {hasFacebook && (
+                                    <button 
+                                        onClick={() => handleRedirect(locationInfo.facebookUrl!)}
+                                        className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all group text-left"
+                                    >
+                                        <div className="h-12 w-12 flex items-center justify-center bg-blue-50 rounded-full border border-blue-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
+                                            <Facebook className="h-6 w-6 text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-900">Facebook</h4>
+                                            <p className="text-xs text-slate-500">Recommander à vos amis</p>
+                                        </div>
+                                        <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-blue-500" />
+                                    </button>
+                                )}
+
+                                {hasTripAdvisor && (
+                                    <button 
+                                        onClick={() => handleRedirect(locationInfo.tripadvisorUrl!)}
+                                        className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-green-300 hover:shadow-md transition-all group text-left"
+                                    >
+                                        <div className="h-12 w-12 flex items-center justify-center bg-green-50 rounded-full border border-green-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
+                                            <TripAdvisorIcon />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-900">TripAdvisor</h4>
+                                            <p className="text-xs text-slate-500">Pour les voyageurs</p>
+                                        </div>
+                                        <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-green-500" />
+                                    </button>
+                                )}
+
+                                {!hasGoogle && !hasFacebook && !hasTripAdvisor && (
+                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                        <p className="text-slate-600 mb-2">
+                                            Merci infiniment pour votre soutien.
+                                        </p>
+                                        <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retour</Button>
                                     </div>
-                                    <p className="text-xs text-slate-400 mt-8">
-                                        Si la redirection ne fonctionne pas, <a href={locationInfo.googleUrl} target="_blank" rel="noreferrer" className="underline text-indigo-600">cliquez ici</a>.
-                                    </p>
-                                </>
-                            ) : (
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <p className="text-slate-600 mb-2">
-                                        Merci infiniment pour votre soutien.
-                                    </p>
-                                    <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retour</Button>
+                                )}
+                            </div>
+                            
+                            {feedback && (hasGoogle || hasFacebook || hasTripAdvisor) && (
+                                <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400 bg-slate-50 py-2 px-4 rounded-full mx-auto w-fit">
+                                    <Copy className="h-3 w-3" />
+                                    Votre message sera copié automatiquement
                                 </div>
                             )}
                         </div>
