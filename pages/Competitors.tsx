@@ -60,29 +60,39 @@ export const CompetitorsPage = () => {
     const handleScan = async () => {
         setLoading(true);
         setLocationStatus('locating');
+        setScannedResults([]);
         
         try {
-            // 1. Get Geolocation
+            // 1. Get Real Geolocation from Browser
             const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-                if (!navigator.geolocation) reject(new Error("Géolocalisation non supportée"));
+                if (!navigator.geolocation) {
+                    reject(new Error("La géolocalisation n'est pas supportée par votre navigateur."));
+                }
                 navigator.geolocation.getCurrentPosition(resolve, reject);
             });
             
             const { latitude, longitude } = position.coords;
             setLocationStatus('found');
 
-            // 2. Call API via Wrapper
-            // Note: le wrapper `api.competitors.autoDiscover` gère maintenant l'appel à la Edge Function
+            // 2. Call the Real Edge Function via API
+            // This now hits 'fetch_places' on Supabase
             const results = await api.competitors.autoDiscover(scanRadius, scanSector, latitude, longitude);
+            
             setScannedResults(results);
             setActiveTab('scan');
-            toast.success(`${results.length} concurrents détectés dans la zone.`);
+            
+            if (results.length > 0) {
+                toast.success(`${results.length} concurrents détectés dans la zone.`);
+            } else {
+                toast.info("Aucun concurrent trouvé avec ces critères.");
+            }
         } catch (e: any) {
             setLocationStatus('error');
             if (e.code === 1) { // PERMISSION_DENIED
                 toast.error("Veuillez autoriser la géolocalisation pour scanner votre zone.");
             } else {
-                toast.error(e.message || "Erreur de scan");
+                console.error(e);
+                toast.error(e.message || "Erreur lors du scan.");
             }
         } finally {
             setLoading(false);

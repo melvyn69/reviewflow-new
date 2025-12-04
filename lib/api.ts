@@ -426,7 +426,7 @@ const competitorsService = {
             const json = await res.json();
             return json.results || [];
         }
-        // Mock
+        // Mock Fallback
         await delay(1000);
         return INITIAL_COMPETITORS;
     },

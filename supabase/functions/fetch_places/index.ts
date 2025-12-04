@@ -17,8 +17,12 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    // On utilise une clé spécifique si elle existe, sinon on fallback sur la clé générique
+    // Try specific key first, fallback to generic API_KEY if configured for multiple services
     const googlePlacesKey = Deno.env.get('GOOGLE_PLACES_API_KEY') || Deno.env.get('API_KEY')!
+
+    if (!googlePlacesKey) {
+        throw new Error("Server Config Error: Missing GOOGLE_PLACES_API_KEY");
+    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
 
@@ -39,7 +43,7 @@ Deno.serve(async (req: Request) => {
     const searchRadius = (radius || 5) * 1000;
     const typeQuery = keyword ? `&keyword=${encodeURIComponent(keyword)}` : '&type=establishment';
     
-    // Note: Utilisation de l'API Places Nearby Search
+    // Using standard Places Nearby Search
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${searchRadius}${typeQuery}&key=${googlePlacesKey}`;
     
     console.log(`Fetching places: ${latitude},${longitude} r=${searchRadius} q=${keyword}`);
@@ -54,18 +58,31 @@ Deno.serve(async (req: Request) => {
 
     const results = googleData.results || [];
 
-    // 4. Transform Data
+    // 4. Transform & Analyze Data
     const competitors = results.map((place: any) => {
-        // Calculate a simple "Threat Level" (0-100) based on rating and review count
-        // High rating + High volume = High threat
+        // Calculate "Threat Level" (0-100)
+        // Logic: Rating (0-5) contributes 60% of threat. Volume contributes 40%.
         const rating = place.rating || 0;
         const count = place.user_ratings_total || 0;
         
         let threat = 0;
         if (count > 0) {
-            threat += (rating / 5) * 60; // Up to 60 points for rating
-            threat += Math.min(count, 500) / 500 * 40; // Up to 40 points for volume (capped at 500 reviews)
+            // High rating (4.5+) is dangerous. Low rating is less threat.
+            threat += (rating / 5) * 60; 
+            // High volume means established competitor. Cap at 500 reviews for max score.
+            threat += Math.min(count, 500) / 500 * 40; 
         }
+
+        // Basic sentiment inference based on rating for "Strengths/Weaknesses"
+        const strengths = [];
+        const weaknesses = [];
+        
+        if (rating >= 4.5) strengths.push("Réputation Excellence");
+        else if (rating >= 4.0) strengths.push("Bonne popularité");
+        else if (rating < 3.5) weaknesses.push("Satisfaction client");
+        
+        if (count > 100) strengths.push("Volume d'avis");
+        else weaknesses.push("Visibilité faible");
 
         return {
             place_id: place.place_id,
@@ -75,7 +92,9 @@ Deno.serve(async (req: Request) => {
             review_count: count,
             types: place.types,
             location: place.geometry.location,
-            threat_level: Math.round(threat)
+            threat_level: Math.round(threat),
+            strengths: strengths.length > 0 ? strengths : ["Localisation"],
+            weaknesses: weaknesses.length > 0 ? weaknesses : ["Potentiel inexploité"]
         };
     });
 
