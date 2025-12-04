@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Review } from '../types';
 import { Button, useToast } from './ui';
-import { Star, Share2, X, Instagram, Facebook, Linkedin, Copy, Image as ImageIcon, Send, Sparkles, Download } from 'lucide-react';
+import { Star, Share2, X, Instagram, Facebook, Linkedin, Copy, Sparkles, Download, ExternalLink } from 'lucide-react';
 import { toPng } from 'html-to-image';
 
 export const SocialShareModal = ({ review, onClose }: { review: Review; onClose: () => void }) => {
@@ -10,14 +10,14 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
     const [caption, setCaption] = useState('');
     const [loading, setLoading] = useState(false);
     const [generatingImage, setGeneratingImage] = useState(false);
-    const [publishing, setPublishing] = useState(false);
+    
     const toast = useToast();
     const cardRef = useRef<HTMLDivElement>(null);
 
     const generateCaption = async () => {
         setLoading(true);
         try {
-            const text = await api.ai.generateSocialPost(review, platform as any);
+            const text = await api.ai.generateSocialPost(review, platform);
             setCaption(text);
         } catch (e: any) {
             toast.error("Erreur de génération : " + e.message);
@@ -26,17 +26,19 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
         }
     };
 
-    const handlePublish = async () => {
-        setPublishing(true);
-        try {
-            await api.social.publish(platform, caption);
-            toast.success(`Post publié sur ${platform} avec succès ! (Simulation)`);
-            onClose();
-        } catch (e) {
-            toast.error("Erreur de publication");
-        } finally {
-            setPublishing(false);
-        }
+    const handleCopyCaption = () => {
+        navigator.clipboard.writeText(caption);
+        toast.success("Texte copié dans le presse-papier !");
+    };
+
+    const handleOpenPlatform = () => {
+        const urls = {
+            instagram: 'https://instagram.com',
+            facebook: 'https://facebook.com',
+            linkedin: 'https://linkedin.com'
+        };
+        window.open(urls[platform], '_blank');
+        onClose();
     };
 
     const handleDownloadImage = async () => {
@@ -148,7 +150,7 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
                             />
                         )}
                         <button 
-                            onClick={() => {navigator.clipboard.writeText(caption); toast.success("Texte copié !")}}
+                            onClick={handleCopyCaption}
                             className="absolute bottom-2 right-2 p-1.5 bg-white shadow-sm border border-slate-200 rounded hover:bg-slate-50 text-slate-500"
                             title="Copier"
                         >
@@ -156,24 +158,34 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
                         </button>
                     </div>
 
-                    <div className="mt-auto flex gap-3">
+                    <div className="mt-auto space-y-3">
+                        <div className="flex gap-3">
+                            <Button 
+                                variant="secondary" 
+                                className="flex-1" 
+                                icon={Download} 
+                                onClick={handleDownloadImage}
+                                isLoading={generatingImage}
+                            >
+                                1. Télécharger
+                            </Button>
+                            <Button 
+                                variant="primary" 
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 border-none shadow-lg shadow-indigo-100" 
+                                icon={Copy} 
+                                onClick={handleCopyCaption}
+                            >
+                                2. Copier Texte
+                            </Button>
+                        </div>
+                        
                         <Button 
-                            variant="secondary" 
-                            className="flex-1" 
-                            icon={Download} 
-                            onClick={handleDownloadImage}
-                            isLoading={generatingImage}
+                            variant="ghost" 
+                            className="w-full text-slate-500 hover:text-indigo-600 text-xs" 
+                            icon={ExternalLink} 
+                            onClick={handleOpenPlatform}
                         >
-                            Télécharger
-                        </Button>
-                        <Button 
-                            variant="primary" 
-                            className="flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 border-none shadow-lg shadow-indigo-200" 
-                            icon={Send} 
-                            onClick={handlePublish}
-                            isLoading={publishing}
-                        >
-                            Publier
+                            3. Ouvrir {platform} pour poster
                         </Button>
                     </div>
                 </div>
