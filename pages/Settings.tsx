@@ -398,7 +398,15 @@ export const SettingsPage = () => {
   });
 
   useEffect(() => {
-    loadData();
+    // Tentative de capture du token au chargement si retour de login
+    api.organization.saveGoogleTokens().then((success) => {
+        if (success) {
+            toast.success("Compte Google connecté et sauvegardé pour l'accès offline.");
+            loadData(); // Recharger pour mettre à jour l'UI
+        } else {
+            loadData();
+        }
+    });
   }, []);
 
   const loadData = async () => {

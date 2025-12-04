@@ -133,19 +133,19 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
 
                             <div className="flex-1 w-full">
                                 {cond.field === 'rating' ? (
-                                    <Select value={cond.value as any} onChange={(e) => updateCondition(cond.id, 'value', parseInt(e.target.value))}>
-                                        {[1,2,3,4,5].map(n => <option key={n} value={String(n)}>{n} ★</option>)}
+                                    <Select value={cond.value} onChange={(e) => updateCondition(cond.id, 'value', parseInt(e.target.value))}>
+                                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} ★</option>)}
                                     </Select>
                                 ) : cond.field === 'source' ? (
-                                    <Select value={cond.value as any} onChange={(e) => updateCondition(cond.id, 'value', e.target.value)}>
+                                    <Select value={cond.value} onChange={(e) => updateCondition(cond.id, 'value', e.target.value)}>
                                         <option value="google">Google</option>
                                         <option value="facebook">Facebook</option>
                                         <option value="tripadvisor">TripAdvisor</option>
                                     </Select>
                                 ) : (
                                     <Input 
-                                        value={cond.value as any} 
-                                        onChange={(e) => updateCondition(cond.id, 'value', e.target.value as any)}
+                                        value={cond.value} 
+                                        onChange={(e) => updateCondition(cond.id, 'value', e.target.value)}
                                         placeholder="Mot-clé..."
                                     />
                                 )}
@@ -193,7 +193,6 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 mb-1">Ton de la réponse</label>
                                             <Select 
-                                                size="sm" 
                                                 value={action.config.tone || 'professionnel'} 
                                                 onChange={(e) => updateAction(action.id, 'config', { tone: e.target.value })}
                                             >
@@ -207,7 +206,6 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-500 mb-1">Délai avant envoi</label>
                                                 <Select 
-                                                    size="sm"
                                                     value={action.config.delay_minutes || 0}
                                                     onChange={(e) => updateAction(action.id, 'config', { delay_minutes: parseInt(e.target.value) })}
                                                 >
