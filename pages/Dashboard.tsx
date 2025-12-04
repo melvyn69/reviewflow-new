@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { AnalyticsSummary, Review, SetupStatus } from '../types';
+import { AnalyticsSummary, Review, SetupStatus, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
 import { 
   TrendingUp, 
@@ -17,32 +17,36 @@ import {
   Zap, 
   CheckCircle2, 
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  Plus,
+  QrCode,
+  Sparkles,
+  Search
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 import { useTranslation } from '../lib/i18n';
 
 const KPI = ({ title, value, change, icon: Icon, trend, loading }: any) => (
-  <Card>
+  <Card className="hover:shadow-md transition-shadow">
     <CardContent className="p-6">
       <div className="flex justify-between items-start mb-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
           {loading ? (
               <Skeleton className="h-8 w-16 mt-1" />
           ) : (
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
+              <h3 className="text-3xl font-bold text-slate-900 tracking-tight">{value}</h3>
           )}
         </div>
         <div className={`p-3 rounded-xl ${trend === 'up' ? 'bg-indigo-50 text-indigo-600' : 'bg-rose-50 text-rose-600'}`}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
-      <div className={`flex items-center text-xs font-medium ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+      <div className={`flex items-center text-xs font-bold ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
         {loading ? <Skeleton className="h-4 w-24" /> : (
             <>
                 {trend === 'up' ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                {change} <span className="text-slate-400 ml-1">vs mois dernier</span>
+                {change} <span className="text-slate-400 ml-1 font-medium">vs mois dernier</span>
             </>
         )}
       </div>
@@ -57,19 +61,19 @@ const ActivityFeed = () => {
         api.activity.getRecent().then((data) => setActivities(data || []));
     }, []);
 
-    if (!activities || activities.length === 0) return <div className="p-4"><Skeleton className="h-8 w-full mb-2" /><Skeleton className="h-8 w-full" /></div>;
+    if (!activities || activities.length === 0) return <div className="p-6 text-center text-slate-400 text-sm">Aucune activité récente.</div>;
 
     return (
-        <div className="space-y-4">
-            {activities.map((act) => (
-                <div key={act.id} className="flex gap-4 p-3 hover:bg-slate-50 rounded-lg transition-colors border-b border-slate-50 last:border-0">
-                    <div className={`mt-1 h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${act.type === 'review' ? 'bg-blue-100 text-blue-600' : act.type === 'alert' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+        <div className="space-y-0">
+            {activities.map((act, i) => (
+                <div key={act.id} className={`flex gap-4 p-4 hover:bg-slate-50 transition-colors ${i !== activities.length - 1 ? 'border-b border-slate-50' : ''}`}>
+                    <div className={`mt-1 h-9 w-9 rounded-full flex items-center justify-center shrink-0 border-2 border-white shadow-sm ${act.type === 'review' ? 'bg-blue-100 text-blue-600' : act.type === 'alert' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
                         {act.type === 'review' ? <Star className="h-4 w-4" /> : act.type === 'alert' ? <AlertCircle className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
                     </div>
                     <div>
                         <p className="text-sm text-slate-900 font-medium">{act.text}</p>
                         <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-slate-500">{act.location}</span>
+                            <span className="text-xs text-slate-500 font-medium">{act.location}</span>
                             <span className="text-[10px] text-slate-400">• {act.time}</span>
                         </div>
                     </div>
@@ -111,27 +115,27 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
     ];
 
     return (
-        <Card className="mb-8 border-indigo-100 overflow-hidden relative">
+        <Card className="mb-8 border-indigo-100 overflow-hidden relative shadow-md">
             <div className="absolute top-0 left-0 w-full h-1 bg-slate-100">
                 <div className="h-full bg-indigo-600 transition-all duration-1000" style={{ width: `${status.completionPercentage}%` }}></div>
             </div>
             <CardContent className="p-0">
-                <div className="p-6 bg-gradient-to-br from-indigo-50/50 to-white border-b border-indigo-50 flex justify-between items-center">
+                <div className="p-6 bg-gradient-to-r from-indigo-50 to-white border-b border-indigo-50 flex justify-between items-center">
                     <div>
                         <h3 className="font-bold text-lg text-indigo-900 flex items-center gap-2">
                             <Rocket className="h-5 w-5 text-indigo-600" />
                             Démarrage Rapide
                         </h3>
-                        <p className="text-slate-500 text-sm">Complétez ces étapes pour profiter à 100% de l'IA.</p>
+                        <p className="text-slate-500 text-sm mt-1">Complétez ces étapes pour profiter à 100% de l'IA.</p>
                     </div>
                     <div className="text-right hidden sm:block">
-                        <span className="text-2xl font-bold text-indigo-600">{status.completionPercentage}%</span>
-                        <span className="text-xs text-slate-400 block uppercase tracking-wide">Complété</span>
+                        <span className="text-3xl font-extrabold text-indigo-600">{status.completionPercentage}%</span>
+                        <span className="text-xs text-slate-400 block uppercase tracking-wide font-bold">Complété</span>
                     </div>
                 </div>
                 <div className="divide-y divide-slate-50">
                     {steps.map((step, i) => (
-                        <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-white opacity-50' : 'bg-white hover:bg-slate-50'}`}>
+                        <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-white opacity-60' : 'bg-white hover:bg-slate-50'}`}>
                             <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
                                 {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
                             </div>
@@ -140,7 +144,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
                                 <p className="text-xs text-slate-500">{step.desc}</p>
                             </div>
                             {!step.done && (
-                                <Button size="xs" variant="outline" onClick={step.action} className="whitespace-nowrap">
+                                <Button size="xs" variant="outline" onClick={step.action} className="whitespace-nowrap bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200">
                                     {step.btn} <ArrowRight className="ml-1 h-3 w-3" />
                                 </Button>
                             )}
@@ -160,6 +164,7 @@ export const DashboardPage = () => {
   const [seeding, setSeeding] = useState(false);
   const [realLocationId, setRealLocationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
   
   const toast = useToast();
   const navigate = useNavigate();
@@ -167,6 +172,7 @@ export const DashboardPage = () => {
 
   useEffect(() => {
     loadData();
+    api.auth.getUser().then(setUser);
   }, [period]);
 
   const loadData = async () => {
@@ -220,35 +226,38 @@ export const DashboardPage = () => {
       }
   };
 
+  const getGreeting = () => {
+      const hour = new Date().getHours();
+      if (hour < 12) return "Bonjour";
+      if (hour < 18) return "Bonne après-midi";
+      return "Bonsoir";
+  };
+
   // Logic for empty state or new account
   const isGoogleConnected = setupStatus?.googleConnected;
   
-  // Show big empty state if Google is NOT connected, regardless of stats
   if (!loading && !isGoogleConnected) {
       return (
-          <Card className="bg-indigo-600 text-white border-none shadow-xl overflow-hidden relative min-h-[60vh] flex items-center justify-center">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-              <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+          <Card className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none shadow-2xl overflow-hidden relative min-h-[70vh] flex items-center justify-center">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+              <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
               
               <CardContent className="p-8 md:p-12 text-center relative z-10 max-w-2xl">
-                  <div className="bg-white/20 p-4 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-                      <Rocket className="h-10 w-10 text-white" />
+                  <div className="bg-white/20 p-5 rounded-3xl w-24 h-24 flex items-center justify-center mx-auto mb-8 backdrop-blur-md shadow-inner ring-1 ring-white/30">
+                      <Rocket className="h-12 w-12 text-white" />
                   </div>
-                  <h2 className="text-4xl font-extrabold mb-4">Bienvenue sur Reviewflow !</h2>
-                  <p className="text-indigo-100 text-xl mb-10 leading-relaxed">
-                      Pour commencer à automatiser vos réponses et booster votre note, nous devons synchroniser vos avis existants.
+                  <h2 className="text-5xl font-extrabold mb-6 tracking-tight">Bienvenue sur Reviewflow</h2>
+                  <p className="text-indigo-100 text-xl mb-12 leading-relaxed">
+                      L'IA est prête à booster votre e-réputation. <br/> Connectez votre fiche Google pour commencer la magie.
                   </p>
                   <div className="flex flex-col sm:flex-row justify-center gap-6">
-                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-6 text-lg shadow-xl hover:scale-105 transition-transform" onClick={() => navigate('/settings')}>
-                          <UploadCloud className="mr-2 h-6 w-6" /> Connecter Google Business
+                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-7 text-lg shadow-xl hover:scale-105 transition-transform font-bold" onClick={() => navigate('/settings')}>
+                          <UploadCloud className="mr-3 h-6 w-6" /> Connecter Google Business
                       </Button>
-                      <Button size="lg" variant="outline" className="text-white border-indigo-300 hover:bg-indigo-700/50 py-6 text-lg" onClick={handleSeedData} isLoading={seeding}>
-                          Mode Démo (Données Test)
+                      <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 py-7 text-lg backdrop-blur-sm" onClick={handleSeedData} isLoading={seeding}>
+                          Mode Démo
                       </Button>
                   </div>
-                  <p className="mt-8 text-xs text-indigo-300 opacity-80">
-                      Connexion sécurisée via l'API officielle Google. Aucun mot de passe requis.
-                  </p>
               </CardContent>
           </Card>
       );
@@ -257,22 +266,59 @@ export const DashboardPage = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* Header with Greeting and Actions */}
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-2">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tableau de bord</h1>
-          <p className="text-slate-500">Bienvenue, voici vos performances en temps réel.</p>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              {getGreeting()}, <span className="text-indigo-600">{user?.name?.split(' ')[0] || 'Chef'}</span> 👋
+          </h1>
+          <p className="text-slate-500">Voici ce qu'il se passe sur vos établissements aujourd'hui.</p>
         </div>
-        <div className="flex bg-slate-100 p-1 rounded-lg">
-            {['7j', '30j', 'Trimestre'].map((p) => (
-                <button 
-                    key={p}
-                    onClick={() => setPeriod(p)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${period === p ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    {p}
-                </button>
-            ))}
+        <div className="flex items-center gap-3">
+            <div className="flex bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
+                {['7j', '30j', 'Trimestre'].map((p) => (
+                    <button 
+                        key={p}
+                        onClick={() => setPeriod(p)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === p ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                    >
+                        {p}
+                    </button>
+                ))}
+            </div>
         </div>
+      </div>
+
+      {/* Quick Actions Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <button onClick={() => navigate('/collect')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all text-left group">
+              <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <QrCode className="h-5 w-5" />
+              </div>
+              <div className="font-bold text-slate-900 text-sm">QR Code</div>
+              <div className="text-xs text-slate-500">Imprimer le kit</div>
+          </button>
+          <button onClick={openFunnel} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all text-left group">
+              <div className="bg-green-50 text-green-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <ExternalLink className="h-5 w-5" />
+              </div>
+              <div className="font-bold text-slate-900 text-sm">Formulaire</div>
+              <div className="text-xs text-slate-500">Lien public</div>
+          </button>
+          <button onClick={() => navigate('/inbox')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left group">
+              <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <MessageSquare className="h-5 w-5" />
+              </div>
+              <div className="font-bold text-slate-900 text-sm">Répondre</div>
+              <div className="text-xs text-slate-500">Boîte de réception</div>
+          </button>
+          <button onClick={() => navigate('/social')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-pink-300 hover:shadow-md transition-all text-left group">
+              <div className="bg-pink-50 text-pink-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="font-bold text-slate-900 text-sm">Social Post</div>
+              <div className="text-xs text-slate-500">Créer un visuel</div>
+          </button>
       </div>
 
       <SetupProgress status={setupStatus} />
@@ -287,84 +333,84 @@ export const DashboardPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
             {/* Urgent Tasks */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+            <Card className="border-l-4 border-l-amber-400">
+                <CardHeader className="border-b border-slate-100 pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
                         <AlertCircle className="h-5 w-5 text-amber-500" />
                         À traiter en priorité
+                        <Badge variant="neutral" className="ml-auto">{urgentReviews.length} avis</Badge>
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                     {urgentReviews.length > 0 ? (
-                        <div className="divide-y divide-slate-100">
+                        <div className="divide-y divide-slate-50">
                             {urgentReviews.map(review => (
                                 <div 
                                     key={review.id} 
-                                    className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer" 
+                                    className="p-4 hover:bg-slate-50 transition-colors flex gap-4 cursor-pointer group" 
                                     onClick={() => navigate(`/inbox?reviewId=${review.id}`)}
                                 >
-                                    <div className="h-10 w-10 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0">
+                                    <div className="h-10 w-10 bg-amber-50 text-amber-700 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border border-amber-100">
                                         {review.rating}★
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-start">
-                                            <h4 className="text-sm font-semibold text-slate-900 truncate">{review.author_name}</h4>
+                                        <div className="flex justify-between items-start mb-1">
+                                            <h4 className="text-sm font-bold text-slate-900 truncate">{review.author_name}</h4>
                                             <span className="text-xs text-slate-400 whitespace-nowrap">{new Date(review.received_at).toLocaleDateString()}</span>
                                         </div>
                                         <p className="text-sm text-slate-600 line-clamp-1">{review.body}</p>
                                     </div>
-                                    <Button size="xs" variant="outline">Répondre</Button>
+                                    <Button size="xs" variant="outline" className="opacity-0 group-hover:opacity-100 transition-opacity">Répondre</Button>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <div className="p-8 text-center text-slate-500 text-sm">
-                            <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                            Tout est à jour ! Aucune urgence.
+                        <div className="p-12 text-center text-slate-500 text-sm flex flex-col items-center">
+                            <div className="bg-green-50 p-3 rounded-full mb-3">
+                                <CheckCircle2 className="h-6 w-6 text-green-600" />
+                            </div>
+                            <p className="font-medium text-slate-900">Tout est sous contrôle !</p>
+                            <p className="text-slate-400">Aucun avis négatif en attente.</p>
                         </div>
                     )}
                 </CardContent>
             </Card>
 
-            {/* Shortcuts Card */}
-            <Card className="bg-indigo-900 text-white border-none">
-                <CardHeader>
-                    <CardTitle className="text-white flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-yellow-400" />
-                        Accès Rapides
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                            onClick={openFunnel}>
-                        <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-bold">Formulaire de Collecte</h4>
-                            <ExternalLink className="h-4 w-4 text-indigo-300" />
-                        </div>
-                        <p className="text-xs text-indigo-200">Page publique pour vos clients.</p>
-                    </div>
-                    <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                            onClick={() => navigate('/collect')}>
-                        <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-bold">QR Code</h4>
-                            <Zap className="h-4 w-4 text-yellow-300" />
-                        </div>
-                        <p className="text-xs text-indigo-200">Imprimer l'affiche comptoir.</p>
-                    </div>
-                </CardContent>
-            </Card>
+            {/* AI Insights Summary */}
+            {stats && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="bg-green-50/50 border-green-100">
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                                <h4 className="text-sm font-bold text-green-900 uppercase tracking-wide">Points Forts</h4>
+                            </div>
+                            <p className="text-sm text-green-800 leading-relaxed">{stats.strengths_summary || "Analyse en cours..."}</p>
+                        </CardContent>
+                    </Card>
+                    <Card className="bg-red-50/50 border-red-100">
+                        <CardContent className="p-5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                                <h4 className="text-sm font-bold text-red-900 uppercase tracking-wide">Points de Vigilance</h4>
+                            </div>
+                            <p className="text-sm text-red-800 leading-relaxed">{stats.problems_summary || "Analyse en cours..."}</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
 
         <div className="space-y-6">
             {/* Live Feed */}
-            <Card className="h-full flex flex-col">
-                <CardHeader className="border-b border-slate-100 bg-slate-50/50">
-                    <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wider text-slate-500">
+            <Card className="h-full flex flex-col border-slate-200 shadow-sm">
+                <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
+                    <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
                         <Activity className="h-4 w-4" /> Flux d'activité
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 flex-1 overflow-hidden">
-                    <div className="max-h-[400px] overflow-y-auto p-4 custom-scrollbar">
+                    <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
                         <ActivityFeed />
                     </div>
                 </CardContent>
