@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail, Facebook, Ticket } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
@@ -417,4 +416,70 @@ export const ReviewFunnel = () => {
                     )}
 
                     {/* STEP 4: SUCCESS (End of Negative Flow) */}
-                    {step === 'success
+                    {step === 'success' && (
+                        <div className="animate-in zoom-in-95 duration-500 py-8">
+                            <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-6">
+                                <CheckCircle2 className="h-12 w-12" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-4">Merci pour votre retour !</h2>
+                            <p className="text-slate-600 mb-8">
+                                Votre avis a bien été pris en compte. Nous faisons tout pour nous améliorer grâce à vous.
+                            </p>
+                            <Button variant="outline" onClick={() => window.location.reload()}>Retour à l'accueil</Button>
+                        </div>
+                    )}
+
+                    {/* STEP 5: REWARD (Positive Flow with Offer) */}
+                    {step === 'reward' && activeOffer && (
+                        <div className="animate-in zoom-in-95 duration-500">
+                            <div className="text-center mb-6">
+                                <div className="inline-block p-3 rounded-full bg-pink-100 text-pink-600 mb-4 animate-bounce">
+                                    <Gift className="h-8 w-8" />
+                                </div>
+                                <h2 className="text-xl font-bold text-slate-900">Une surprise pour vous !</h2>
+                                <p className="text-sm text-slate-500">Pour vous remercier de votre avis 5 étoiles.</p>
+                            </div>
+
+                            {!revealed ? (
+                                <div className="bg-slate-50 p-6 rounded-2xl border-2 border-dashed border-indigo-200 text-center cursor-pointer hover:bg-slate-100 transition-colors" onClick={handleRevealReward}>
+                                    <p className="font-bold text-indigo-600 mb-2">{activeOffer.title}</p>
+                                    <Button isLoading={loading} icon={Gift} className="shadow-lg shadow-pink-200 bg-pink-600 hover:bg-pink-700 border-none">
+                                        Découvrir mon cadeau
+                                    </Button>
+                                </div>
+                            ) : coupon ? (
+                                <div className="bg-white p-6 rounded-2xl border-2 border-indigo-600 shadow-xl relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-full h-2 bg-indigo-600"></div>
+                                    <h3 className="font-bold text-lg text-slate-900 mb-1">{coupon.offer_title}</h3>
+                                    <p className="text-slate-500 text-sm mb-4">{coupon.discount_detail}</p>
+                                    
+                                    <div className="bg-slate-100 p-3 rounded-lg mb-4">
+                                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Code Coupon</p>
+                                        <div className="font-mono text-2xl font-bold text-indigo-700 tracking-widest">{coupon.code}</div>
+                                    </div>
+                                    
+                                    <p className="text-[10px] text-slate-400 mb-4">
+                                        Valable jusqu'au {new Date(coupon.expires_at).toLocaleDateString()}. Présentez ce code en caisse.
+                                    </p>
+                                    
+                                    <p className="text-xs text-green-600 font-bold flex items-center justify-center gap-1">
+                                        <CheckCircle2 className="h-3 w-3" /> Envoyé à {contact}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="text-red-500">Erreur de chargement du coupon.</div>
+                            )}
+                        </div>
+                    )}
+                </div>
+                
+                {/* Footer Branding */}
+                <div className="py-4 text-center bg-slate-50 border-t border-slate-100">
+                    <p className="text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1">
+                        Propulsé par <span className="font-bold text-indigo-600">Reviewflow</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
