@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember } from '../types';
 
@@ -324,31 +323,77 @@ export const api = {
   },
   analytics: {
       getOverview: async (period: string = '30j'): Promise<AnalyticsSummary> => {
-          const reviews = await api.reviews.list({ limit: 1000 }); // Fetch recent history
+          const org = await api.organization.get();
+          if (!org || org.locations.length === 0) {
+              return {
+                  period,
+                  total_reviews: 0,
+                  average_rating: 0,
+                  response_rate: 0,
+                  nps_score: 0,
+                  global_rating: 0,
+                  sentiment_distribution: { positive: 0, neutral: 0, negative: 0 },
+                  volume_by_date: [],
+                  top_themes_positive: [],
+                  top_themes_negative: [],
+                  top_keywords: []
+              };
+          }
+
+          // 1. FAST SERVER-SIDE STATS (KPIs via RPC)
+          // Appel de la fonction SQL optimisée 'get_dashboard_stats'
+          const { data: kpi, error: rpcError } = await supabase!.rpc('get_dashboard_stats', { org_id: org.id });
           
-          const total = reviews.length;
-          const avg = total > 0 ? reviews.reduce((a, b) => a + b.rating, 0) / total : 0;
-          const positive = reviews.filter(r => r.rating >= 4).length;
-          const negative = reviews.filter(r => r.rating <= 2).length;
-          const neutral = total - positive - negative;
+          if (rpcError) console.warn("RPC get_dashboard_stats error:", rpcError);
+
+          // 2. Fetch Recent Data for Charts (Last 30 Days)
+          // On ne charge pas tout l'historique pour l'affichage des graphiques
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - 30);
           
-          // Simple mock-up of time series based on real data
-          const volumeByDate = reviews.slice(0, 30).map(r => ({
-              date: new Date(r.received_at).toLocaleDateString(),
-              count: 1 // In real app, aggregate by date
-          }));
+          const { data: recentReviews } = await supabase!
+            .from('reviews')
+            .select('rating, received_at, status, analysis')
+            .in('location_id', org.locations.map(l => l.id))
+            .gte('received_at', startDate.toISOString())
+            .order('received_at', { ascending: true });
+
+          const reviews = recentReviews || [];
+          
+          // Calculate volume chart locally
+          const volumeMap = new Map<string, number>();
+          reviews.forEach(r => {
+              const d = new Date(r.received_at).toLocaleDateString();
+              volumeMap.set(d, (volumeMap.get(d) || 0) + 1);
+          });
+          
+          const volumeByDate = Array.from(volumeMap.entries())
+            .map(([date, count]) => ({ date, count }))
+            .slice(-7); // Keep last 7 days for the chart view
+
+          // Use RPC KPIs if available, else fallback to calculation from recent
+          const total = kpi?.total_reviews ?? reviews.length;
+          const avg = kpi?.average_rating ?? (reviews.length > 0 ? reviews.reduce((a, b) => a + b.rating, 0) / reviews.length : 0);
+          const responseRate = kpi?.response_rate ?? 0;
+          const nps = kpi?.nps_score ?? 0;
+
+          // Simple sentiment from recent reviews
+          const pos = reviews.filter(r => r.rating >= 4).length;
+          const neg = reviews.filter(r => r.rating <= 2).length;
+          const neu = reviews.length - pos - neg;
+          const totalRecent = reviews.length || 1;
 
           return {
               period,
               total_reviews: total,
               average_rating: parseFloat(avg.toFixed(1)),
-              response_rate: Math.round((reviews.filter(r => r.status === 'sent').length / total) * 100) || 0,
-              nps_score: Math.round(((positive - negative) / total) * 100) || 0,
+              response_rate: responseRate,
+              nps_score: nps,
               global_rating: parseFloat(avg.toFixed(1)),
               sentiment_distribution: {
-                  positive: positive / (total || 1),
-                  neutral: neutral / (total || 1),
-                  negative: negative / (total || 1)
+                  positive: pos / totalRecent,
+                  neutral: neu / totalRecent,
+                  negative: neg / totalRecent
               },
               volume_by_date: volumeByDate,
               top_themes_positive: [{ name: 'Service', weight: 0.8 }, { name: 'Qualité', weight: 0.7 }],
