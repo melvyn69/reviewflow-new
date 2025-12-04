@@ -116,25 +116,31 @@ const InvoiceTable = () => {
                 <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                     <tr>
                         <th className="px-6 py-3">Date</th>
-                        <th className="px-6 py-3">Montant HT</th>
+                        <th className="px-6 py-3">N° Facture</th>
+                        <th className="px-6 py-3">Montant TTC</th>
                         <th className="px-6 py-3">Statut</th>
-                        <th className="px-6 py-3 text-right">Facture</th>
+                        <th className="px-6 py-3 text-right">Action</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                     {invoices.length === 0 ? (
-                        <tr><td colSpan={4} className="p-6 text-center text-slate-400">Aucune facture disponible.</td></tr>
+                        <tr><td colSpan={5} className="p-6 text-center text-slate-400">Aucune facture disponible.</td></tr>
                     ) : invoices.map((inv) => (
                         <tr key={inv.id} className="hover:bg-slate-50">
                             <td className="px-6 py-4 font-medium text-slate-900">{inv.date}</td>
-                            <td className="px-6 py-4">{inv.amount}</td>
+                            <td className="px-6 py-4 text-xs font-mono text-slate-500">{inv.number}</td>
+                            <td className="px-6 py-4 font-bold">{inv.amount}</td>
                             <td className="px-6 py-4">
-                                <Badge variant="success" className="text-[10px]">{inv.status}</Badge>
+                                <Badge variant={inv.status === 'paid' ? 'success' : inv.status === 'open' ? 'warning' : 'error'} className="text-[10px] capitalize">{inv.status}</Badge>
                             </td>
                             <td className="px-6 py-4 text-right">
-                                <button className="text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center gap-1">
-                                    <Download className="h-3 w-3" /> PDF
-                                </button>
+                                {inv.pdf_url ? (
+                                    <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center gap-1">
+                                        <Download className="h-3 w-3" /> PDF
+                                    </a>
+                                ) : (
+                                    <span className="text-slate-300 text-xs">N/A</span>
+                                )}
                             </td>
                         </tr>
                     ))}

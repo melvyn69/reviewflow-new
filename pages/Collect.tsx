@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Review } from '../types';
@@ -138,10 +139,25 @@ export const CollectPage = () => {
   const handleSendCampaign = async () => {
     if (!recipient) return;
     setIsSending(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSending(false);
-    toast.success(`Campagne ${campaignType === 'sms' ? 'SMS' : 'Email'} envoyée à ${recipient}`);
-    setRecipient('');
+    
+    try {
+        const subject = "Votre avis compte pour nous";
+        const content = `
+            <h1>Bonjour,</h1>
+            <p>Merci d'avoir choisi ${selectedLocation?.name}.</p>
+            <p>Nous espérons que vous avez apprécié votre expérience.</p>
+            <p>Pourriez-vous prendre 30 secondes pour nous laisser une note ?</p>
+            <p><a href="${reviewLink}">Donner mon avis</a></p>
+        `;
+
+        await api.campaigns.send(campaignType, recipient, subject, content);
+        toast.success(`Campagne ${campaignType === 'sms' ? 'SMS' : 'Email'} envoyée à ${recipient}`);
+        setRecipient('');
+    } catch (e: any) {
+        toast.error("Erreur : " + e.message);
+    } finally {
+        setIsSending(false);
+    }
   };
   
   if (!org) {

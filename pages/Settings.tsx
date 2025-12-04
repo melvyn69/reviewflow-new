@@ -27,25 +27,25 @@ import {
     ExternalLink, 
     Check, 
     Briefcase, 
-    Globe,
-    Phone,
-    MapPin,
-    PenLine,
-    UserPlus,
-    Lock,
-    Send,
-    Search,
-    UploadCloud,
-    FileText,
-    Link as LinkIcon,
-    Code,
-    Key,
-    Webhook,
-    Copy,
-    Zap,
-    Image as ImageIcon,
-    CreditCard,
-    AlertTriangle
+    Globe, 
+    Phone, 
+    MapPin, 
+    PenLine, 
+    UserPlus, 
+    Lock, 
+    Send, 
+    Search, 
+    UploadCloud, 
+    FileText, 
+    Link as LinkIcon, 
+    Code, 
+    Key, 
+    Webhook, 
+    Copy, 
+    Zap, 
+    Image as ImageIcon, 
+    CreditCard, 
+    AlertTriangle 
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -532,7 +532,7 @@ export const SettingsPage = () => {
 
   const handleUpdateProfile = async () => {
       try {
-          await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined, role: userRole });
+          await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined, role: userRole as User['role'] });
           toast.success("Profil mis à jour !");
           setUserPassword(''); 
           if (user?.role !== userRole) window.location.reload();
