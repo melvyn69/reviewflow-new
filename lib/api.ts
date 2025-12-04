@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, 
@@ -128,16 +127,27 @@ const authService = {
         }
     },
 
-    updateProfile: async (updates: Partial<User>) => {
+    updateProfile: async (updates: Partial<User> & { password?: string }) => {
         if (useSupabase()) {
             const { data: { user } } = await supabase!.auth.getUser();
             if (!user) throw new Error("Not logged in");
             
-            const { error } = await supabase!
-                .from('users')
-                .update(updates)
-                .eq('id', user.id);
-            if (error) throw error;
+            // Handle password update if provided
+            if (updates.password) {
+                const { error: pwdError } = await supabase!.auth.updateUser({ password: updates.password });
+                if (pwdError) throw pwdError;
+            }
+
+            // Exclude password from profile updates for the DB table
+            const { password, ...profileUpdates } = updates;
+            
+            if (Object.keys(profileUpdates).length > 0) {
+                const { error } = await supabase!
+                    .from('users')
+                    .update(profileUpdates)
+                    .eq('id', user.id);
+                if (error) throw error;
+            }
         } else {
             const user = JSON.parse(localStorage.getItem('mock_user') || '{}');
             localStorage.setItem('mock_user', JSON.stringify({ ...user, ...updates }));
@@ -497,6 +507,19 @@ const automationService = {
         setMockData('mock_workflows', wfs.filter(w => w.id !== id));
     },
     run: async () => {
+        if (useSupabase()) {
+            // Trigger the Edge Function manually
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process_reviews`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({}) // Empty body triggering the process
+            });
+            const json = await res.json();
+            return { processed: json.processed || 0, actions: json.actions || 0 };
+        }
         // Mock run
         await delay(1000);
         return { processed: 5, actions: 3 };
