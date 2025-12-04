@@ -174,18 +174,15 @@ const organizationService = {
           }
           return INITIAL_ORG;
       },
-      // Nouvelle méthode robuste pour sauvegarder le refresh token Google sans écraser les autres données
       saveGoogleTokens: async () => {
           console.log("🔐 Vérification du Refresh Token Google...");
           const { data } = await supabase!.auth.getSession();
-          // Le provider_refresh_token n'est présent qu'immédiatement après le callback OAuth avec access_type=offline
           const refreshToken = data.session?.provider_refresh_token;
           
           if (refreshToken) {
               console.log("✅ Token trouvé ! Sauvegarde en cours...");
               const user = await authService.getUser();
               if (user?.organization_id) {
-                  // 1. On récupère d'abord l'objet integrations existant pour ne pas écraser Facebook ou autres
                   const { data: currentOrg } = await requireSupabase()
                       .from('organizations')
                       .select('integrations')
@@ -194,7 +191,6 @@ const organizationService = {
                   
                   const currentIntegrations = currentOrg?.integrations || {};
                   
-                  // 2. On met à jour avec le nouveau token et le flag google activé
                   const { error } = await requireSupabase().from('organizations').update({ 
                       google_refresh_token: refreshToken,
                       integrations: { ...currentIntegrations, google: true }
@@ -204,8 +200,6 @@ const organizationService = {
                       console.error("❌ Erreur sauvegarde token:", error);
                       return false;
                   }
-
-                  console.log("🎉 Token Google sauvegardé avec succès pour l'organisation.");
                   return true;
               }
           }
@@ -230,18 +224,15 @@ const reviewsService = {
                 if (filters.status && filters.status !== 'Tout') {
                     query = query.eq('status', filters.status.toLowerCase());
                 }
-                
                 if (filters.source && filters.source !== 'Tout') {
                     query = query.eq('source', filters.source.toLowerCase());
                 }
-                
                 if (filters.rating && filters.rating !== 'Tout') {
                     const ratingVal = typeof filters.rating === 'string' ? parseInt(filters.rating) : filters.rating;
                     if (!isNaN(ratingVal)) {
                         query = query.eq('rating', ratingVal);
                     }
                 }
-
                 if (filters.search) {
                     query = query.ilike('text', `%${filters.search}%`);
                 }
@@ -299,20 +290,15 @@ const reviewsService = {
 };
 
 const googleService = {
-    // Utilise le token du backend (via refresh token)
     getToken: async () => {
         const { data } = await supabase!.auth.getSession();
         return data.session?.provider_token;
     },
-    
     fetchAllGoogleLocations: async () => {
-        // Pour lister les établissements la première fois, on a besoin du token temporaire de la session
         const token = await googleService.getToken();
-        
         if (!token) {
             throw new Error("Token Google introuvable. Veuillez reconnecter votre compte.");
         }
-
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch_google_locations`, {
             method: 'POST',
             headers: {
@@ -321,18 +307,13 @@ const googleService = {
             },
             body: JSON.stringify({ accessToken: token })
         });
-
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.error || "Erreur récupération établissements");
         }
-
         return await response.json();
     },
-
     syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
-        // Logique Backend : on n'envoie PAS de token depuis le client.
-        // Le backend va utiliser le refresh_token stocké de manière sécurisée dans l'organisation.
         const user = await authService.getUser();
         if (!user?.organization_id) throw new Error("Organisation manquante");
 
@@ -345,15 +326,13 @@ const googleService = {
             body: JSON.stringify({
                 locationId,
                 googleLocationName,
-                organizationId: user.organization_id // On passe l'ID pour que le back trouve le refresh_token
+                organizationId: user.organization_id 
             })
         });
-
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.error || "Erreur de synchronisation backend");
         }
-
         const data = await response.json();
         return data.count;
     }
@@ -453,6 +432,115 @@ const locationsService = {
     }
 };
 
+const analyticsService = {
+    getOverview: async (period: string = '30j'): Promise<AnalyticsSummary> => {
+        if (!isSupabaseConfigured()) return INITIAL_ANALYTICS;
+
+        try {
+            const user = await authService.getUser();
+            if (!user?.organization_id) return INITIAL_ANALYTICS;
+
+            // 1. Get Location IDs
+            const { data: locations } = await supabase!.from('locations').select('id').eq('organization_id', user.organization_id);
+            const locationIds = locations?.map(l => l.id) || [];
+
+            if (locationIds.length === 0) return { ...INITIAL_ANALYTICS, total_reviews: 0 };
+
+            // 2. Fetch Reviews with basic filtering
+            let query = supabase!
+                .from('reviews')
+                .select('rating, status, received_at, source, analysis')
+                .in('location_id', locationIds);
+
+            // Date filtering
+            const now = new Date();
+            let startDate = new Date();
+            if (period === '7j') startDate.setDate(now.getDate() - 7);
+            else if (period === '30j') startDate.setDate(now.getDate() - 30);
+            else if (period === 'Trimestre') startDate.setDate(now.getDate() - 90);
+            else startDate.setDate(now.getDate() - 365); // Default year
+
+            query = query.gte('received_at', startDate.toISOString());
+
+            const { data: reviews, error } = await query;
+            
+            if (error || !reviews || reviews.length === 0) {
+                return { ...INITIAL_ANALYTICS, total_reviews: 0, period };
+            }
+
+            // 3. Calculate Real KPIs
+            const total = reviews.length;
+            const avgRating = reviews.reduce((acc, r) => acc + r.rating, 0) / total;
+            
+            // Sentiment & NPS
+            let positive = 0, neutral = 0, negative = 0;
+            let promoters = 0, detractors = 0;
+            let responded = 0;
+
+            reviews.forEach(r => {
+                // Sentiment
+                if (r.rating >= 4) positive++;
+                else if (r.rating === 3) neutral++;
+                else negative++;
+
+                // NPS (5 = Promoter, 4 = Passive, 1-3 = Detractor)
+                if (r.rating === 5) promoters++;
+                else if (r.rating <= 3) detractors++;
+
+                // Response Rate
+                if (r.status === 'sent' || r.status === 'manual') responded++;
+            });
+
+            const nps = Math.round(((promoters - detractors) / total) * 100);
+            const responseRate = Math.round((responded / total) * 100);
+
+            // 4. Group by Date (Histogram)
+            const volumeByDate: Record<string, number> = {};
+            reviews.forEach(r => {
+                const dateKey = new Date(r.received_at).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
+                volumeByDate[dateKey] = (volumeByDate[dateKey] || 0) + 1;
+            });
+            const chartData = Object.entries(volumeByDate)
+                .map(([date, count]) => ({ date, count }))
+                .sort((a, b) => a.date.localeCompare(b.date))
+                .slice(-14); // Last 14 points
+
+            return {
+                period,
+                total_reviews: total,
+                average_rating: parseFloat(avgRating.toFixed(1)),
+                response_rate: responseRate,
+                nps_score: nps,
+                global_rating: parseFloat(avgRating.toFixed(1)),
+                sentiment_distribution: {
+                    positive: positive / total,
+                    neutral: neutral / total,
+                    negative: negative / total
+                },
+                volume_by_date: chartData,
+                // Static for now, as real extraction needs complex SQL or AI batching
+                top_themes_positive: [
+                    { name: 'service', weight: 0.8 },
+                    { name: 'qualité', weight: 0.7 }
+                ],
+                top_themes_negative: [
+                    { name: 'attente', weight: 0.5 }
+                ],
+                top_keywords: [
+                    { keyword: "merci", count: positive },
+                    { keyword: "problème", count: negative }
+                ],
+                problems_summary: negative > 0 ? "Attention aux notes inférieures à 3 étoiles récentes." : "Aucun problème majeur détecté.",
+                strengths_summary: "La majorité des clients sont satisfaits (Note > 4)."
+            };
+
+        } catch (e) {
+            console.error("Analytics Error", e);
+            return { ...INITIAL_ANALYTICS, total_reviews: 0 };
+        }
+    }
+};
+
 const teamService = {
     list: async () => [],
     invite: async (email: string, role: string) => true,
@@ -469,76 +557,6 @@ const competitorsService = {
         swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, 
         competitors_detailed: [] 
     })
-};
-
-const analyticsService = {
-    getOverview: async (period?: string): Promise<AnalyticsSummary> => {
-        if (!isSupabaseConfigured()) return INITIAL_ANALYTICS;
-
-        try {
-            const user = await authService.getUser();
-            if (!user?.organization_id) return INITIAL_ANALYTICS;
-
-            const { data: locations } = await supabase!.from('locations').select('id').eq('organization_id', user.organization_id);
-            const locationIds = locations?.map(l => l.id) || [];
-
-            if (locationIds.length === 0) return { ...INITIAL_ANALYTICS, total_reviews: 0 };
-
-            const { data: reviews } = await supabase!
-                .from('reviews')
-                .select('rating, analysis, received_at')
-                .in('location_id', locationIds);
-            
-            if (!reviews || reviews.length === 0) return { ...INITIAL_ANALYTICS, total_reviews: 0 };
-
-            const total = reviews.length;
-            const avg = reviews.reduce((a, b) => a + b.rating, 0) / total;
-            
-            let positive = 0, neutral = 0, negative = 0;
-            reviews.forEach(r => {
-                if (r.rating >= 4) positive++;
-                else if (r.rating === 3) neutral++;
-                else negative++;
-            });
-
-            return {
-                period: period || 'all_time',
-                total_reviews: total,
-                average_rating: parseFloat(avg.toFixed(1)),
-                response_rate: 0,
-                nps_score: Math.round(((positive - negative) / total) * 100),
-                global_rating: parseFloat(avg.toFixed(1)),
-                sentiment_distribution: {
-                    positive: positive / total,
-                    neutral: neutral / total,
-                    negative: negative / total
-                },
-                volume_by_date: [
-                    { date: 'J-6', count: Math.floor(Math.random() * 5) },
-                    { date: 'J-5', count: Math.floor(Math.random() * 5) },
-                    { date: 'J-4', count: Math.floor(Math.random() * 5) },
-                    { date: 'J-3', count: Math.floor(Math.random() * 5) },
-                    { date: 'J-2', count: Math.floor(Math.random() * 5) },
-                    { date: 'Hier', count: Math.floor(Math.random() * 5) },
-                    { date: 'Auj', count: Math.floor(Math.random() * 5) },
-                ],
-                top_themes_positive: [
-                    { name: 'service', weight: 0.8 },
-                    { name: 'qualité', weight: 0.7 }
-                ],
-                top_themes_negative: [
-                    { name: 'attente', weight: 0.5 }
-                ],
-                top_keywords: [
-                    { keyword: "merci", count: positive },
-                    { keyword: "problème", count: negative }
-                ]
-            };
-        } catch (e) {
-            console.error("Analytics Error", e);
-            return { ...INITIAL_ANALYTICS, total_reviews: 0 };
-        }
-    }
 };
 
 const customersService = {

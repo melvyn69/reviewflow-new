@@ -20,22 +20,31 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from '../lib/i18n';
 
-const KPI = ({ title, value, change, icon: Icon, trend }: any) => (
+const KPI = ({ title, value, change, icon: Icon, trend, loading }: any) => (
   <Card>
     <CardContent className="p-6">
       <div className="flex justify-between items-start mb-4">
         <div>
           <p className="text-sm font-medium text-slate-500">{title}</p>
-          <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
+          {loading ? (
+              <Skeleton className="h-8 w-16 mt-1" />
+          ) : (
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">{value}</h3>
+          )}
         </div>
         <div className={`p-3 rounded-xl ${trend === 'up' ? 'bg-indigo-50 text-indigo-600' : 'bg-rose-50 text-rose-600'}`}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
       <div className={`flex items-center text-xs font-medium ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-        {trend === 'up' ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-        {change} <span className="text-slate-400 ml-1">vs mois dernier</span>
+        {loading ? <Skeleton className="h-4 w-24" /> : (
+            <>
+                {trend === 'up' ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                {change} <span className="text-slate-400 ml-1">vs mois dernier</span>
+            </>
+        )}
       </div>
     </CardContent>
   </Card>
@@ -150,15 +159,18 @@ export const DashboardPage = () => {
   const [period, setPeriod] = useState('30j');
   const [seeding, setSeeding] = useState(false);
   const [realLocationId, setRealLocationId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   
   const toast = useToast();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   useEffect(() => {
     loadData();
   }, [period]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
       const [analyticsData, reviewsData, status, org] = await Promise.all([
         api.analytics.getOverview(period),
@@ -181,6 +193,8 @@ export const DashboardPage = () => {
       setUrgentReviews(urgent);
     } catch (e) {
       console.error("Dashboard Load Error", e);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -206,7 +220,7 @@ export const DashboardPage = () => {
       }
   };
 
-  const isNewAccount = !stats || stats.total_reviews === 0;
+  const isNewAccount = !loading && (!stats || stats.total_reviews === 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -214,7 +228,7 @@ export const DashboardPage = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Tableau de bord</h1>
-          <p className="text-slate-500">Bienvenue, voici ce qui se passe aujourd'hui.</p>
+          <p className="text-slate-500">Bienvenue, voici vos performances en temps réel.</p>
         </div>
         <div className="flex bg-slate-100 p-1 rounded-lg">
             {['7j', '30j', 'Trimestre'].map((p) => (
@@ -236,13 +250,16 @@ export const DashboardPage = () => {
                   <Rocket className="h-16 w-16 mx-auto mb-6 text-indigo-200" />
                   <h2 className="text-3xl font-bold mb-4">Bienvenue sur Reviewflow !</h2>
                   <p className="text-indigo-100 text-lg mb-8 max-w-2xl mx-auto">
-                      Votre tableau de bord est vide car vous n'avez pas encore connecté de source d'avis. 
-                      Pour découvrir la puissance de l'outil maintenant, nous pouvons injecter des données de démonstration.
+                      Votre tableau de bord est vide. Connectez une source d'avis ou injectez des données de test.
                   </p>
-                  <Button size="lg" icon={UploadCloud} onClick={handleSeedData} isLoading={seeding} className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-8 shadow-xl">
-                      Initialiser les Données Démo
-                  </Button>
-                  <p className="mt-4 text-xs text-indigo-300">Cela créera des faux avis, clients et statistiques pour tester l'interface.</p>
+                  <div className="flex justify-center gap-4">
+                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-8 shadow-xl" onClick={() => navigate('/settings')}>
+                          Connecter Google
+                      </Button>
+                      <Button size="lg" variant="outline" className="text-white border-indigo-400 hover:bg-indigo-700" onClick={handleSeedData} isLoading={seeding}>
+                          Mode Démo
+                      </Button>
+                  </div>
               </CardContent>
           </Card>
       ) : (
@@ -250,10 +267,10 @@ export const DashboardPage = () => {
           <SetupProgress status={setupStatus} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <KPI title="Note Moyenne" value={stats?.average_rating + '/5'} change="+0.2" icon={Star} trend="up" />
-            <KPI title="Avis non lus" value={urgentReviews.length} change="-5" icon={MessageSquare} trend="up" />
-            <KPI title="Temps de réponse" value="12h" change="-2h" icon={Clock} trend="up" />
-            <KPI title="Sentiment Positif" value={(stats ? Math.round(stats.sentiment_distribution.positive * 100) : 0) + '%'} change="+4%" icon={Activity} trend="up" />
+            <KPI title={t('kpi.rating')} value={stats?.average_rating ? stats.average_rating + '/5' : '-'} change="+0.1" icon={Star} trend="up" loading={loading} />
+            <KPI title={t('kpi.response')} value={stats?.response_rate + '%'} change="+5%" icon={MessageSquare} trend="up" loading={loading} />
+            <KPI title={t('kpi.nps')} value={stats?.nps_score} change="+2" icon={Clock} trend="up" loading={loading} />
+            <KPI title={t('kpi.sentiment')} value={(stats ? Math.round(stats.sentiment_distribution.positive * 100) : 0) + '%'} change="+4%" icon={Activity} trend="up" loading={loading} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -313,7 +330,7 @@ export const DashboardPage = () => {
                                 <h4 className="font-bold">Funnel Public</h4>
                                 <ExternalLink className="h-4 w-4 text-indigo-300" />
                             </div>
-                            <p className="text-xs text-indigo-200">Voir la page de collecte que voient vos clients (ID: {realLocationId ? realLocationId.substring(0,8) : '...'})</p>
+                            <p className="text-xs text-indigo-200">Page de collecte (ID: {realLocationId ? realLocationId.substring(0,8) : '...'})</p>
                         </div>
                         <div className="p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
                              onClick={() => navigate('/admin')}>
@@ -321,7 +338,7 @@ export const DashboardPage = () => {
                                 <h4 className="font-bold">Super Admin</h4>
                                 <ShieldAlert className="h-4 w-4 text-red-300" />
                             </div>
-                            <p className="text-xs text-indigo-200">Accéder au tableau de bord de gestion SaaS.</p>
+                            <p className="text-xs text-indigo-200">Accéder au tableau de bord SaaS.</p>
                         </div>
                     </CardContent>
                 </Card>

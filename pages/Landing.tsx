@@ -1,424 +1,360 @@
-import React, { useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, CardContent } from '../components/ui';
-import { CheckCircle2, Star, Zap, MessageSquare, ShieldCheck, ArrowRight, BarChart3, Globe, Sparkles, HelpCircle, ChevronDown, QrCode, Workflow, Users, FileText, Smartphone, Mail, Layout, Video } from 'lucide-react';
+import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '../components/ui';
+import { 
+  CheckCircle2, 
+  Star, 
+  Zap, 
+  ArrowRight, 
+  BarChart3, 
+  Globe, 
+  Calculator, 
+  TrendingUp,
+  ShieldCheck,
+  Clock,
+  Sparkles,
+  Building2,
+  Phone,
+  Play
+} from 'lucide-react';
+import { useTranslation } from '../lib/i18n';
 
-const FeatureCard = ({ icon: Icon, title, description, color = "indigo" }: any) => {
-  const colors: Record<string, string> = {
-      indigo: "bg-indigo-50 text-indigo-600",
-      green: "bg-green-50 text-green-600",
-      amber: "bg-amber-50 text-amber-600",
-      blue: "bg-blue-50 text-blue-600",
-      rose: "bg-rose-50 text-rose-600",
-      violet: "bg-violet-50 text-violet-600",
-      cyan: "bg-cyan-50 text-cyan-600",
-  };
+// --- COMPONENTS ---
 
-  return (
-    <Card className="border-none shadow-lg shadow-slate-200/50 hover:shadow-xl hover:shadow-indigo-100 transition-all duration-300 h-full">
-        <CardContent className="p-8 flex flex-col h-full">
-        <div className={`h-12 w-12 rounded-xl flex items-center justify-center mb-6 ${colors[color] || colors.indigo}`}>
-            <Icon className="h-6 w-6" />
-        </div>
-        <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
-        <p className="text-slate-600 leading-relaxed flex-1">
-            {description}
-        </p>
-        </CardContent>
-    </Card>
-  );
-};
-
-const PricingCard = ({ title, price, features, cta, highlighted = false, variant = 'light', onClick }: any) => (
-    <div className={`p-8 rounded-2xl border flex flex-col ${highlighted ? 'border-indigo-500 ring-4 ring-indigo-500/20 bg-slate-800' : 'border-slate-700 bg-slate-800/50'}`}>
-        <h3 className="text-lg font-medium text-slate-300 mb-2">{title}</h3>
-        <div className="flex items-baseline gap-1 mb-6">
-            <span className="text-4xl font-bold text-white">{price}</span>
-            <span className="text-slate-400">/mois</span>
+const PricingCard = ({ title, price, features, recommended = false, buttonLabel, onAction, subtitle }: any) => (
+    <div className={`relative p-8 rounded-2xl border flex flex-col h-full transition-all duration-300 ${recommended ? 'border-indigo-600 ring-4 ring-indigo-50 shadow-2xl bg-white scale-105 z-10' : 'border-slate-200 bg-white hover:border-slate-300 shadow-sm'}`}>
+        {recommended && (
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-lg">
+                Recommandé
+            </div>
+        )}
+        <div className="mb-6">
+            <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+            <div className="mt-2 flex items-baseline gap-1">
+                <span className="text-4xl font-extrabold text-slate-900">{price}</span>
+                {price !== 'Sur Devis' && <span className="text-slate-500 text-sm font-medium">HT / mois</span>}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">{subtitle}</p>
         </div>
         <ul className="space-y-4 mb-8 flex-1">
             {features.map((feat: string, i: number) => (
-                <li key={i} className="flex items-start gap-3 text-sm text-slate-300">
-                    <CheckCircle2 className="h-5 w-5 text-indigo-400 shrink-0" />
+                <li key={i} className="flex items-start gap-3 text-sm text-slate-600">
+                    <CheckCircle2 className={`h-5 w-5 shrink-0 ${recommended ? 'text-indigo-600' : 'text-slate-400'}`} />
                     <span>{feat}</span>
                 </li>
             ))}
         </ul>
         <Button 
-            variant={highlighted ? 'primary' : 'outline'} 
-            className={`w-full ${!highlighted ? 'text-white border-slate-600 hover:bg-slate-700' : ''}`}
-            onClick={onClick}
+            variant={recommended ? 'primary' : 'outline'} 
+            className={`w-full py-6 ${recommended ? 'shadow-xl shadow-indigo-200' : ''}`}
+            onClick={onAction}
         >
-            {cta}
+            {buttonLabel}
         </Button>
     </div>
 );
 
-const FaqItem = ({ question, answer }: { question: string, answer: string }) => {
-    const [isOpen, setIsOpen] = React.useState(false);
-    return (
-        <div className="border-b border-slate-200 last:border-0">
-            <button 
-                className="w-full py-6 flex items-center justify-between text-left focus:outline-none hover:bg-slate-50 transition-colors px-4 rounded-lg"
-                onClick={() => setIsOpen(!isOpen)}
-            >
-                <span className="text-lg font-medium text-slate-900">{question}</span>
-                <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {isOpen && (
-                <div className="pb-6 px-4 text-slate-600 leading-relaxed animate-in fade-in">
-                    {answer}
-                </div>
-            )}
-        </div>
-    )
-}
+// ADVANCED ROI CALCULATOR
+const RoiCalculator = () => {
+    const [industry, setIndustry] = useState('restaurant');
+    const [monthlyRevenue, setMonthlyRevenue] = useState(25000);
+    const [currentRating, setCurrentRating] = useState(3.8);
 
-const Step = ({ number, title, description }: any) => (
-    <div className="flex flex-col items-center text-center relative z-10">
-        <div className="h-16 w-16 bg-white border-4 border-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold mb-6 shadow-sm">
-            {number}
-        </div>
-        <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
-        <p className="text-slate-500 leading-relaxed max-w-xs">{description}</p>
-    </div>
-)
+    const sensitivityMap: Record<string, number> = {
+        restaurant: 0.09,
+        hotel: 0.11,
+        retail: 0.05,
+        services: 0.08, 
+    };
+
+    const targetRating = 4.8;
+    const ratingGap = Math.max(0, targetRating - currentRating);
+    const impactFactor = sensitivityMap[industry] || 0.07;
+    const potentialAnnualGain = Math.round((monthlyRevenue * 12) * (ratingGap * impactFactor));
+
+    return (
+        <Card className="bg-slate-900 text-white border-slate-800 shadow-2xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            
+            <CardHeader className="border-b border-slate-800 pb-6">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-500 rounded-lg text-white shadow-lg shadow-indigo-500/20">
+                        <Calculator className="h-6 w-6" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-xl text-white">Calculateur de Perte de Revenus</CardTitle>
+                        <p className="text-slate-400 text-sm">Ne laissez pas vos concurrents prendre vos clients.</p>
+                    </div>
+                </div>
+            </CardHeader>
+
+            <CardContent className="p-8 relative z-10">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div className="space-y-8">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-3">Votre Secteur</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[['restaurant', 'Resto/Bar'], ['services', 'Services'], ['retail', 'Retail'], ['hotel', 'Hôtellerie']].map(([key, label]) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => setIndustry(key)}
+                                        className={`px-4 py-3 rounded-xl text-sm font-medium transition-all border ${
+                                            industry === key 
+                                                ? 'bg-indigo-600 border-indigo-500 text-white shadow-md' 
+                                                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between text-sm mb-3">
+                                <span className="text-slate-400">CA Mensuel Moyen</span>
+                                <span className="font-bold text-white">{monthlyRevenue.toLocaleString()} $</span>
+                            </div>
+                            <input 
+                                type="range" min="5000" max="200000" step="5000" 
+                                value={monthlyRevenue} 
+                                onChange={(e) => setMonthlyRevenue(parseInt(e.target.value))}
+                                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between text-sm mb-3">
+                                <span className="text-slate-400">Note Google Actuelle</span>
+                                <span className={`font-bold ${currentRating < 4 ? 'text-amber-400' : 'text-green-400'}`}>{currentRating} ★</span>
+                            </div>
+                            <input 
+                                type="range" min="1" max="5" step="0.1" 
+                                value={currentRating} 
+                                onChange={(e) => setCurrentRating(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col justify-center items-center bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl p-8 border border-slate-700 shadow-inner">
+                        <TrendingUp className="h-12 w-12 text-green-400 mb-4 opacity-80" />
+                        <div className="text-sm text-slate-400 uppercase tracking-widest font-semibold mb-2">Manque à Gagner Annuel</div>
+                        <div className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-400 to-teal-400 mb-4">
+                            {potentialAnnualGain.toLocaleString()} $
+                        </div>
+                        <p className="text-sm text-slate-500 text-center max-w-xs leading-relaxed">
+                            C'est le montant estimé que vous laissez à vos concurrents chaque année à cause d'une réputation non optimisée.
+                        </p>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
 
 export const LandingPage = () => {
   const navigate = useNavigate();
+  const { t, setLang, lang } = useTranslation();
 
-  useEffect(() => {
-      // Load Calendly script dynamically
-      const head = document.querySelector('head');
-      const script = document.createElement('script');
-      script.setAttribute('src', 'https://assets.calendly.com/assets/external/widget.js');
-      script.setAttribute('async', 'true');
-      head?.appendChild(script);
-  }, []);
-
-  const scrollToSection = (id: string) => {
-      const element = document.getElementById(id);
-      if (element) {
-          element.scrollIntoView({ behavior: 'smooth' });
-      }
-  };
+  const handleBookDemo = () => navigate('/book-demo');
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <div className="min-h-screen bg-white font-sans text-slate-900">
       {/* Navbar */}
-      <nav className="border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <nav className="fixed w-full bg-white/90 backdrop-blur-md z-50 border-b border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
+            <div className="h-9 w-9 bg-indigo-900 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-lg">R</span>
             </div>
-            <span className="font-bold text-xl text-slate-900">Reviewflow</span>
+            <span className="font-bold text-xl tracking-tight text-slate-900">Reviewflow</span>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
-            <button onClick={() => scrollToSection('features')} className="hover:text-indigo-600 transition-colors">Fonctionnalités</button>
-            <button onClick={() => scrollToSection('pricing')} className="hover:text-indigo-600 transition-colors">Tarifs</button>
-            <button onClick={() => scrollToSection('demo')} className="hover:text-indigo-600 transition-colors flex items-center gap-1 font-semibold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full">
-                <Video className="h-4 w-4"/> Démo
-            </button>
+          
+          <div className="hidden md:flex gap-8 text-sm font-medium text-slate-600 items-center">
+              <a href="#roi" className="hover:text-indigo-900 transition-colors">ROI</a>
+              <a href="#features" className="hover:text-indigo-900 transition-colors">Platform</a>
+              <a href="#pricing" className="hover:text-indigo-900 transition-colors">Pricing</a>
           </div>
+
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/login')} className="text-sm font-medium text-slate-600 hover:text-indigo-600">
-              Connexion
+            <select 
+                value={lang} 
+                onChange={(e) => setLang(e.target.value)} 
+                className="bg-transparent text-sm font-medium text-slate-500 border-none focus:ring-0 cursor-pointer hidden sm:block"
+            >
+                <option value="en">🇺🇸 EN</option>
+                <option value="fr">🇫🇷 FR</option>
+                <option value="es">🇪🇸 ES</option>
+            </select>
+            <button onClick={() => navigate('/login')} className="text-sm font-bold text-slate-900 hover:text-indigo-600 px-4">
+              {t('nav.login')}
             </button>
-            <Button onClick={() => navigate('/register')} className="shadow-lg shadow-indigo-200">
-              Essai Gratuit
+            <Button onClick={handleBookDemo} className="shadow-lg shadow-indigo-200 bg-indigo-900 hover:bg-indigo-800 text-white rounded-full px-6">
+              {t('nav.demo')}
             </Button>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <div className="relative overflow-hidden pt-16 pb-20 lg:pt-32 lg:pb-32">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-1.5 text-indigo-700 text-xs font-bold uppercase tracking-wide mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <Sparkles className="h-3 w-3" /> Nouveau : Module "Acquisition d'avis" inclus
-          </div>
-          <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 tracking-tight mb-6 leading-tight max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
-            Gérez votre réputation <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">sans y passer vos soirées</span>
-          </h1>
-          <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-700">
-            La plateforme tout-en-un pour centraliser, analyser et répondre à vos avis clients grâce à l'IA. 
-            Idéal pour les restaurants, artisans et commerces locaux.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-in fade-in slide-in-from-bottom-10 duration-700">
-            <Button size="lg" className="h-14 px-8 text-lg shadow-xl shadow-indigo-200" onClick={() => navigate('/register')}>
-              Commencer l'essai gratuit
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
-            <Button size="lg" variant="secondary" className="h-14 px-8 text-lg bg-white border-slate-200 hover:bg-slate-50 text-slate-700" onClick={() => scrollToSection('demo')} icon={Video}>
-              Réserver une Démo
-            </Button>
-          </div>
-          <div className="mt-10 flex flex-wrap justify-center gap-6 text-sm text-slate-500 animate-in fade-in slide-in-from-bottom-12 duration-700">
-            <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-green-500" /> Sans carte bancaire</span>
-            <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-green-500" /> Compatible Google & Facebook</span>
-            <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-green-500" /> Installation en 2 min</span>
-          </div>
+      <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100/50 via-white to-white -z-10"></div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+            <div className="inline-flex items-center gap-2 bg-slate-900 rounded-full px-4 py-1.5 text-white text-xs font-bold uppercase tracking-wide mb-8 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <Sparkles className="h-3 w-3 text-yellow-400" />
+                Enterprise-Grade AI Engine
+            </div>
+            <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight mb-8 leading-tight max-w-5xl mx-auto whitespace-pre-line animate-in fade-in slide-in-from-bottom-6 duration-700">
+                {t('hero.title')}
+            </h1>
+            <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700">
+                {t('hero.subtitle')}
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700">
+                <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-2xl bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleBookDemo}>
+                    {t('cta.book')}
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button size="lg" variant="secondary" className="h-14 px-8 text-lg rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth'})}>
+                    <Play className="mr-2 h-4 w-4" /> Tour de la plateforme
+                </Button>
+            </div>
+            
+            {/* Social Proof */}
+            <div className="mt-20 pt-8 border-t border-slate-100 flex flex-col md:flex-row items-center justify-center gap-12 text-slate-400 grayscale opacity-60">
+                <div className="flex items-center gap-2 font-bold text-xl"><Building2 className="h-6 w-6" /> HYATT</div>
+                <div className="flex items-center gap-2 font-bold text-xl"><Globe className="h-6 w-6" /> REMAX</div>
+                <div className="flex items-center gap-2 font-bold text-xl"><ShieldCheck className="h-6 w-6" /> AXA</div>
+                <div className="flex items-center gap-2 font-bold text-xl"><Zap className="h-6 w-6" /> TESLA</div>
+            </div>
         </div>
-        
-        {/* Abstract Background Shapes */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full z-0 pointer-events-none">
-            <div className="absolute top-20 left-10 w-72 h-72 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-            <div className="absolute top-20 right-10 w-72 h-72 bg-violet-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-            <div className="absolute -bottom-32 left-1/2 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
-        </div>
-      </div>
+      </section>
 
-      {/* How it works */}
-      <div className="bg-slate-50 py-24 border-y border-slate-100">
+      {/* ROI Audit Section */}
+      <section id="roi" className="py-24 bg-slate-950 border-y border-slate-800 scroll-mt-20">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+              <RoiCalculator />
+          </div>
+      </section>
+
+      {/* Features Detail */}
+      <section id="features" className="py-24 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="text-center mb-16">
-                  <h2 className="text-3xl font-bold text-slate-900 mb-4">Comment ça marche ?</h2>
-                  <p className="text-slate-500 max-w-2xl mx-auto">Trois étapes simples pour reprendre le contrôle de votre image.</p>
+                  <h2 className="text-3xl font-bold text-slate-900 mb-4">Une Suite Complète</h2>
+                  <p className="text-slate-500 max-w-2xl mx-auto">Conçue pour les exigences des réseaux et franchises.</p>
               </div>
-              <div className="relative grid grid-cols-1 md:grid-cols-3 gap-12">
-                  <div className="hidden md:block absolute top-8 left-[16%] right-[16%] h-0.5 bg-indigo-100 -z-0"></div>
-                  <Step 
-                    number="1" 
-                    title="Connectez" 
-                    description="Liez vos pages Google Business et Facebook en un clic. Importez votre historique d'avis."
-                  />
-                  <Step 
-                    number="2" 
-                    title="Répondez" 
-                    description="Notre IA analyse le sentiment et rédige une réponse parfaite. Vous validez ou modifiez."
-                  />
-                  <Step 
-                    number="3" 
-                    title="Décollez" 
-                    description="Utilisez nos outils de collecte pour obtenir plus d'avis positifs et monter dans les classements."
-                  />
-              </div>
-          </div>
-      </div>
 
-      {/* Features Grid */}
-      <div id="features" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <div className="inline-block px-3 py-1 mb-4 text-xs font-semibold tracking-wider text-indigo-600 uppercase bg-indigo-50 rounded-full">
-                Fonctionnalités
-            </div>
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">Une suite complète pour votre succès</h2>
-            <p className="text-slate-500 max-w-2xl mx-auto">Nous avons rassemblé les meilleurs outils du marché dans une interface simple.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={Zap}
-              color="indigo"
-              title="Réponses IA Intelligentes"
-              description="Fini le syndrome de la page blanche. Notre IA rédige des réponses personnalisées, empathiques et sans fautes d'orthographe en 3 secondes."
-            />
-            <FeatureCard 
-              icon={Globe}
-              color="blue"
-              title="Centralisation 360°"
-              description="Google, Facebook, TripAdvisor... Tous vos avis arrivent dans une seule boîte de réception. Ne ratez plus jamais un commentaire client."
-            />
-            <FeatureCard 
-              icon={QrCode}
-              color="green"
-              title="Collecte d'Avis (Nouveau)"
-              description="Transformez vos clients en ambassadeurs. Générez des QR Codes, des affiches PDF et envoyez des campagnes SMS pour récolter des 5 étoiles."
-            />
-            <FeatureCard 
-              icon={Workflow}
-              color="amber"
-              title="Automatisation 24/7"
-              description="Créez des règles : 'Si l'avis est 5 étoiles et sans texte, répondre automatiquement merci'. L'IA travaille pendant que vous dormez."
-            />
-            <FeatureCard 
-              icon={BarChart3}
-              color="violet"
-              title="Analyses Sémantiques"
-              description="Détectez les problèmes avant qu'ils n'explosent. Notre tableau de bord analyse les mots-clés : 'Prix', 'Accueil', 'Propreté'..."
-            />
-            <FeatureCard 
-              icon={FileText}
-              color="rose"
-              title="Rapports & Équipe"
-              description="Générez des rapports PDF mensuels pour vos associés. Invitez vos managers et ajoutez des notes internes sur les avis sensibles."
-            />
-            <FeatureCard 
-              icon={Layout}
-              color="cyan"
-              title="Widgets Site Web"
-              description="Affichez vos meilleurs avis directement sur votre site internet (Wordpress, Wix, etc.) avec nos widgets personnalisables."
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Testimonials */}
-      <div id="testimonials" className="py-24 bg-slate-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-              <div>
-                  <h2 className="text-3xl font-bold mb-6">Conçu pour les pros, par des pros.</h2>
-                  <div className="flex gap-1 text-yellow-400 mb-4">
-                      {[1,2,3,4,5].map(i => <Star key={i} className="h-5 w-5 fill-current" />)}
-                  </div>
-                  <blockquote className="text-xl text-slate-300 italic leading-relaxed mb-6">
-                      "Je gère 3 salons de coiffure. Reviewflow m'a permis de déléguer la gestion des avis à mes managers tout en gardant un œil sur la qualité des réponses. L'IA comprend le vocabulaire technique de la coiffure, c'est bluffant."
-                  </blockquote>
-                  <div>
-                      <div className="font-bold text-white">Sophie M.</div>
-                      <div className="text-indigo-400">Gérante de Salons de Coiffure</div>
-                  </div>
-              </div>
-              <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-violet-500 rounded-2xl transform rotate-3 blur opacity-30"></div>
-                  <div className="relative bg-slate-800 rounded-2xl p-8 border border-slate-700">
-                      <div className="flex items-center gap-4 mb-6">
-                          <div className="h-12 w-12 bg-slate-700 rounded-full flex items-center justify-center">
-                              <StoreIcon className="h-6 w-6 text-slate-400" />
-                          </div>
-                          <div>
-                              <div className="font-bold">Garage Auto Express</div>
-                              <div className="text-xs text-slate-400">Client depuis 2024</div>
-                          </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="p-8 rounded-2xl bg-slate-50 border border-slate-100 hover:border-indigo-200 transition-all">
+                      <div className="h-12 w-12 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center mb-6">
+                          <Globe className="h-6 w-6" />
                       </div>
-                      <div className="space-y-4">
-                          <div className="flex justify-between text-sm border-b border-slate-700 pb-2">
-                              <span className="text-slate-400">Avis traités</span>
-                              <span className="font-bold text-white">1,240</span>
-                          </div>
-                          <div className="flex justify-between text-sm border-b border-slate-700 pb-2">
-                              <span className="text-slate-400">Note moyenne</span>
-                              <span className="font-bold text-green-400">4.8/5 (+0.3)</span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                              <span className="text-slate-400">Temps gagné</span>
-                              <span className="font-bold text-indigo-400">12h / mois</span>
-                          </div>
+                      <h3 className="text-xl font-bold text-slate-900 mb-3">Centralisation Multi-Lieux</h3>
+                      <p className="text-slate-600">Gérez 1 ou 1000 établissements depuis un dashboard unique. Vue groupe et permissions granulaires.</p>
+                  </div>
+                  <div className="p-8 rounded-2xl bg-slate-50 border border-slate-100 hover:border-indigo-200 transition-all">
+                      <div className="h-12 w-12 bg-indigo-100 text-indigo-700 rounded-lg flex items-center justify-center mb-6">
+                          <Zap className="h-6 w-6" />
                       </div>
+                      <h3 className="text-xl font-bold text-slate-900 mb-3">IA Générative Brandée</h3>
+                      <p className="text-slate-600">L'IA apprend votre ton de marque (Brand Voice) et répond 24/7. Validation humaine optionnelle.</p>
+                  </div>
+                  <div className="p-8 rounded-2xl bg-slate-50 border border-slate-100 hover:border-indigo-200 transition-all">
+                      <div className="h-12 w-12 bg-green-100 text-green-700 rounded-lg flex items-center justify-center mb-6">
+                          <BarChart3 className="h-6 w-6" />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900 mb-3">Analytique Prédictive</h3>
+                      <p className="text-slate-600">Détectez les tendances avant qu'elles ne deviennent des problèmes. Rapports PDF automatisés.</p>
                   </div>
               </div>
-           </div>
-        </div>
-      </div>
+          </div>
+      </section>
 
-      {/* DEMO SECTION (Calendly Inline) */}
-      <div id="demo" className="py-24 bg-indigo-50 border-y border-indigo-100">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="text-center mb-12">
-                  <h2 className="text-3xl font-bold text-slate-900 mb-4">Réservez votre démo personnalisée</h2>
-                  <p className="text-slate-500 max-w-2xl mx-auto">Nos experts vous montreront comment Reviewflow peut transformer votre activité en 15 minutes.</p>
+      {/* Pricing */}
+      <section id="pricing" className="py-24 bg-slate-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="text-center mb-16">
+                  <h2 className="text-3xl font-bold text-slate-900 mb-4">Investissement Rentable</h2>
+                  <p className="text-slate-500">Tarification transparente B2B. Pas de coûts cachés.</p>
               </div>
               
-              {/* Calendly Inline Widget */}
-              <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-                  <div 
-                    className="calendly-inline-widget" 
-                    data-url="https://calendly.com/d/cw6r-k86-yz3?hide_gdpr_banner=1&background_color=ffffff&text_color=1e293b&primary_color=4f46e5" 
-                    style={{ minWidth: '320px', height: '700px' }} 
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+                  <PricingCard 
+                    title="Essential" 
+                    price="$49"
+                    subtitle="Pour 1 établissement" 
+                    buttonLabel={t('cta.book')}
+                    onAction={handleBookDemo}
+                    features={[
+                        "Connexion Google & Facebook",
+                        "Réponses IA Illimitées",
+                        "Alertes Email instantanées",
+                        "Dashboard Analytics",
+                        "Support Email 24/7"
+                    ]} 
+                  />
+                  <PricingCard 
+                    title="Growth" 
+                    price="$79" 
+                    recommended
+                    subtitle="Jusqu'à 2 établissements"
+                    buttonLabel={t('cta.book')}
+                    onAction={handleBookDemo}
+                    features={[
+                        "Multi-établissements (Max 2)",
+                        "IA Avancée (Personnalisation)",
+                        "Automatisation (Workflows)",
+                        "Rapports PDF Marque Blanche",
+                        "Support Prioritaire"
+                    ]} 
+                  />
+                  <PricingCard 
+                    title="Enterprise" 
+                    price="Sur Devis" 
+                    subtitle="Réseaux & Franchises (+3)"
+                    buttonLabel={t('pricing.contact')}
+                    onAction={() => window.location.href = "mailto:sales@reviewflow.com"}
+                    features={[
+                        "Etablissements Illimités",
+                        "Dashboard Master (Vue Groupe)",
+                        "API Access & Webhooks",
+                        "Onboarding Dédié & CSM",
+                        "Contrat SLA & Facturation Groupe"
+                    ]} 
                   />
               </div>
-          </div>
-      </div>
-
-      {/* Pricing Section */}
-      <div id="pricing" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">Tarifs simples et transparents</h2>
-            <p className="text-slate-500 max-w-2xl mx-auto">Pas de frais cachés. Changez d'offre à tout moment.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <PricingCard 
-                title="Gratuit"
-                price="0€"
-                features={['1 Établissement', 'Connexion Google & Facebook', 'Réponses manuelles illimitées', 'Tableau de bord basique']}
-                cta="Commencer Gratuitement"
-                variant="light"
-                onClick={() => navigate('/register')}
-            />
-            <PricingCard 
-                title="Starter"
-                price="49€"
-                features={['1 Établissement', '100 Réponses IA / mois', 'Module Collecte (QR Codes)', 'Personnalité de Marque', 'Support Email']}
-                cta="Choisir Starter"
-                highlighted
-                variant="light"
-                onClick={() => navigate('/register')}
-            />
-            <PricingCard 
-                title="Pro"
-                price="79€"
-                features={['Établissements Illimités', '300 Réponses IA / mois', 'Automatisation (Workflows)', 'Rapports PDF & Excel', 'Notes Internes & Équipe']}
-                cta="Choisir Pro"
-                variant="light"
-                onClick={() => navigate('/register')}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* FAQ Section */}
-      <div id="faq" className="py-24 bg-slate-50">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6">
-              <div className="text-center mb-12">
-                  <h2 className="text-3xl font-bold text-slate-900">Questions Fréquentes</h2>
-              </div>
-              <div className="space-y-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <FaqItem 
-                    question="Est-ce compatible avec mon activité ?" 
-                    answer="Oui ! Reviewflow s'adapte à tous les secteurs : restaurants, artisans, coiffeurs, garages, boutiques, etc. Vous pouvez configurer l'IA pour qu'elle utilise votre vocabulaire métier spécifique." 
-                  />
-                  <FaqItem 
-                    question="Puis-je annuler à tout moment ?" 
-                    answer="Absolument. Il n'y a aucun engagement de durée. Vous pouvez annuler votre abonnement d'un simple clic depuis votre espace client." 
-                  />
-                  <FaqItem 
-                    question="Comment fonctionne la connexion Google ?" 
-                    answer="Nous utilisons l'API officielle Google Business Profile (certifiée). Vous connectez votre compte en toute sécurité, et nous synchronisons vos avis automatiquement sans jamais avoir accès à vos mots de passe." 
-                  />
-                  <FaqItem 
-                    question="L'IA répond-elle toute seule ?" 
-                    answer="Par défaut, l'IA génère des brouillons que vous devez valider. C'est vous qui gardez le contrôle. Vous pouvez activer l'automatisation complète (autopilot) uniquement si vous le décidez, par exemple pour les avis 5 étoiles simples." 
-                  />
+              <div className="mt-12 text-center">
+                  <p className="text-sm text-slate-500">
+                      Besoin d'une offre sur mesure pour plus de 50 points de vente ? <a href="#" className="text-indigo-600 font-bold hover:underline" onClick={handleBookDemo}>Parlons-en.</a>
+                  </p>
               </div>
           </div>
-      </div>
+      </section>
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 bg-slate-900 rounded flex items-center justify-center">
-                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                    </svg>
-                </div>
-                <span className="font-bold text-slate-900">Reviewflow</span>
-              </div>
-              <div className="text-sm text-slate-500">
-                  © 2025 Reviewflow SAS. Tous droits réservés.
-              </div>
-              <div className="flex gap-6 text-sm text-slate-500">
-                  <button onClick={() => navigate('/legal')} className="hover:text-slate-900">Mentions Légales</button>
-                  <button onClick={() => navigate('/privacy')} className="hover:text-slate-900">Confidentialité</button>
-                  <button onClick={() => navigate('/contact')} className="hover:text-slate-900">Contact</button>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 bg-indigo-900 rounded-lg flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">R</span>
+                    </div>
+                    <span className="font-bold text-slate-900 text-xl">Reviewflow</span>
+                  </div>
+                  <div className="text-sm text-slate-500">
+                      © 2025 Reviewflow SAS. Paris, France.
+                  </div>
+                  <div className="flex gap-6 text-sm font-medium text-slate-600">
+                      <a href="/legal" className="hover:text-indigo-900">Legal</a>
+                      <a href="/privacy" className="hover:text-indigo-900">Privacy</a>
+                      <a href="/contact" className="hover:text-indigo-900">Contact</a>
+                  </div>
               </div>
           </div>
       </footer>
     </div>
   );
 };
-
-// Simple icon for testimonial section
-const StoreIcon = ({ className }: { className?: string }) => (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m8-2a2 2 0 01-2.828 0 2 2 0 010-2.828 2 2 0 012.828 0 2 2 0 010 2.828z" />
-    </svg>
-);

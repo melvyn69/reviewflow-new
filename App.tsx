@@ -20,9 +20,11 @@ import { HelpPage } from './pages/Help';
 import { CustomersPage } from './pages/Customers';
 import { SuperAdminPage } from './pages/SuperAdmin';
 import { CompetitorsPage } from './pages/Competitors';
+import { BookDemoPage } from './pages/BookDemo';
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
+import { I18nProvider } from './lib/i18n';
 
 // ScrollToTop component
 const ScrollToTop = () => {
@@ -68,6 +70,9 @@ function AppRoutes() {
         {/* Public Routes */}
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="login" onLoginSuccess={checkUser} />} />
+        <Route path="/book-demo" element={<BookDemoPage />} />
+        
+        {/* Hidden Registration (Invite Only logic conceptually, but kept open for code completeness) */}
         <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />} />
         
         <Route path="/legal" element={<LegalPage />} />
@@ -110,9 +115,11 @@ function AppRoutes() {
 const App = () => {
   return (
     <HashRouter>
-      <ToastProvider>
-        <AppRoutes />
-      </ToastProvider>
+      <I18nProvider>
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
+      </I18nProvider>
     </HashRouter>
   );
 };

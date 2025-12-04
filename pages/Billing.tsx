@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone, Building2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useTranslation } from '../lib/i18n';
 
 const PricingCard = ({ 
     title, 
@@ -15,7 +16,8 @@ const PricingCard = ({
     onUpgrade, 
     loading,
     variant = 'default',
-    overageText
+    subtext,
+    ctaLabel
 }: { 
     title: string; 
     price: string; 
@@ -23,26 +25,27 @@ const PricingCard = ({
     current?: boolean; 
     onUpgrade?: () => void; 
     loading?: boolean;
-    variant?: 'default' | 'featured';
-    overageText?: string;
+    variant?: 'default' | 'featured' | 'enterprise';
+    subtext?: string;
+    ctaLabel?: string;
 }) => (
-    <div className={`relative p-6 rounded-2xl border transition-all duration-300 ${current ? 'border-indigo-600 ring-2 ring-indigo-100 bg-white' : variant === 'featured' ? 'border-indigo-200 bg-gradient-to-b from-indigo-50/50 to-white shadow-lg scale-105 z-10' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+    <div className={`relative p-6 rounded-2xl border transition-all duration-300 flex flex-col h-full ${current ? 'border-indigo-600 ring-2 ring-indigo-100 bg-white' : variant === 'featured' ? 'border-indigo-200 bg-gradient-to-b from-indigo-50/50 to-white shadow-lg scale-105 z-10' : variant === 'enterprise' ? 'border-slate-800 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
         {current && (
             <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
                 Plan Actuel
             </span>
         )}
-        <h3 className="text-lg font-bold text-slate-900 mb-2">{title}</h3>
+        <h3 className={`text-lg font-bold mb-2 ${variant === 'enterprise' ? 'text-white' : 'text-slate-900'}`}>{title}</h3>
         <div className="flex items-baseline gap-1 mb-1">
-            <span className="text-3xl font-bold text-slate-900">{price}</span>
-            <span className="text-sm text-slate-500">/mois</span>
+            <span className={`text-3xl font-bold ${variant === 'enterprise' ? 'text-white' : 'text-slate-900'}`}>{price}</span>
+            {price !== 'Sur Devis' && <span className={`text-sm ${variant === 'enterprise' ? 'text-slate-400' : 'text-slate-500'}`}>HT/mois</span>}
         </div>
-        {overageText && <p className="text-xs text-slate-500 mb-6">{overageText}</p>}
+        {subtext && <p className={`text-xs mb-6 ${variant === 'enterprise' ? 'text-slate-400' : 'text-slate-500'}`}>{subtext}</p>}
         
-        <ul className="space-y-3 mb-8">
+        <ul className="space-y-3 mb-8 flex-1">
             {features.map((feat, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm text-slate-600">
-                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                <li key={i} className={`flex items-start gap-3 text-sm ${variant === 'enterprise' ? 'text-slate-300' : 'text-slate-600'}`}>
+                    <CheckCircle2 className={`h-4 w-4 shrink-0 mt-0.5 ${variant === 'enterprise' ? 'text-indigo-400' : 'text-green-500'}`} />
                     <span>{feat}</span>
                 </li>
             ))}
@@ -52,18 +55,19 @@ const PricingCard = ({
             <Button disabled className="w-full bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-100">Actif</Button>
         ) : (
             <Button 
-                variant={variant === 'featured' ? 'primary' : 'outline'} 
-                className="w-full" 
+                variant={variant === 'featured' ? 'primary' : variant === 'enterprise' ? 'secondary' : 'outline'} 
+                className={`w-full ${variant === 'enterprise' ? 'bg-white text-slate-900 hover:bg-slate-100 border-none' : ''}`}
                 onClick={onUpgrade}
                 isLoading={loading}
             >
-                {variant === 'featured' ? 'Passer au Pro' : 'Choisir'}
+                {ctaLabel || (variant === 'enterprise' ? 'Contacter' : 'Choisir')}
             </Button>
         )}
     </div>
 );
 
 const InvoiceTable = () => {
+    // ... (same as before)
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const toast = useToast();
@@ -75,65 +79,6 @@ const InvoiceTable = () => {
         });
     }, []);
 
-    const handleDownload = (invoice: any) => {
-        const doc = new jsPDF();
-        
-        // Logo / Brand
-        doc.setFontSize(22);
-        doc.setTextColor(79, 70, 229);
-        doc.text("Reviewflow", 20, 20);
-        
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text("12 Avenue de la République", 20, 26);
-        doc.text("75011 Paris, France", 20, 31);
-        doc.text("SIRET: 123 456 789 00012", 20, 36);
-
-        // Invoice Info
-        doc.setFontSize(16);
-        doc.setTextColor(30, 41, 59);
-        doc.text("FACTURE", 140, 20);
-        doc.setFontSize(10);
-        doc.text(`N° ${invoice.id}`, 140, 26);
-        doc.text(`Date : ${invoice.date}`, 140, 31);
-        
-        // Client Info
-        doc.text("Facturé à :", 20, 55);
-        doc.setFont("helvetica", "bold");
-        doc.text("Client", 20, 60);
-        
-        // Table
-        const price = parseFloat(invoice.amount.replace('€', ''));
-        const ht = (price / 1.2).toFixed(2);
-        const tva = (price - parseFloat(ht)).toFixed(2);
-
-        autoTable(doc, {
-            startY: 80,
-            head: [['Description', 'Qté', 'Prix U. HT', 'Total HT']],
-            body: [
-                ['Abonnement Pro Mensuel', '1', `${ht} €`, `${ht} €`],
-                ['Crédits IA (Inclus)', '1', '0.00 €', '0.00 €']
-            ],
-            theme: 'striped',
-            headStyles: { fillColor: [79, 70, 229] },
-            foot: [
-                ['', '', 'Total HT', `${ht} €`],
-                ['', '', 'TVA (20%)', `${tva} €`],
-                ['', '', 'Total TTC', invoice.amount]
-            ],
-            footStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' }
-        });
-        
-        // Footer
-        const finalY = (doc as any).lastAutoTable.finalY + 20;
-        doc.setFontSize(9);
-        doc.setTextColor(150);
-        doc.text("Paiement acquitté.", 20, finalY);
-
-        doc.save(`facture_${invoice.id}.pdf`);
-        toast.success("Facture téléchargée");
-    };
-
     if (loading) return <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>;
 
     return (
@@ -142,13 +87,15 @@ const InvoiceTable = () => {
                 <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                     <tr>
                         <th className="px-6 py-3">Date</th>
-                        <th className="px-6 py-3">Montant</th>
+                        <th className="px-6 py-3">Montant HT</th>
                         <th className="px-6 py-3">Statut</th>
                         <th className="px-6 py-3 text-right">Facture</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    {invoices.map((inv) => (
+                    {invoices.length === 0 ? (
+                        <tr><td colSpan={4} className="p-6 text-center text-slate-400">Aucune facture disponible.</td></tr>
+                    ) : invoices.map((inv) => (
                         <tr key={inv.id} className="hover:bg-slate-50">
                             <td className="px-6 py-4 font-medium text-slate-900">{inv.date}</td>
                             <td className="px-6 py-4">{inv.amount}</td>
@@ -156,10 +103,7 @@ const InvoiceTable = () => {
                                 <Badge variant="success" className="text-[10px]">{inv.status}</Badge>
                             </td>
                             <td className="px-6 py-4 text-right">
-                                <button 
-                                    onClick={() => handleDownload(inv)}
-                                    className="text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center gap-1"
-                                >
+                                <button className="text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center gap-1">
                                     <Download className="h-3 w-3" /> PDF
                                 </button>
                             </td>
@@ -176,6 +120,7 @@ export const BillingPage = () => {
     const [upgrading, setUpgrading] = useState<string | null>(null);
     const [error, setError] = useState(false);
     const toast = useToast();
+    const { t } = useTranslation();
 
     useEffect(() => {
         loadOrg();
@@ -185,14 +130,9 @@ export const BillingPage = () => {
         setError(false);
         setOrg(null);
         try {
-            // Timeout safety pour éviter le chargement infini
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
-            const dataPromise = api.organization.get();
-            
-            const data = await Promise.race([dataPromise, timeoutPromise]) as Organization;
+            const data = await api.organization.get();
             setOrg(data);
         } catch (e) {
-            console.error("Erreur chargement Billing:", e);
             setError(true);
         }
     };
@@ -201,156 +141,115 @@ export const BillingPage = () => {
         setUpgrading(plan);
         try {
             const url = await api.billing.createCheckoutSession(plan);
-            // Redirection vers le lien Stripe Payment Link
             if (url && url.startsWith('http')) {
                 window.location.href = url;
             } else {
-                // Fallback si lien vide (ex: en dev)
                 toast.error("Lien de paiement non configuré.");
             }
         } catch (e: any) {
-            console.error(e);
             toast.error(e.message || "Erreur paiement.");
         } finally {
             setUpgrading(null);
         }
     };
 
-    // Helper pour forcer le plan en mode démo
-    const handleSimulatePlan = async (plan: 'free' | 'starter' | 'pro') => {
-        try {
-            await api.organization.simulatePlanChange(plan);
-            toast.success(`Mode Démo : Plan changé en ${plan.toUpperCase()}`);
-            loadOrg();
-        } catch (e) {
-            toast.error("Erreur changement plan");
-        }
+    const handleContactSales = () => {
+        window.location.href = "mailto:sales@reviewflow.com?subject=Demande%20Enterprise";
     };
 
-    if (error) {
-        return (
-            <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
-                <ShieldCheck className="h-12 w-12 text-slate-300 mb-4" />
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Information indisponible</h3>
-                <p className="text-slate-500 mb-6">Nous n'avons pas pu charger votre abonnement. Cela arrive si l'organisation est en cours de création.</p>
-                <Button onClick={loadOrg} icon={RefreshCw}>Réessayer</Button>
-            </div>
-        );
-    }
-
+    if (error) return <div>Erreur chargement.</div>;
     if (!org) return <div className="p-8 text-center"><Skeleton className="h-96 w-full" /></div>;
 
-    // Logic for usage bars
     const usage = org.ai_usage_count || 0;
-    const limit = org.subscription_plan === 'free' ? 3 : org.subscription_plan === 'starter' ? 100 : 300;
-    const percentage = Math.min(100, (usage / limit) * 100);
+    const limit = org.subscription_plan === 'free' ? 0 : org.subscription_plan === 'starter' ? 150 : 500;
+    const percentage = limit > 0 ? Math.min(100, (usage / limit) * 100) : 100;
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Abonnement & Facturation</h1>
-                    <p className="text-slate-500">Gérez votre plan et vos méthodes de paiement.</p>
+                    <p className="text-slate-500">Vente B2B uniquement. TVA applicable selon le pays.</p>
                 </div>
-                <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url: string) => window.location.href = url)}>
-                    Gérer carte bancaire
-                </Button>
+                {org.subscription_plan !== 'free' && (
+                    <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url: string) => window.location.href = url)}>
+                        Gérer carte & Factures
+                    </Button>
+                )}
             </div>
 
             {/* Usage Section */}
-            <Card className="bg-gradient-to-r from-slate-900 to-indigo-900 text-white border-none shadow-xl">
-                <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Zap className="h-5 w-5 text-yellow-400 fill-yellow-400" />
-                            <h3 className="font-bold text-lg">Consommation IA</h3>
+            {org.subscription_plan !== 'free' && (
+                <Card className="bg-gradient-to-r from-slate-900 to-indigo-900 text-white border-none shadow-xl">
+                    <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-8">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Zap className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                                <h3 className="font-bold text-lg">Consommation IA</h3>
+                            </div>
+                            <div className="w-full bg-white/10 rounded-full h-4 mb-2 overflow-hidden">
+                                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 h-full" style={{ width: `${percentage}%` }}></div>
+                            </div>
+                            <div className="flex justify-between text-xs font-medium text-indigo-200">
+                                <span>{usage} réponses</span>
+                                <span>Limite : {limit}</span>
+                            </div>
                         </div>
-                        <p className="text-indigo-200 text-sm mb-6">
-                            Crédits de réponse utilisés ce mois-ci. Les réponses supplémentaires sont facturées selon votre plan.
-                        </p>
-                        <div className="w-full bg-white/10 rounded-full h-4 mb-2 overflow-hidden">
-                            <div 
-                                className="bg-gradient-to-r from-yellow-400 to-orange-500 h-full transition-all duration-1000 ease-out" 
-                                style={{ width: `${percentage}%` }}
-                            ></div>
+                        <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[200px]">
+                            <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold mb-1">Plan Actuel</div>
+                            <div className="text-2xl font-bold mb-1 capitalize">{org.subscription_plan}</div>
                         </div>
-                        <div className="flex justify-between text-xs font-medium text-indigo-200">
-                            <span>{usage} réponses générées</span>
-                            <span>Limite incluse : {limit}</span>
-                        </div>
-                    </div>
-                    <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[200px]">
-                        <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold mb-1">Plan Actuel</div>
-                        <div className="text-2xl font-bold mb-1 capitalize">{org.subscription_plan}</div>
-                        {org.subscription_plan === 'free' && (
-                            <Button size="xs" className="mt-2 bg-white text-indigo-900 hover:bg-indigo-50 border-none" onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth'})}>
-                                Mettre à niveau
-                            </Button>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Pricing Cards */}
-            <div id="pricing" className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start pt-8">
+            <div id="pricing" className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch pt-4">
                 <PricingCard 
-                    title="Gratuit" 
-                    price="0€" 
-                    current={org.subscription_plan === 'free'}
-                    overageText="Pas d'IA incluse"
-                    features={[
-                        "1 Établissement",
-                        "Connexion Google & Facebook",
-                        "Réponses Manuelles illimitées",
-                        "Tableau de bord basique",
-                        "Pas d'IA générative"
-                    ]} 
-                />
-                <PricingCard 
-                    title="Starter" 
-                    price="49€" 
+                    title="Essential" 
+                    price="$49" 
                     current={org.subscription_plan === 'starter'}
                     loading={upgrading === 'starter'}
                     onUpgrade={() => handleUpgrade('starter')}
-                    overageText="puis 0.20€ / réponse supp."
+                    subtext="Pour 1 établissement"
                     features={[
-                        "1 Établissement",
-                        "100 Réponses IA incluses",
-                        "IA personnalisée (Brand Voice)",
+                        "1 Établissement connecté",
+                        "Réponses IA Illimitées",
+                        "Alertes Email instantanées",
                         "Analyses Sémantiques",
-                        "Support Email 24h"
+                        "Support Email 24/7"
                     ]} 
                 />
                 <PricingCard 
-                    title="Pro" 
-                    price="79€" 
+                    title="Growth" 
+                    price="$79" 
                     variant="featured"
                     current={org.subscription_plan === 'pro'}
                     loading={upgrading === 'pro'}
                     onUpgrade={() => handleUpgrade('pro')}
-                    overageText="puis 0.15€ / réponse supp."
+                    subtext="Jusqu'à 2 établissements"
                     features={[
-                        "Établissements Illimités",
-                        "300 Réponses IA incluses",
+                        "2 Établissements connectés",
                         "Automatisation (Workflows)",
-                        "Rapports PDF & Excel",
-                        "Support Prioritaire",
-                        "Accès API"
+                        "Rapports PDF Marque Blanche",
+                        "Veille Concurrentielle",
+                        "Support Prioritaire"
                     ]} 
                 />
-            </div>
-
-            {/* DEV TOOLS: SIMULATE PLAN CHANGE */}
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mt-8">
-                <h3 className="font-bold text-amber-900 text-sm mb-3 flex items-center gap-2">
-                    <Smartphone className="h-4 w-4" /> Mode Développeur : Simuler un changement de plan
-                </h3>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleSimulatePlan('free')} className="bg-white border-amber-200 hover:bg-amber-100 text-amber-800">Forcer Free</Button>
-                    <Button variant="outline" size="sm" onClick={() => handleSimulatePlan('starter')} className="bg-white border-amber-200 hover:bg-amber-100 text-amber-800">Forcer Starter</Button>
-                    <Button variant="outline" size="sm" onClick={() => handleSimulatePlan('pro')} className="bg-white border-amber-200 hover:bg-amber-100 text-amber-800">Forcer Pro</Button>
-                </div>
-                <p className="text-xs text-amber-700 mt-2">Utilisez ces boutons pour tester l'interface utilisateur selon les différents niveaux d'abonnement sans passer par Stripe.</p>
+                <PricingCard 
+                    title="Enterprise" 
+                    price="Sur Devis" 
+                    variant="enterprise"
+                    subtext="Réseaux & Franchises (+3 lieux)"
+                    onUpgrade={handleContactSales}
+                    features={[
+                        "Établissements Illimités",
+                        "Dashboard Master (Vue Groupe)",
+                        "API Dédiée",
+                        "Onboarding Personnalisé",
+                        "Facturation centralisée"
+                    ]} 
+                />
             </div>
 
             {/* Invoices */}
@@ -368,7 +267,7 @@ export const BillingPage = () => {
 
             <div className="text-center text-xs text-slate-400 flex items-center justify-center gap-2 pb-8">
                 <ShieldCheck className="h-4 w-4" />
-                Paiements sécurisés par Stripe. Annulation possible à tout moment.
+                Transactions sécurisées par Stripe. Factures disponibles avec TVA détaillée.
             </div>
         </div>
     );
