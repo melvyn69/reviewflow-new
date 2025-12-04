@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { WorkflowRule } from '../types';
+import { WorkflowRule, Organization } from '../types';
 import { Card, CardContent, Button, Toggle, Badge, useToast, Input } from '../components/ui';
-import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, AlertTriangle, Clock, Settings, Shield, Activity, Share2 } from 'lucide-react';
+import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, AlertTriangle, Clock, Settings, Shield, Activity, Share2, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const WorkflowItem: React.FC<{ workflow: WorkflowRule }> = ({ workflow }) => {
   const [enabled, setEnabled] = useState(workflow.enabled);
@@ -43,9 +45,11 @@ const WorkflowItem: React.FC<{ workflow: WorkflowRule }> = ({ workflow }) => {
 
 export const AutomationPage = () => {
   const [workflows, setWorkflows] = useState<WorkflowRule[]>([]);
+  const [org, setOrg] = useState<Organization | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [lastRunResult, setLastRunResult] = useState<{processed: number, actions: number, alerts: number} | null>(null);
   
   // Builder State
@@ -56,11 +60,22 @@ export const AutomationPage = () => {
   const [builderConditionOperator, setBuilderConditionOperator] = useState('gte');
 
   const toast = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Charger les workflows existants
-    api.automation.getWorkflows().then(setWorkflows);
+    loadData();
   }, []);
+
+  const loadData = async () => {
+      setLoading(true);
+      const [workflowsData, orgData] = await Promise.all([
+          api.automation.getWorkflows(),
+          api.organization.get()
+      ]);
+      setWorkflows(workflowsData);
+      setOrg(orgData);
+      setLoading(false);
+  };
 
   const handleCreateWorkflow = async () => {
     setIsCreating(true);
@@ -112,6 +127,29 @@ export const AutomationPage = () => {
           setIsRunning(false);
       }
   };
+
+  if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
+
+  // UPGRADE WALL
+  if (org && org.subscription_plan !== 'pro') {
+      return (
+          <div className="max-w-5xl mx-auto h-[80vh] flex items-center justify-center">
+              <div className="text-center max-w-md p-8 bg-white rounded-2xl shadow-xl border border-slate-200">
+                  <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Lock className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-slate-900 mb-2">Fonctionnalité Pro</h2>
+                  <p className="text-slate-500 mb-8">
+                      L'automatisation des réponses et la publication sur les réseaux sociaux sont réservées aux membres Pro.
+                  </p>
+                  <Button size="lg" className="w-full shadow-lg shadow-indigo-200" onClick={() => navigate('/billing')}>
+                      Passer au plan Pro
+                  </Button>
+                  <p className="mt-4 text-xs text-slate-400">À partir de 79€/mois • Annulation à tout moment</p>
+              </div>
+          </div>
+      );
+  }
 
   if (showBuilder) {
     return (

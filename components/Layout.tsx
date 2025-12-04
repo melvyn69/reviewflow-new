@@ -24,7 +24,7 @@ import {
   Target
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { AppNotification } from '../types';
+import { AppNotification, User } from '../types';
 
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => {
   const location = useLocation();
@@ -89,10 +89,10 @@ const BottomNav = () => {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  userEmail?: string;
+  user?: User;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, userEmail }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstall, setShowInstall] = useState(false);
 
@@ -160,11 +160,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, userEmail }) => {
           <SidebarItem to="/settings" icon={Settings} label="Paramètres" onClick={onClose} />
           <SidebarItem to="/help" icon={HelpCircle} label="Centre d'Aide" onClick={onClose} />
           
-          {/* Always show Admin for demo purposes, or filter by email if strict */}
-          <div className="px-3 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
-              <ShieldAlert className="h-3 w-3" /> Zone Admin
-          </div>
-          <SidebarItem to="/admin" icon={ShieldAlert} label="Super Admin" onClick={onClose} />
+          {/* Conditional Rendering for Super Admin */}
+          {user?.role === 'super_admin' && (
+            <>
+                <div className="px-3 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
+                    <ShieldAlert className="h-3 w-3" /> Zone Admin
+                </div>
+                <SidebarItem to="/admin" icon={ShieldAlert} label="Super Admin" onClick={onClose} />
+            </>
+          )}
         
           {showInstall && (
             <div className="mt-6 mx-3">
@@ -319,7 +323,9 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
           <div className="flex items-center gap-3">
             <div className="text-right hidden md:block">
               <div className="text-sm font-medium text-slate-900">{user.name}</div>
-              <div className="text-xs text-slate-500 capitalize">{user.role === 'admin' ? 'Administrateur' : user.role}</div>
+              <div className="text-xs text-slate-500 capitalize">
+                  {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : user.role}
+              </div>
             </div>
             <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=random`} alt="Avatar" className="h-9 w-9 rounded-full border border-slate-200" />
           </div>
@@ -331,17 +337,17 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
 
 export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState<string>('');
+  const [user, setUser] = useState<User | undefined>(undefined);
   const location = useLocation();
 
   useEffect(() => {
     setIsSidebarOpen(false);
-    api.auth.getUser().then(u => setUserEmail(u?.email || ''));
+    api.auth.getUser().then(u => setUser(u || undefined));
   }, [location]);
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} userEmail={userEmail} />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={user} />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar onMenuClick={() => setIsSidebarOpen(true)} />
         <main className="flex-1 overflow-auto p-4 md:p-8 pb-24 lg:pb-8">

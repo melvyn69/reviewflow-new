@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import jsPDF from 'jspdf';
@@ -215,6 +216,17 @@ export const BillingPage = () => {
         }
     };
 
+    // Helper pour forcer le plan en mode démo
+    const handleSimulatePlan = async (plan: 'free' | 'starter' | 'pro') => {
+        try {
+            await api.organization.simulatePlanChange(plan);
+            toast.success(`Mode Démo : Plan changé en ${plan.toUpperCase()}`);
+            loadOrg();
+        } catch (e) {
+            toast.error("Erreur changement plan");
+        }
+    };
+
     if (error) {
         return (
             <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
@@ -326,6 +338,19 @@ export const BillingPage = () => {
                         "Accès API"
                     ]} 
                 />
+            </div>
+
+            {/* DEV TOOLS: SIMULATE PLAN CHANGE */}
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mt-8">
+                <h3 className="font-bold text-amber-900 text-sm mb-3 flex items-center gap-2">
+                    <Smartphone className="h-4 w-4" /> Mode Développeur : Simuler un changement de plan
+                </h3>
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleSimulatePlan('free')} className="bg-white border-amber-200 hover:bg-amber-100 text-amber-800">Forcer Free</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleSimulatePlan('starter')} className="bg-white border-amber-200 hover:bg-amber-100 text-amber-800">Forcer Starter</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleSimulatePlan('pro')} className="bg-white border-amber-200 hover:bg-amber-100 text-amber-800">Forcer Pro</Button>
+                </div>
+                <p className="text-xs text-amber-700 mt-2">Utilisez ces boutons pour tester l'interface utilisateur selon les différents niveaux d'abonnement sans passer par Stripe.</p>
             </div>
 
             {/* Invoices */}

@@ -1,3 +1,4 @@
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -66,7 +67,7 @@ const authService = {
         });
         if (authError) throw authError;
     },
-    updateProfile: async (data: { name?: string, email?: string, password?: string }) => {
+    updateProfile: async (data: { name?: string, email?: string, password?: string, role?: string }) => {
         const db = requireSupabase();
         const updates: any = {};
         
@@ -77,10 +78,14 @@ const authService = {
         const { error } = await db.auth.updateUser(updates);
         if (error) throw error;
         
-        // Mettre à jour la table public.users aussi si changement de nom
-        if (data.name) {
-             const { data: { user } } = await db.auth.getUser();
-             if (user) await db.from('users').update({ full_name: data.name }).eq('id', user.id);
+        // Mettre à jour la table public.users
+        const { data: { user } } = await db.auth.getUser();
+        if (user) {
+            const profileUpdates: any = {};
+            if (data.name) profileUpdates.full_name = data.name;
+            if (data.role) profileUpdates.role = data.role; // Allow role simulation
+            
+            await db.from('users').update(profileUpdates).eq('id', user.id);
         }
         
         return true;
@@ -125,7 +130,6 @@ const authService = {
 const companyService = {
     // Simulation d'une API type "Pappers" ou "Societe.com"
     search: async (query: string) => {
-        // En prod, appeler une Edge Function qui interroge l'API réelle pour masquer la clé
         console.log("Searching company registry for:", query);
         await new Promise(resolve => setTimeout(resolve, 800)); // Fake latency
 
@@ -253,8 +257,14 @@ const organizationService = {
           }
           return INITIAL_ORG;
       },
-      toggleIntegration: async (provider: string, enabled: boolean) => { return true; },
-      upgradePlan: async (plan: string) => { return true; }
+      // Force plan update for demo purposes
+      simulatePlanChange: async (plan: 'free' | 'starter' | 'pro') => {
+          const user = await authService.getUser();
+          if (user?.organization_id) {
+              await requireSupabase().from('organizations').update({ subscription_plan: plan }).eq('id', user.organization_id);
+          }
+          return true;
+      }
 };
 
 const reviewsService = {
@@ -341,19 +351,16 @@ const reviewsService = {
                   if (!text) return reject("Fichier vide");
                   
                   // Simple CSV Parser (Header expected: Date,Author,Rating,Comment,Source)
-                  // Handles quotes somewhat simplistically
                   const lines = text.split('\n').slice(1); // Skip header
                   const parsedReviews = [];
                   
                   for (const line of lines) {
                       if (!line.trim()) continue;
-                      const cols = line.split(','); // Warning: breaks if comma in content without proper csv parsing library
+                      const cols = line.split(','); 
                       if (cols.length >= 3) {
-                          // Try to be robust
                           const date = cols[0] ? new Date(cols[0]).toISOString() : new Date().toISOString();
                           const author = cols[1] || 'Anonyme';
                           const rating = parseInt(cols[2]) || 5;
-                          // Join rest as body in case of extra commas
                           const body = cols.slice(3).join(',').replace(/^"|"$/g, '').trim(); 
                           
                           parsedReviews.push({
@@ -361,7 +368,7 @@ const reviewsService = {
                               author_name: author,
                               rating: rating,
                               text: body,
-                              source: 'direct' // Default for imported
+                              source: 'direct' 
                           });
                       }
                   }
@@ -467,8 +474,6 @@ const googleService = {
         const token = await googleService.getToken();
         if (!token) throw new Error("Token manquant");
         
-        // Use v4 API or appropriate endpoint. Assuming standard v4 for reviews.
-        // Format of locationName must be "accounts/{accId}/locations/{locId}"
         const res = await fetch(`https://mybusiness.googleapis.com/v4/${locationName}/reviews`, {
              headers: { Authorization: `Bearer ${token}` }
         });
@@ -485,8 +490,6 @@ const googleService = {
         
         let count = 0;
         for (const r of reviews) {
-            // Check if review already exists (basic check)
-            // Note: In prod, use `external_id` column
             const receivedAt = r.createTime || new Date().toISOString();
             const author = r.reviewer?.displayName || 'Anonyme';
             const ratingMap: any = { "ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "FIVE": 5, "STAR_RATING_UNSPECIFIED": 0 };
@@ -712,7 +715,6 @@ const teamService = {
         const user = await authService.getUser();
         if(!user?.organization_id) return [];
         
-        // Récupération des utilisateurs liés à l'organisation
         const { data: users, error } = await requireSupabase().from('users').select('*').eq('organization_id', user.organization_id);
         
         if(error) return [];

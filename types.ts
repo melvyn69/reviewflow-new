@@ -5,7 +5,7 @@ export interface User {
   email: string;
   name: string;
   avatar: string;
-  role: 'admin' | 'editor' | 'viewer';
+  role: 'super_admin' | 'admin' | 'editor' | 'viewer';
   organizations: string[];
   organization_id?: string;
   status?: 'active' | 'invited';

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings } from '../types';
@@ -385,6 +386,7 @@ export const SettingsPage = () => {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPassword, setUserPassword] = useState('');
+  const [userRole, setUserRole] = useState('');
 
   // Form states (Notifications)
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({
@@ -415,6 +417,7 @@ export const SettingsPage = () => {
         if (userData) {
             setUserName(userData.name);
             setUserEmail(userData.email);
+            setUserRole(userData.role);
         }
 
         if (orgData) {
@@ -444,9 +447,11 @@ export const SettingsPage = () => {
 
   const handleUpdateProfile = async () => {
       try {
-          await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined });
+          await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined, role: userRole });
           toast.success("Profil mis à jour !");
           setUserPassword(''); // Clear password field
+          // Reload window to reflect role changes if any (simplest way for demo)
+          if (user?.role !== userRole) window.location.reload();
       } catch(e: any) {
           toast.error("Erreur mise à jour profil : " + e.message);
       }
@@ -664,6 +669,19 @@ export const SettingsPage = () => {
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe (Laisser vide si inchangé)</label>
                             <Input type="password" value={userPassword} onChange={e => setUserPassword(e.target.value)} placeholder="••••••••" />
+                        </div>
+                        <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mt-4">
+                            <label className="block text-xs font-bold text-amber-900 uppercase tracking-wide mb-2">
+                                <ShieldCheck className="h-3 w-3 inline-block mr-1" />
+                                Simulation de Rôle (Mode Démo)
+                            </label>
+                            <Select value={userRole} onChange={e => setUserRole(e.target.value)}>
+                                <option value="super_admin">Super Admin (Vue SaaS)</option>
+                                <option value="admin">Administrateur Organisation</option>
+                                <option value="editor">Éditeur</option>
+                                <option value="viewer">Lecteur</option>
+                            </Select>
+                            <p className="text-xs text-amber-700 mt-2">Changez votre rôle pour tester l'accès aux différentes interfaces (ex: Super Admin pour voir le menu caché).</p>
                         </div>
                     </div>
 
