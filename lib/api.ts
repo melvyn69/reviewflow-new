@@ -12,7 +12,8 @@ import {
   BrandSettings,
   Customer,
   Location,
-  AnalyticsSummary
+  AnalyticsSummary,
+  Competitor
 } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
@@ -547,16 +548,90 @@ const teamService = {
     remove: async (id: string) => true
 };
 
+// --- COMPETITORS SERVICE ENHANCED ---
 const competitorsService = {
-    list: async () => [],
-    create: async (c: any) => true,
-    delete: async (id: string) => true,
-    autoDiscover: async (rad: number, sec: string) => [],
-    getDeepAnalysis: async () => ({ 
-        trends: [], 
-        swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, 
-        competitors_detailed: [] 
-    })
+    list: async (): Promise<Competitor[]> => {
+        // Return tracked competitors from DB or LocalStorage for now
+        // In a real app, this would fetch from 'competitors' table
+        const saved = localStorage.getItem('tracked_competitors');
+        return saved ? JSON.parse(saved) : [
+            {
+                id: 'c1', name: 'Le Concurrent A', rating: 4.2, review_count: 320, address: '500m - Centre Ville',
+                strengths: ['Prix', 'Emplacement'], weaknesses: ['Service', 'Bruit']
+            }
+        ];
+    },
+    create: async (c: any) => {
+        const current = await competitorsService.list();
+        const newComp = { ...c, id: `comp-${Date.now()}` };
+        localStorage.setItem('tracked_competitors', JSON.stringify([...current, newComp]));
+        return true;
+    },
+    delete: async (id: string) => {
+        const current = await competitorsService.list();
+        const filtered = current.filter(c => c.id !== id);
+        localStorage.setItem('tracked_competitors', JSON.stringify(filtered));
+        return true;
+    },
+    autoDiscover: async (radius: number, sector: string): Promise<any[]> => {
+        // Mock Google Places API behavior
+        // In prod, this would call a Supabase Edge Function to query Google Maps
+        await new Promise(r => setTimeout(r, 2000)); // Simulate radar scan delay
+        
+        return [
+            { 
+                name: "Brasserie du Coin", 
+                distance: "300m", 
+                rating: 4.5, 
+                review_count: 1250, 
+                estimated_revenue: "1.2M€",
+                strengths: ["Terrasse", "Happy Hour"],
+                weaknesses: ["Service Lent"],
+                threat_level: 85 // High threat
+            },
+            { 
+                name: "Pizza Express", 
+                distance: "800m", 
+                rating: 3.9, 
+                review_count: 450, 
+                estimated_revenue: "450K€",
+                strengths: ["Prix bas", "Vitesse"],
+                weaknesses: ["Qualité produits"],
+                threat_level: 40 // Low threat
+            },
+            { 
+                name: "Sushi World", 
+                distance: "1.2km", 
+                rating: 4.8, 
+                review_count: 89, 
+                estimated_revenue: "N/A",
+                strengths: ["Fraîcheur", "Originalité"],
+                weaknesses: ["Prix élevés"],
+                threat_level: 60 // Medium threat
+            }
+        ];
+    },
+    getDeepAnalysis: async (): Promise<any> => {
+        // Mock AI aggregated analysis
+        await new Promise(r => setTimeout(r, 3000)); // Simulate expensive AI computation
+        return {
+            trends: [
+                "Les clients de la zone se plaignent de plus en plus du temps d'attente le midi.",
+                "La demande pour les options végétariennes a augmenté de 40% ce trimestre.",
+                "Votre concurrent 'Brasserie du Coin' a augmenté ses prix de 10% récemment."
+            ],
+            swot: {
+                strengths: ["Votre note moyenne (4.8) est supérieure au marché (4.2)", "Vos avis citent souvent l'accueil chaleureux"],
+                weaknesses: ["Vous avez moins d'avis photos que la moyenne", "Visibilité faible le soir"],
+                opportunities: ["Lancer une offre Happy Hour pour contrer 'Brasserie du Coin'", "Mettre en avant vos produits locaux"],
+                threats: ["Arrivée d'une nouvelle franchise à 500m", "Baisse globale de la fréquentation le lundi"]
+            },
+            competitors_detailed: [
+                { name: "Brasserie du Coin", last_month_growth: "+5%", sentiment_trend: "Négatif", top_complaint: "Prix", rating: 4.5 },
+                { name: "Pizza Express", last_month_growth: "-2%", sentiment_trend: "Stable", top_complaint: "Qualité", rating: 3.9 }
+            ]
+        };
+    }
 };
 
 const customersService = {
