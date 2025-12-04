@@ -44,7 +44,8 @@ import {
     Copy,
     Zap,
     Image as ImageIcon,
-    CreditCard
+    CreditCard,
+    AlertTriangle
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -538,6 +539,17 @@ export const SettingsPage = () => {
       }
   };
 
+  const handleDeleteAccount = async () => {
+      if (confirm("ÊTES-VOUS SÛR ? Cette action est irréversible. Tapez OK pour confirmer.")) {
+          try {
+              await api.auth.deleteAccount();
+              window.location.href = '/';
+          } catch (e: any) {
+              toast.error("Erreur suppression: " + e.message);
+          }
+      }
+  };
+
   const handleResetPassword = async () => {
       if(!userEmail) return;
       await api.auth.resetPassword(userEmail);
@@ -809,6 +821,23 @@ export const SettingsPage = () => {
                             <Input type="password" value={userPassword} onChange={e => setUserPassword(e.target.value)} placeholder="••••••••" />
                         </div>
                         <Button onClick={handleUpdateProfile}>Enregistrer le profil</Button>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="mt-12 pt-8 border-t border-red-100">
+                        <h4 className="text-red-700 font-bold text-sm uppercase tracking-wide mb-4 flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4" /> Zone de Danger
+                        </h4>
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                            <h5 className="font-bold text-red-900 text-sm mb-1">Supprimer mon compte</h5>
+                            <p className="text-red-700 text-xs mb-4">
+                                Cette action est irréversible. Toutes vos données personnelles seront effacées. 
+                                Si vous êtes le dernier administrateur, l'organisation sera également supprimée.
+                            </p>
+                            <Button variant="danger" size="sm" onClick={handleDeleteAccount}>
+                                Supprimer définitivement
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}

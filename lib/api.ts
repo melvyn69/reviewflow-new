@@ -1,3 +1,4 @@
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -96,6 +97,26 @@ const authService = {
     },
     logout: async () => {
         if (isSupabaseConfigured()) { await supabase!.auth.signOut(); }
+    },
+    deleteAccount: async () => {
+        const { data: { session } } = await supabase!.auth.getSession();
+        if (!session) throw new Error("Unauthorized");
+
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete_account`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Deletion failed");
+        }
+        
+        await supabase!.auth.signOut();
+        return true;
     },
     resetPassword: async (email: string) => {
         if (isSupabaseConfigured()) { 
@@ -728,8 +749,49 @@ const analyticsService = {
 };
 
 const teamService = {
-    list: async () => [],
-    invite: async (email: string, role: string) => true,
+    list: async (): Promise<User[]> => {
+        if (!isSupabaseConfigured()) return [];
+        const currentUser = await authService.getUser();
+        if (!currentUser?.organization_id) return [];
+
+        const { data, error } = await supabase!
+            .from('users')
+            .select('*')
+            .eq('organization_id', currentUser.organization_id);
+            
+        if (error) return [];
+        
+        // Map DB users to User type
+        return data.map((u: any) => ({
+            id: u.id,
+            email: u.email,
+            name: u.full_name || 'Utilisateur',
+            role: u.role || 'viewer',
+            avatar: u.avatar_url || `https://ui-avatars.com/api/?name=${u.full_name}&background=random`,
+            organizations: [u.organization_id],
+            organization_id: u.organization_id
+        }));
+    },
+    // REAL SUPABASE INVITE
+    invite: async (email: string, role: string) => {
+        const { data: { session } } = await supabase!.auth.getSession();
+        if (!session) throw new Error("Unauthorized");
+
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite_user`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${session.access_token}`, 
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ email, role })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || "Invite failed");
+        }
+        return true;
+    },
     remove: async (id: string) => true
 };
 
@@ -925,8 +987,26 @@ const billingService = {
         const data = await response.json();
         return data.url;
     },
+    // REAL PORTAL SESSION
     createPortalSession: async () => {
-        return ""; // Stub, to be implemented with /api/create_portal
+        const { data: { session } } = await supabase!.auth.getSession();
+        if (!session) throw new Error("Unauthorized");
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create_portal`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${session.access_token}`, 
+                'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ returnUrl: window.location.origin + '/#/billing' })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || "Portal failed");
+        }
+        const data = await response.json();
+        return data.url;
     },
     getInvoices: async () => []
 };
