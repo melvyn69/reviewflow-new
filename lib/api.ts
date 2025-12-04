@@ -1,6 +1,3 @@
-
-
-
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -419,6 +416,112 @@ const reviewsService = {
           if (error) throw error;
           return data.length;
       }
+};
+
+const googleService = {
+    getToken: async () => {
+        const { data } = await supabase!.auth.getSession();
+        return data.session?.provider_token;
+    },
+    listAccounts: async () => {
+        const token = await googleService.getToken();
+        if (!token) throw new Error("Session Google expirée. Veuillez vous reconnecter via le bouton 'Sign in with Google'.");
+        
+        const res = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) {
+            console.error(await res.text());
+            throw new Error("Impossible de récupérer les comptes Google. Vérifiez vos accès.");
+        }
+        const data = await res.json();
+        return data.accounts || [];
+    },
+    listLocations: async (accountName: string) => {
+        const token = await googleService.getToken();
+        if (!token) throw new Error("Token manquant");
+        
+        const res = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storeCode,metadata`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Erreur GMB Locations: " + res.statusText);
+        const data = await res.json();
+        return data.locations || [];
+    },
+    fetchAllGoogleLocations: async () => {
+        try {
+            const accounts = await googleService.listAccounts();
+            let allLocs: any[] = [];
+            for (const acc of accounts) {
+                const locs = await googleService.listLocations(acc.name);
+                const enriched = locs.map((l:any) => ({...l, accountName: acc.name}));
+                allLocs = [...allLocs, ...enriched];
+            }
+            return allLocs;
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }
+    },
+    fetchReviews: async (locationName: string) => {
+        const token = await googleService.getToken();
+        if (!token) throw new Error("Token manquant");
+        
+        // Use v4 API or appropriate endpoint. Assuming standard v4 for reviews.
+        // Format of locationName must be "accounts/{accId}/locations/{locId}"
+        const res = await fetch(`https://mybusiness.googleapis.com/v4/${locationName}/reviews`, {
+             headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (!res.ok) throw new Error("Erreur GMB Reviews: " + res.statusText);
+        const data = await res.json();
+        return data.reviews || [];
+    },
+    syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
+        const reviews = await googleService.fetchReviews(googleLocationName);
+        if (!reviews || !reviews.length) return 0;
+        
+        const db = requireSupabase();
+        
+        let count = 0;
+        for (const r of reviews) {
+            // Check if review already exists (basic check)
+            // Note: In prod, use `external_id` column
+            const receivedAt = r.createTime || new Date().toISOString();
+            const author = r.reviewer?.displayName || 'Anonyme';
+            const ratingMap: any = { "ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "FIVE": 5, "STAR_RATING_UNSPECIFIED": 0 };
+            const rating = ratingMap[r.starRating] || 0;
+            const text = r.comment || '';
+
+            const { data: existing } = await db.from('reviews')
+                .select('id')
+                .eq('location_id', locationId)
+                .eq('received_at', receivedAt)
+                .eq('author_name', author)
+                .single();
+            
+            if (!existing) {
+                await db.from('reviews').insert({
+                    location_id: locationId,
+                    source: 'google',
+                    rating: rating,
+                    text: text,
+                    author_name: author,
+                    received_at: receivedAt,
+                    status: 'pending',
+                    language: 'fr', // Default
+                    analysis: { 
+                        sentiment: 'neutral', 
+                        themes: [], 
+                        keywords: [], 
+                        flags: { hygiene: false, security: false } 
+                    }
+                });
+                count++;
+            }
+        }
+        return count;
+    }
 };
 
 const aiService = {
@@ -1232,5 +1335,6 @@ export const api = {
     team: teamService,
     competitors: competitorsService,
     billing: billingService,
-    seedCloudDatabase
+    seedCloudDatabase,
+    google: googleService
 };

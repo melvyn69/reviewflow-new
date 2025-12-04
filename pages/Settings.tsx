@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings } from '../types';
@@ -38,7 +35,8 @@ import {
     Send,
     Search,
     UploadCloud,
-    FileText
+    FileText,
+    Link as LinkIcon
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -197,6 +195,113 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
     );
 };
 
+const GoogleMappingModal = ({ locations, onClose, onSave }: { locations: Location[], onClose: () => void, onSave: (mappings: Record<string, string>) => Promise<void> }) => {
+    const [googleLocations, setGoogleLocations] = useState<any[]>([]);
+    const [mappings, setMappings] = useState<Record<string, string>>({});
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const toast = useToast();
+
+    useEffect(() => {
+        loadGoogleData();
+        // Init mappings with existing
+        const initialMap: Record<string, string> = {};
+        locations.forEach(l => {
+            if (l.external_reference) initialMap[l.id] = l.external_reference;
+        });
+        setMappings(initialMap);
+    }, []);
+
+    const loadGoogleData = async () => {
+        try {
+            const list = await api.google.fetchAllGoogleLocations();
+            setGoogleLocations(list);
+        } catch (e: any) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSubmit = async () => {
+        setLoading(true);
+        await onSave(mappings);
+        setLoading(false);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <Card className="w-full max-w-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+                <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                        <LinkIcon className="h-5 w-5 text-indigo-600" /> Mapping des Établissements
+                    </h3>
+                    <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>
+                </div>
+                
+                <div className="p-6 flex-1 overflow-y-auto">
+                    {loading && googleLocations.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-4" />
+                            <p className="text-slate-500">Récupération de vos fiches Google...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="p-6 bg-red-50 text-red-700 rounded-lg text-center">
+                            <AlertCircle className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                            <p className="font-bold">Erreur de connexion</p>
+                            <p className="text-sm mb-4">{error}</p>
+                            <Button variant="outline" size="sm" onClick={() => window.location.href = '/'}>Reconnecter Google</Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <p className="text-sm text-slate-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                Associez chaque établissement Reviewflow à sa fiche Google correspondante pour activer la synchronisation automatique des avis.
+                            </p>
+                            
+                            {locations.map(loc => (
+                                <div key={loc.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 border border-slate-200 rounded-xl bg-slate-50/50">
+                                    <div className="flex-1">
+                                        <div className="font-bold text-slate-900">{loc.name}</div>
+                                        <div className="text-xs text-slate-500 flex items-center gap-1">
+                                            <MapPin className="h-3 w-3" /> {loc.city}, {loc.country}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-slate-400 hidden sm:inline">→</span>
+                                        <div className="relative w-full sm:w-64">
+                                            <select 
+                                                className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none pr-8"
+                                                value={mappings[loc.id] || ''}
+                                                onChange={(e) => setMappings({...mappings, [loc.id]: e.target.value})}
+                                            >
+                                                <option value="">Sélectionner...</option>
+                                                {googleLocations.map((gLoc, i) => (
+                                                    <option key={i} value={gLoc.name}>
+                                                        {gLoc.title} ({gLoc.storeCode || 'Sans code'})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                                                <GoogleIcon />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-white">
+                    <Button variant="ghost" onClick={onClose}>Annuler</Button>
+                    <Button onClick={handleSubmit} disabled={loading || !!error} isLoading={loading}>Enregistrer</Button>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
 const InviteModal = ({ onClose, onInvite }: { onClose: () => void, onInvite: (email: string, role: string) => Promise<void> }) => {
     const [email, setEmail] = useState('');
     const [role, setRole] = useState('editor');
@@ -254,6 +359,8 @@ export const SettingsPage = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showMappingModal, setShowMappingModal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Form states (Brand)
   const [brandTone, setBrandTone] = useState('');
@@ -473,6 +580,39 @@ export const SettingsPage = () => {
       }
   };
 
+  const handleSaveMappings = async (mappings: Record<string, string>) => {
+      try {
+          for (const [locId, googleResource] of Object.entries(mappings)) {
+              if (googleResource) {
+                  await api.locations.update(locId, { external_reference: googleResource });
+              }
+          }
+          toast.success("Configuration sauvegardée !");
+          loadData();
+      } catch (e) {
+          toast.error("Erreur de sauvegarde");
+      }
+  };
+
+  const handleSyncNow = async () => {
+      if (!org?.locations) return;
+      setSyncing(true);
+      let total = 0;
+      try {
+          for (const loc of org.locations) {
+              if (loc.external_reference) {
+                  const count = await api.google.syncReviewsForLocation(loc.id, loc.external_reference);
+                  total += count;
+              }
+          }
+          toast.success(`Synchronisation terminée : ${total} nouveaux avis !`);
+      } catch (e: any) {
+          toast.error("Erreur de sync: " + e.message);
+      } finally {
+          setSyncing(false);
+      }
+  };
+
   if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
   return (
@@ -660,6 +800,11 @@ export const SettingsPage = () => {
                                     <div className="flex items-center gap-2 text-xs text-slate-500 truncate">
                                         <MapPin className="h-3 w-3 shrink-0" /> {loc.address}
                                     </div>
+                                    {loc.external_reference && (
+                                        <div className="flex items-center gap-2 text-xs text-blue-600 font-medium">
+                                            <RefreshCw className="h-3 w-3" /> Sync Google Active
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="mt-3">
                                     <Button variant="outline" size="xs" className="w-full" onClick={() => { setEditingLocation(loc); setShowLocationModal(true); }}>
@@ -690,17 +835,22 @@ export const SettingsPage = () => {
                                 </div>
                             </div>
                             
-                            {!org?.integrations.google ? (
-                                <button 
-                                    onClick={() => api.auth.connectGoogleBusiness()}
-                                    className="flex items-center gap-3 bg-white text-slate-700 font-medium py-2.5 px-6 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50 transition-all group"
-                                >
-                                    <div className="h-5 w-5"><GoogleIcon /></div>
-                                    <span>Sign in with Google</span>
-                                </button>
-                            ) : (
-                                <Button variant="outline" className="text-red-600 hover:bg-red-50 hover:border-red-200">Déconnecter</Button>
-                            )}
+                            <div className="flex flex-col gap-2 w-full md:w-auto">
+                                {!org?.integrations.google ? (
+                                    <button 
+                                        onClick={() => api.auth.connectGoogleBusiness()}
+                                        className="flex items-center justify-center gap-3 bg-white text-slate-700 font-medium py-2.5 px-6 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50 transition-all group"
+                                    >
+                                        <div className="h-5 w-5"><GoogleIcon /></div>
+                                        <span>Sign in with Google</span>
+                                    </button>
+                                ) : (
+                                    <>
+                                        <Button icon={RefreshCw} onClick={handleSyncNow} isLoading={syncing}>Synchroniser maintenant</Button>
+                                        <Button variant="outline" icon={LinkIcon} onClick={() => setShowMappingModal(true)}>Configurer les liens</Button>
+                                    </>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -902,6 +1052,7 @@ export const SettingsPage = () => {
       
       {showLocationModal && <LocationModal location={editingLocation} onClose={() => setShowLocationModal(false)} onSave={handleSaveLocation} onUpload={handleImportCsv} />}
       {showInviteModal && <InviteModal onClose={() => setShowInviteModal(false)} onInvite={handleInvite} />}
+      {showMappingModal && org?.locations && <GoogleMappingModal locations={org.locations} onClose={() => setShowMappingModal(false)} onSave={handleSaveMappings} />}
     </div>
   );
 };
