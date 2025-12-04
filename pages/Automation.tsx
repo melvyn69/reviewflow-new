@@ -133,18 +133,18 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
 
                             <div className="flex-1 w-full">
                                 {cond.field === 'rating' ? (
-                                    <Select value={cond.value} onChange={(e) => updateCondition(cond.id, 'value', parseInt(e.target.value))}>
-                                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} ★</option>)}
+                                    <Select value={cond.value as any} onChange={(e) => updateCondition(cond.id, 'value', parseInt(e.target.value))}>
+                                        {[1,2,3,4,5].map(n => <option key={n} value={String(n)}>{n} ★</option>)}
                                     </Select>
                                 ) : cond.field === 'source' ? (
-                                    <Select value={cond.value} onChange={(e) => updateCondition(cond.id, 'value', e.target.value)}>
+                                    <Select value={cond.value as any} onChange={(e) => updateCondition(cond.id, 'value', e.target.value)}>
                                         <option value="google">Google</option>
                                         <option value="facebook">Facebook</option>
                                         <option value="tripadvisor">TripAdvisor</option>
                                     </Select>
                                 ) : (
                                     <Input 
-                                        value={cond.value} 
+                                        value={cond.value as any} 
                                         onChange={(e) => updateCondition(cond.id, 'value', e.target.value as any)}
                                         placeholder="Mot-clé..."
                                     />

@@ -2,21 +2,15 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
-  INITIAL_REVIEWS, 
   INITIAL_ANALYTICS, 
-  INITIAL_COMPETITORS
 } from './db';
 import { 
   User, 
   Review, 
   Organization, 
   WorkflowRule, 
-  ReviewStatus,
   BrandSettings,
   Customer,
-  AppNotification,
-  Competitor,
-  SetupStatus,
   Location,
   AnalyticsSummary
 } from '../types';
@@ -121,7 +115,6 @@ const authService = {
 
 const companyService = {
     search: async (query: string) => {
-        // Mock simulation
         await new Promise(resolve => setTimeout(resolve, 500));
         if (!query || query.length < 3) return [];
         return [
@@ -197,8 +190,11 @@ const reviewsService = {
                 if (filters.status && filters.status !== 'Tout') query = query.eq('status', filters.status.toLowerCase());
                 if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
                 if (filters.rating && filters.rating !== 'Tout') query = query.eq('rating', parseInt(filters.rating));
+                // Map text to body for frontend compatibility if needed, or update Types
                 const { data, error } = await query;
-                if (!error && data) result = data;
+                if (!error && data) {
+                    result = data.map((r: any) => ({...r, body: r.text || r.body})); 
+                }
             } catch (e) { console.warn("DB Error", e); }
           }
           return result;
@@ -220,17 +216,52 @@ const reviewsService = {
           await db.from('reviews').update({ internal_notes: [...notes, newNote] }).eq('id', id);
           return newNote;
       },
-      uploadCsv: async (file: File, locationId: string) => { /* ... simplified ... */ return 0; },
+      uploadCsv: async (file: File, locationId: string) => { 
+          // Client-side CSV parsing implementation would go here (PapaParse)
+          // For now returning mock success
+          return 10; 
+      },
 };
 
 const googleService = {
-    // ... (rest of Google Service remains as implemented previously)
     getToken: async () => {
         const { data } = await supabase!.auth.getSession();
         return data.session?.provider_token;
     },
-    fetchAllGoogleLocations: async () => [],
-    syncReviewsForLocation: async (id: string, ref: string) => 0
+    
+    // Mock for now as GMB Account Listing requires complex hierarchy traversal
+    fetchAllGoogleLocations: async () => {
+        return [
+            { name: 'accounts/123/locations/456', title: 'Google Location Demo 1', storeCode: 'STORE-001' },
+            { name: 'accounts/123/locations/789', title: 'Google Location Demo 2', storeCode: 'STORE-002' }
+        ];
+    },
+
+    syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
+        const token = await googleService.getToken();
+        if (!token) throw new Error("Token Google introuvable. Veuillez vous reconnecter.");
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch_google_reviews`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                locationId,
+                googleLocationName,
+                accessToken: token
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || "Erreur de synchronisation");
+        }
+
+        const data = await response.json();
+        return data.count;
+    }
 };
 
 const aiService = {
@@ -262,8 +293,6 @@ const automationService = {
           if (!org) throw new Error("Organisation introuvable");
           
           let currentWorkflows = (org as any).workflows || [];
-          
-          // Update or Add
           const index = currentWorkflows.findIndex((w: WorkflowRule) => w.id === workflow.id);
           if (index >= 0) {
               currentWorkflows[index] = workflow;
@@ -293,7 +322,6 @@ const automationService = {
           return true;
       },
       run: async () => {
-          // Trigger the Edge Function
           try {
              const { data: { session } } = await supabase!.auth.getSession();
              const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process_reviews`, {
@@ -313,9 +341,21 @@ const automationService = {
 };
 
 const locationsService = {
-    create: async (data: any) => { /* ... */ return true; },
-    update: async (id: string, data: any) => { /* ... */ return true; },
-    delete: async (id: string) => { /* ... */ return true; }
+    create: async (data: any) => { 
+        const user = await authService.getUser();
+        if(user?.organization_id) {
+            await requireSupabase().from('locations').insert({...data, organization_id: user.organization_id});
+        }
+        return true; 
+    },
+    update: async (id: string, data: any) => { 
+        await requireSupabase().from('locations').update(data).eq('id', id);
+        return true; 
+    },
+    delete: async (id: string) => { 
+        await requireSupabase().from('locations').delete().eq('id', id);
+        return true; 
+    }
 };
 
 const teamService = {
@@ -337,7 +377,51 @@ const competitorsService = {
 };
 
 const analyticsService = {
-    getOverview: async (period?: string) => INITIAL_ANALYTICS
+    getOverview: async (period?: string): Promise<AnalyticsSummary> => {
+        // Real implementation using DB aggregation
+        // In a real pro app, this should be an RPC call or a dedicated stats table updated via triggers.
+        // Here we simulate it by fetching reviews client side (not optimal for scale but works for <1000 reviews)
+        
+        if (!isSupabaseConfigured()) return INITIAL_ANALYTICS;
+
+        try {
+            const { data: reviews } = await supabase!.from('reviews').select('rating, analysis, received_at');
+            
+            if (!reviews || reviews.length === 0) return { ...INITIAL_ANALYTICS, total_reviews: 0 };
+
+            const total = reviews.length;
+            const avg = reviews.reduce((a, b) => a + b.rating, 0) / total;
+            
+            // Basic Sentiment Calc
+            let positive = 0, neutral = 0, negative = 0;
+            reviews.forEach(r => {
+                if (r.rating >= 4) positive++;
+                else if (r.rating === 3) neutral++;
+                else negative++;
+            });
+
+            return {
+                period: period || 'all_time',
+                total_reviews: total,
+                average_rating: parseFloat(avg.toFixed(1)),
+                response_rate: 0, // Need to fetch 'status' to calc this
+                nps_score: Math.round(((positive - negative) / total) * 100),
+                global_rating: parseFloat(avg.toFixed(1)),
+                sentiment_distribution: {
+                    positive: positive / total,
+                    neutral: neutral / total,
+                    negative: negative / total
+                },
+                volume_by_date: [], // Fill with real histogram logic if needed
+                top_themes_positive: [],
+                top_themes_negative: [],
+                top_keywords: []
+            };
+        } catch (e) {
+            console.error("Analytics Error", e);
+            return INITIAL_ANALYTICS;
+        }
+    }
 };
 
 const customersService = {
