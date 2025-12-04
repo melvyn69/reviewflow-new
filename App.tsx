@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
@@ -24,7 +25,8 @@ import { BookDemoPage } from './pages/BookDemo';
 import { OnboardingPage } from './pages/Onboarding';
 import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
-import { SocialPage } from './pages/Social'; // Import
+import { SocialPage } from './pages/Social';
+import { PublicProfilePage } from './pages/PublicProfile'; // Import
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
@@ -84,6 +86,7 @@ function AppRoutes() {
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/feedback/:locationId" element={<ReviewFunnel />} />
         <Route path="/widget/:locationId" element={<WidgetPage />} />
+        <Route path="/v/:locationId" element={<PublicProfilePage />} />
         
         {/* Protected Route: Onboarding (No Layout) */}
         <Route path="/onboarding" element={user ? <OnboardingPage /> : <Navigate to="/login" replace />} />

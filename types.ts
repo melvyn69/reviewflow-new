@@ -141,6 +141,10 @@ export interface Location {
   google_review_url?: string;
   facebook_review_url?: string;
   tripadvisor_review_url?: string;
+  // Public Profile
+  public_profile_enabled?: boolean;
+  cover_image?: string;
+  booking_url?: string;
 }
 
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';

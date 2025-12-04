@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
@@ -43,7 +44,8 @@ import {
     Key,
     Webhook,
     Copy,
-    Zap
+    Zap,
+    Image as ImageIcon
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -101,10 +103,14 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
         google_review_url: location?.google_review_url || '',
         facebook_review_url: location?.facebook_review_url || '',
         tripadvisor_review_url: location?.tripadvisor_review_url || '',
-        description: location?.description || ''
+        description: location?.description || '',
+        public_profile_enabled: location?.public_profile_enabled || false,
+        booking_url: location?.booking_url || '',
+        cover_image: location?.cover_image || ''
     });
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [tab, setTab] = useState<'info' | 'profile'>('info');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -129,82 +135,130 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                     <h3 className="font-bold text-slate-900">{location ? 'Modifier l\'établissement' : 'Ajouter un établissement'}</h3>
                     <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>
                 </div>
+                
+                <div className="flex border-b border-slate-200">
+                    <button onClick={() => setTab('info')} className={`flex-1 py-3 text-sm font-medium border-b-2 ${tab === 'info' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>Informations</button>
+                    <button onClick={() => setTab('profile')} className={`flex-1 py-3 text-sm font-medium border-b-2 ${tab === 'profile' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>Profil Public (SEO)</button>
+                </div>
+
                 <div className="p-6 overflow-y-auto flex-1">
                     <form id="loc-form" onSubmit={handleSubmit} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement</label>
-                            <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Restaurant Le Gourmet" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Ville</label>
-                                <Input required value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="Paris" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Pays</label>
-                                <Input value={formData.country} onChange={e => setFormData({...formData, country: e.target.value})} />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Adresse complète</label>
-                            <Input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="12 Rue de la Paix, 75000" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
-                                <Input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+33 1 23 45 67 89" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Site Web</label>
-                                <Input value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} placeholder="https://monsite.com" />
-                            </div>
-                        </div>
-                        
-                        <div className="space-y-3 pt-2">
-                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Liens de Collecte (Review Funnel)</h4>
-                            <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                                <label className="block text-xs font-bold text-indigo-900 mb-1">Google Avis (Prioritaire)</label>
-                                <Input value={formData.google_review_url} onChange={e => setFormData({...formData, google_review_url: e.target.value})} placeholder="https://g.page/r/..." className="bg-white text-xs" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
+                        {tab === 'info' && (
+                            <>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-700 mb-1">Facebook</label>
-                                    <Input value={formData.facebook_review_url} onChange={e => setFormData({...formData, facebook_review_url: e.target.value})} placeholder="https://facebook.com/..." className="text-xs" />
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement</label>
+                                    <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Restaurant Le Gourmet" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Ville</label>
+                                        <Input required value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="Paris" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Pays</label>
+                                        <Input value={formData.country} onChange={e => setFormData({...formData, country: e.target.value})} />
+                                    </div>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-700 mb-1">TripAdvisor</label>
-                                    <Input value={formData.tripadvisor_review_url} onChange={e => setFormData({...formData, tripadvisor_review_url: e.target.value})} placeholder="https://tripadvisor.com/..." className="text-xs" />
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Adresse complète</label>
+                                    <Input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="12 Rue de la Paix, 75000" />
                                 </div>
-                            </div>
-                        </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Téléphone</label>
+                                        <Input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+33 1 23 45 67 89" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Site Web</label>
+                                        <Input value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} placeholder="https://monsite.com" />
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-3 pt-2">
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Liens de Collecte (Review Funnel)</h4>
+                                    <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                                        <label className="block text-xs font-bold text-indigo-900 mb-1">Google Avis (Prioritaire)</label>
+                                        <Input value={formData.google_review_url} onChange={e => setFormData({...formData, google_review_url: e.target.value})} placeholder="https://g.page/r/..." className="bg-white text-xs" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-700 mb-1">Facebook</label>
+                                            <Input value={formData.facebook_review_url} onChange={e => setFormData({...formData, facebook_review_url: e.target.value})} placeholder="https://facebook.com/..." className="text-xs" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-700 mb-1">TripAdvisor</label>
+                                            <Input value={formData.tripadvisor_review_url} onChange={e => setFormData({...formData, tripadvisor_review_url: e.target.value})} placeholder="https://tripadvisor.com/..." className="text-xs" />
+                                        </div>
+                                    </div>
+                                </div>
 
-                        <div className="pt-2">
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Description courte</label>
-                            <textarea 
-                                className="w-full p-2 border border-slate-200 rounded-lg text-sm" 
-                                rows={2}
-                                placeholder="Spécialités, ambiance... (Aide l'IA à répondre)"
-                                value={formData.description}
-                                onChange={e => setFormData({...formData, description: e.target.value})}
-                            />
-                        </div>
-                        
-                        {location && (
-                            <div className="border-t border-slate-200 pt-4 mt-4">
-                                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                                    <UploadCloud className="h-4 w-4" /> Import Manuel (Historique)
-                                </label>
-                                <div className="flex items-center gap-2">
-                                    <input 
-                                        type="file" 
-                                        accept=".csv"
-                                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                                        onChange={handleFileUpload}
-                                        disabled={uploading}
-                                    />
-                                    {uploading && <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />}
+                                {location && (
+                                    <div className="border-t border-slate-200 pt-4 mt-4">
+                                        <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                                            <UploadCloud className="h-4 w-4" /> Import Manuel (Historique)
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="file" 
+                                                accept=".csv"
+                                                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                                onChange={handleFileUpload}
+                                                disabled={uploading}
+                                            />
+                                            {uploading && <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-1">Format CSV : Date, Auteur, Note (1-5), Commentaire</p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {tab === 'profile' && (
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <div>
+                                        <h4 className="font-bold text-slate-900 text-sm">Activer le profil public</h4>
+                                        <p className="text-xs text-slate-500">Page SEO référencée sur Google avec tous vos avis.</p>
+                                    </div>
+                                    <Toggle checked={formData.public_profile_enabled} onChange={(v) => setFormData({...formData, public_profile_enabled: v})} />
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-1">Format CSV : Date, Auteur, Note (1-5), Commentaire</p>
+
+                                {formData.public_profile_enabled && (
+                                    <>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Lien de réservation / Commande</label>
+                                                <Input 
+                                                    value={formData.booking_url} 
+                                                    onChange={e => setFormData({...formData, booking_url: e.target.value})} 
+                                                    placeholder="https://thefork.com/..." 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Image de couverture (URL)</label>
+                                                <div className="flex gap-2">
+                                                    <Input 
+                                                        value={formData.cover_image} 
+                                                        onChange={e => setFormData({...formData, cover_image: e.target.value})} 
+                                                        placeholder="https://..." 
+                                                    />
+                                                    <div className="h-10 w-10 bg-slate-100 rounded border border-slate-200 overflow-hidden shrink-0">
+                                                        {formData.cover_image ? <img src={formData.cover_image} className="w-full h-full object-cover" /> : <ImageIcon className="h-5 w-5 m-auto mt-2 text-slate-300"/>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100 text-sm text-indigo-800">
+                                            <div className="flex items-center gap-2 font-bold mb-2">
+                                                <ExternalLink className="h-4 w-4" /> Lien Public
+                                            </div>
+                                            <a href={`/#/v/${location?.id}`} target="_blank" className="underline break-all block">
+                                                {window.location.origin}/#/v/{location?.id}
+                                            </a>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
                     </form>
@@ -893,15 +947,15 @@ export const SettingsPage = () => {
                                     <div className="flex items-center gap-2 text-xs text-slate-500 truncate">
                                         <MapPin className="h-3 w-3 shrink-0" /> {loc.address}
                                     </div>
-                                    {loc.external_reference && (
-                                        <div className="flex items-center gap-2 text-xs text-blue-600 font-medium">
-                                            <RefreshCw className="h-3 w-3" /> Sync Google Active
+                                    {loc.public_profile_enabled && (
+                                        <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium">
+                                            <Globe className="h-3 w-3" /> Profil Public Actif
                                         </div>
                                     )}
                                 </div>
                                 <div className="mt-3">
                                     <Button variant="outline" size="xs" className="w-full" onClick={() => { setEditingLocation(loc); setShowLocationModal(true); }}>
-                                        Gérer (Import, Lien, Détails)
+                                        Gérer
                                     </Button>
                                 </div>
                             </div>
