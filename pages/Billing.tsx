@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone, Building2 } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone, Building2, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import jsPDF from 'jspdf';
@@ -18,6 +18,23 @@ const Confetti = () => (
                 backgroundColor: ['#f2d74e', '#ef2964', '#00c09d', '#2d87b0'][Math.floor(Math.random() * 4)]
             }}></div>
         ))}
+    </div>
+);
+
+const PaymentProcessingOverlay = () => (
+    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center animate-in fade-in duration-300">
+        <div className="bg-white p-8 rounded-2xl shadow-2xl border border-indigo-100 text-center max-w-sm">
+            <div className="relative mb-4">
+                <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto">
+                    <CreditCard className="h-8 w-8 text-indigo-600" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1 border-2 border-white">
+                    <RefreshCw className="h-3 w-3 text-white animate-spin" />
+                </div>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Finalisation de l'activation</h3>
+            <p className="text-slate-500 text-sm">Nous synchronisons votre abonnement avec le serveur. Cela prend quelques secondes...</p>
+        </div>
     </div>
 );
 
@@ -132,6 +149,7 @@ export const BillingPage = () => {
     const [upgrading, setUpgrading] = useState<string | null>(null);
     const [error, setError] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
     
     const toast = useToast();
     const { t } = useTranslation();
@@ -139,18 +157,53 @@ export const BillingPage = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Handle Stripe Return
-        if (location.search.includes('success=true')) {
-            setShowSuccess(true);
-            toast.success("Paiement réussi ! Bienvenue dans le club.");
-            // Clear URL param without reload
-            window.history.replaceState({}, '', '#/billing');
-            // Force refresh data
-            api.auth.getUser().then(() => loadOrg());
-        }
-        
-        loadOrg();
+        const init = async () => {
+            // Handle Stripe Return
+            if (location.search.includes('success=true')) {
+                setIsVerifyingPayment(true);
+                await pollForPlanUpdate();
+                // Clear URL param without reload
+                window.history.replaceState({}, '', '#/billing');
+            } else {
+                loadOrg();
+            }
+        };
+        init();
     }, [location.search]);
+
+    const pollForPlanUpdate = async () => {
+        let attempts = 0;
+        const maxAttempts = 10; // 20 seconds total
+        
+        const check = async () => {
+            try {
+                const data = await api.organization.get();
+                // Check if plan has changed from free (assuming we upgraded from free)
+                // In a real scenario, we might want to know the *target* plan to compare
+                if (data && data.subscription_plan !== 'free') {
+                    setOrg(data);
+                    setIsVerifyingPayment(false);
+                    setShowSuccess(true);
+                    toast.success("Paiement validé ! Votre abonnement est actif.");
+                    return;
+                }
+            } catch (e) {
+                console.error("Polling error", e);
+            }
+
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(check, 2000);
+            } else {
+                // Timeout but maybe it worked, just slow webhook
+                setIsVerifyingPayment(false);
+                toast.info("Paiement reçu. L'activation peut prendre jusqu'à une minute.");
+                loadOrg();
+            }
+        };
+
+        check();
+    };
 
     const loadOrg = async () => {
         setError(false);
@@ -184,14 +237,15 @@ export const BillingPage = () => {
     };
 
     if (error) return <div>Erreur chargement.</div>;
-    if (!org) return <div className="p-8 text-center"><Skeleton className="h-96 w-full" /></div>;
+    if (!org && !isVerifyingPayment) return <div className="p-8 text-center"><Skeleton className="h-96 w-full" /></div>;
 
-    const usage = org.ai_usage_count || 0;
-    const limit = org.subscription_plan === 'free' ? 0 : org.subscription_plan === 'starter' ? 150 : 500;
+    const usage = org?.ai_usage_count || 0;
+    const limit = org?.subscription_plan === 'free' ? 0 : org?.subscription_plan === 'starter' ? 150 : 500;
     const percentage = limit > 0 ? Math.min(100, (usage / limit) * 100) : 100;
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 relative">
+            {isVerifyingPayment && <PaymentProcessingOverlay />}
             {showSuccess && <Confetti />}
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -199,7 +253,7 @@ export const BillingPage = () => {
                     <h1 className="text-2xl font-bold text-slate-900">Abonnement & Facturation</h1>
                     <p className="text-slate-500">Choisissez la puissance dont votre enseigne a besoin.</p>
                 </div>
-                {org.subscription_plan !== 'free' && (
+                {org?.subscription_plan !== 'free' && (
                     <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url: string) => window.location.href = url)}>
                         Gérer carte & Factures
                     </Button>
@@ -207,7 +261,7 @@ export const BillingPage = () => {
             </div>
 
             {/* Usage Section */}
-            {org.subscription_plan !== 'free' && (
+            {org?.subscription_plan !== 'free' && (
                 <Card className="bg-gradient-to-r from-slate-900 to-indigo-900 text-white border-none shadow-xl">
                     <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-8">
                         <div className="flex-1">
@@ -226,7 +280,7 @@ export const BillingPage = () => {
                         <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[200px]">
                             <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold mb-1">Plan Actuel</div>
                             <div className="text-2xl font-bold mb-1 capitalize">
-                                {org.subscription_plan === 'starter' ? 'Essential' : org.subscription_plan === 'pro' ? 'Growth' : org.subscription_plan}
+                                {org?.subscription_plan === 'starter' ? 'Essential' : org?.subscription_plan === 'pro' ? 'Growth' : org?.subscription_plan}
                             </div>
                         </div>
                     </CardContent>
@@ -238,7 +292,7 @@ export const BillingPage = () => {
                 <PricingCard 
                     title="Essential" 
                     price="49€" 
-                    current={org.subscription_plan === 'starter'}
+                    current={org?.subscription_plan === 'starter'}
                     loading={upgrading === 'starter'}
                     onUpgrade={() => handleUpgrade('starter')}
                     subtext="Pour les indépendants"
@@ -254,7 +308,7 @@ export const BillingPage = () => {
                     title="Growth" 
                     price="89€" 
                     variant="featured"
-                    current={org.subscription_plan === 'pro'}
+                    current={org?.subscription_plan === 'pro'}
                     loading={upgrading === 'pro'}
                     onUpgrade={() => handleUpgrade('pro')}
                     subtext="Pour les gérants exigeants"
