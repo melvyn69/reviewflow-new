@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
 
@@ -27,16 +28,23 @@ Deno.serve(async (req: any) => {
 
     const { plan, successUrl, cancelUrl } = await req.json()
 
-    // --- CONFIGURATION DES PRIX (VRAIS IDS) ---
+    // --- CONFIGURATION DYNAMIQUE DES PRIX ---
+    const starterPriceId = Deno.env.get('STRIPE_PRICE_ID_STARTER');
+    const proPriceId = Deno.env.get('STRIPE_PRICE_ID_PRO');
+
+    if (!starterPriceId || !proPriceId) {
+        throw new Error("Configuration Stripe incomplète (STRIPE_PRICE_ID_STARTER ou PRO manquant).");
+    }
+
     const prices: Record<string, string> = {
-        'starter': 'price_1SYoOgGbX3nkKvzOsqUzRHQc', // Vrai ID Starter
-        'pro': 'price_1SYoQgGbX3nkKvzORj2RRUqZ'      // Vrai ID Pro
+        'starter': starterPriceId,
+        'pro': proPriceId
     }
 
     const priceId = prices[plan]
 
     if (!priceId) {
-         throw new Error(`Le plan '${plan}' n'a pas d'ID de prix configuré dans la fonction.`);
+         throw new Error(`Le plan '${plan}' n'est pas reconnu.`);
     }
 
     const session = await stripe.checkout.sessions.create({

@@ -9,6 +9,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Helper: Sleep to respect rate limits
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Helper: Check condition matches
 const checkCondition = (condition: any, review: any) => {
     let reviewValue;
@@ -41,14 +44,16 @@ Deno.serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
     const ai = new GoogleGenerativeAI(geminiKey)
-    const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    // Utilisation du modèle flash pour la rapidité et le coût
+    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     // 1. Fetch pending reviews with org data
+    // Limit to 10 per run to ensure we stay well within timeout limits (Function execution limit)
     const { data: reviews, error: fetchError } = await supabase
       .from('reviews')
       .select('*, location:locations(organization:organizations(*))')
       .eq('status', 'pending')
-      .limit(50) // Process in batches
+      .limit(10) 
 
     if (fetchError) throw fetchError
     if (!reviews || reviews.length === 0) return new Response(JSON.stringify({ message: 'Nothing to process', processed: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -56,8 +61,15 @@ Deno.serve(async (req: Request) => {
     let processedCount = 0
     let actionsCount = 0
 
+    console.log(`Processing ${reviews.length} reviews...`);
+
     // 2. Process each review
     for (const review of reviews) {
+        // RATE LIMITING PROTECTION
+        // Gemini Free Tier: 15 RPM (Requests Per Minute) => 1 request every 4 seconds.
+        // Paid Tier: Much higher. We use a conservative 2s delay here to be safe.
+        await sleep(2000); 
+
         const org = review.location?.organization
         if (!org) continue
 
@@ -100,22 +112,27 @@ Deno.serve(async (req: Request) => {
                         try {
                             const result = await model.generateContent(prompt)
                             replyText = result.response.text()
-                            aiModelUsed = 'gemini-1.5-flash'
+                            aiModelUsed = 'gemini-2.5-flash'
                             
                             if (action.type === 'auto_reply') {
-                                finalStatus = 'sent' // In reality, we would call the GMB API here
+                                finalStatus = 'sent' 
+                                // TODO: In a real scenario, initiate GMB API call here to post reply
                             } else {
                                 finalStatus = 'draft'
                             }
-                        } catch (e) {
-                            console.error("AI Error", e)
+                        } catch (e: any) {
+                            console.error("AI Error for review " + review.id, e)
+                            if (e.message.includes('429')) {
+                                console.warn("Quota Limit Reached. Stopping batch.");
+                                return new Response(JSON.stringify({ processed: processedCount, message: "Rate limit hit, stopping early." }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+                            }
                         }
                     }
 
                     // B. Email Alert (Mock)
                     if (action.type === 'email_alert') {
                         console.log(`[Email] Sending alert to ${action.config?.email_to} for review ${review.id}`)
-                        // Here we would call Resend API
+                        // Implementation note: Call Resend API here using Deno.env.get('RESEND_API_KEY')
                     }
 
                     // C. Tagging
@@ -124,13 +141,11 @@ Deno.serve(async (req: Request) => {
                     }
                 }
                 
-                // Stop after first matching workflow to prevent conflicts? 
-                // For now, yes.
-                break 
+                break // Stop after first matching workflow
             }
         }
 
-        // 3. Update DB
+        // 3. Update DB if matched and processed
         if (matched && replyText) {
             const updatePayload: any = {
                 status: finalStatus,
@@ -148,12 +163,16 @@ Deno.serve(async (req: Request) => {
                 updatePayload.replied_at = new Date().toISOString()
             }
 
-            await supabase.from('reviews').update(updatePayload).eq('id', review.id)
-            processedCount++
+            const { error: updateError } = await supabase.from('reviews').update(updatePayload).eq('id', review.id)
+            if (!updateError) {
+                processedCount++
+            } else {
+                console.error("DB Update Error", updateError)
+            }
         } else if (!matched) {
-            // No rule matched -> Keep pending or move to manual? 
-            // Let's verify if default AI is enabled (could be a setting). 
-            // For now, we leave it pending.
+            // No workflow matched.
+            // Optional: Auto-generate a draft anyway if "Default AI" is on?
+            // For now, we leave it as pending to be safe.
         }
     }
 
@@ -163,6 +182,7 @@ Deno.serve(async (req: Request) => {
     )
 
   } catch (error: any) {
+    console.error("Fatal Function Error:", error.message)
     return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
