@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
@@ -23,6 +24,7 @@ import { CompetitorsPage } from './pages/Competitors';
 import { BookDemoPage } from './pages/BookDemo';
 import { OnboardingPage } from './pages/Onboarding';
 import { TeamPage } from './pages/Team';
+import { OffersPage } from './pages/Offers';
 import { api } from './lib/api';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
@@ -99,6 +101,7 @@ function AppRoutes() {
                         <Route path="collect" element={<CollectPage />} />
                         <Route path="customers" element={<CustomersPage />} />
                         <Route path="team" element={<TeamPage />} />
+                        <Route path="offers" element={<OffersPage />} />
                         <Route path="reports" element={<ReportsPage />} />
                         <Route path="settings" element={<SettingsPage />} />
                         <Route path="billing" element={<BillingPage />} />

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -8,20 +9,21 @@ import {
   Workflow, 
   FileText, 
   Settings, 
-  LogOut,
-  CreditCard,
-  Search,
-  Bell,
-  Menu,
-  X,
-  QrCode,
-  HelpCircle,
-  Download,
-  Users,
-  ShieldAlert,
-  Home,
-  PlusCircle,
-  Target
+  LogOut, 
+  CreditCard, 
+  Search, 
+  Bell, 
+  Menu, 
+  X, 
+  QrCode, 
+  HelpCircle, 
+  Download, 
+  Users, 
+  ShieldAlert, 
+  Home, 
+  PlusCircle, 
+  Target, 
+  Gift
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User } from '../types';
@@ -152,6 +154,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
           <SidebarItem to="/competitors" icon={Target} label="Veille Concurrentielle" onClick={onClose} />
           <SidebarItem to="/team" icon={Users} label="Équipe & Classement" onClick={onClose} />
           <SidebarItem to="/collect" icon={QrCode} label="Collecte d'avis" onClick={onClose} />
+          <SidebarItem to="/offers" icon={Gift} label="Offres & Fidélité" onClick={onClose} />
           <SidebarItem to="/reports" icon={FileText} label="Rapports" onClick={onClose} />
           <SidebarItem to="/automation" icon={Workflow} label="Automatisation" onClick={onClose} />
 
@@ -324,10 +327,12 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
             <div className="text-right hidden md:block">
               <div className="text-sm font-medium text-slate-900">{user.name}</div>
               <div className="text-xs text-slate-500 capitalize">
-                  {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : user.role}
+                  {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : user.role === 'editor' ? 'Éditeur' : 'Lecteur'}
               </div>
             </div>
-            <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=random`} alt="Avatar" className="h-9 w-9 rounded-full border border-slate-200" />
+            <div className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200">
+                {user.name.charAt(0)}
+            </div>
           </div>
         )}
       </div>
@@ -335,22 +340,25 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   );
 };
 
-export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+export const AppLayout = ({ children }: { children: React.ReactNode }) => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<User | undefined>(undefined);
-  const location = useLocation();
 
   useEffect(() => {
-    setIsSidebarOpen(false);
-    api.auth.getUser().then(u => setUser(u || undefined));
-  }, [location]);
+      api.auth.getUser().then(u => setUser(u || undefined));
+  }, []);
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={user} />
+    <div className="min-h-screen bg-slate-50 flex">
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+        user={user}
+      />
+      
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar onMenuClick={() => setIsSidebarOpen(true)} />
-        <main className="flex-1 overflow-auto p-4 md:p-8 pb-24 lg:pb-8">
+        <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           {children}
         </main>
         <BottomNav />

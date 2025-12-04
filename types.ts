@@ -1,4 +1,5 @@
 
+
 export interface User {
   id: string;
   email: string;
@@ -47,6 +48,34 @@ export interface StaffMember {
     average_rating: number;
 }
 
+export interface Offer {
+    id: string;
+    title: string; // "Café Offert"
+    description: string; // "Valable pour tout repas..."
+    code_prefix: string; // "CAFE-"
+    trigger_rating: number; // Min stars required (ex: 4)
+    active: boolean;
+    expiry_days: number;
+    style?: {
+        color: string; // Hex color for the coupon
+        icon: string; // 'coffee', 'percent', 'gift'
+    };
+    stats: {
+        distributed: number;
+        redeemed: number;
+    };
+}
+
+export interface Coupon {
+    id: string;
+    code: string;
+    offer_title: string;
+    discount_detail: string;
+    expires_at: string;
+    status: 'active' | 'redeemed' | 'expired';
+    customer_email?: string;
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -73,6 +102,7 @@ export interface Organization {
   workflows?: WorkflowRule[]; 
   stripe_customer_id?: string;
   staff_members?: StaffMember[]; 
+  offers?: Offer[];
 }
 
 export interface Location {

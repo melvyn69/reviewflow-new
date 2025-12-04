@@ -1,4 +1,5 @@
 
+
 import { supabase, isSupabaseConfigured } from './supabase';
 import { 
   INITIAL_ORG, 
@@ -14,7 +15,9 @@ import {
   Location,
   AnalyticsSummary,
   Competitor,
-  StaffMember
+  StaffMember,
+  Offer,
+  Coupon
 } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
@@ -155,7 +158,8 @@ const organizationService = {
                   workflows: org.workflows || [], 
                   notification_settings: org.notification_settings || INITIAL_ORG.notification_settings,
                   locations: locations || [],
-                  staff_members: staff
+                  staff_members: staff,
+                  offers: org.offers || []
               } as Organization;
           } catch (e) { return null; }
       },
@@ -243,6 +247,66 @@ const organizationService = {
           await new Promise(r => setTimeout(r, 1000));
           return true;
       }
+};
+
+const offersService = {
+    list: async (): Promise<Offer[]> => {
+        const org = await organizationService.get();
+        return org?.offers || [];
+    },
+    create: async (offer: Partial<Offer>) => {
+        const org = await organizationService.get();
+        if (org) {
+            const newOffer: Offer = {
+                id: `offer-${Date.now()}`,
+                title: offer.title || 'Nouvelle Offre',
+                description: offer.description || '',
+                code_prefix: offer.code_prefix || 'PROMO',
+                trigger_rating: offer.trigger_rating || 5,
+                active: true,
+                expiry_days: offer.expiry_days || 30,
+                style: offer.style || { color: '#4f46e5', icon: 'gift' },
+                stats: { distributed: 0, redeemed: 0 },
+                ...offer
+            } as Offer;
+            const updatedOffers = [...(org.offers || []), newOffer];
+            await organizationService.update({ offers: updatedOffers });
+            return newOffer;
+        }
+        return null;
+    },
+    delete: async (id: string) => {
+        const org = await organizationService.get();
+        if (org && org.offers) {
+            const updatedOffers = org.offers.filter(o => o.id !== id);
+            await organizationService.update({ offers: updatedOffers });
+        }
+    },
+    validate: async (code: string) => {
+        await new Promise(r => setTimeout(r, 800)); // Sim network
+        // Simple mock validation logic
+        if (code.startsWith("INVALID")) return { valid: false, reason: "Code inconnu" };
+        if (code.startsWith("USED")) return { valid: false, reason: "Déjà utilisé" };
+        return { valid: true, discount: "Café Offert (Valable jusqu'au 20/12)" };
+    },
+    generateCoupon: async (offerId: string, email?: string): Promise<Coupon | null> => {
+        const org = await organizationService.get();
+        const offer = org?.offers?.find(o => o.id === offerId);
+        if (!offer) return null;
+
+        // In a real app, save this to DB
+        const code = `${offer.code_prefix}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+        
+        return {
+            id: `cpn-${Date.now()}`,
+            code,
+            offer_title: offer.title,
+            discount_detail: offer.description,
+            expires_at: new Date(Date.now() + offer.expiry_days * 24 * 60 * 60 * 1000).toISOString(),
+            status: 'active',
+            customer_email: email
+        };
+    }
 };
 
 const reviewsService = {
@@ -598,6 +662,7 @@ export const api = {
     competitors: competitorsService,
     billing: billingService,
     seedCloudDatabase,
+    offers: offersService,
     public: { 
         getLocationInfo: async (id: string) => null, 
         getWidgetReviews: async (id: string) => [], 
@@ -621,7 +686,16 @@ export const api = {
                 console.log(`Review attributed to ${detectedStaff.name}. New Count: ${newCount}`);
             }
             return true;
-        } 
+        },
+        // NEW: Get active offer for location
+        getActiveOffer: async (locationId: string, rating: number): Promise<Offer | null> => {
+            // Mock logic: get org offers matching rating
+            const org = await organizationService.get(); // Should filter by location in real DB
+            if (org?.offers) {
+                return org.offers.find(o => o.active && rating >= o.trigger_rating) || null;
+            }
+            return null;
+        }
     },
     google: googleService
 };
