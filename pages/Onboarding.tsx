@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 import { api } from '../lib/api';
 import { Button, Input, Select, useToast, Card } from '../components/ui';
 import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw } from 'lucide-react';

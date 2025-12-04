@@ -46,6 +46,7 @@ export interface StaffMember {
     location_id?: string;
     reviews_count: number;
     average_rating: number;
+    organization_id?: string;
 }
 
 export interface Offer {
@@ -123,6 +124,7 @@ export interface Organization {
   offers?: Offer[];
   api_keys?: ApiKey[];
   webhooks?: WebhookConfig[];
+  google_refresh_token?: string;
 }
 
 export interface Location {
@@ -145,6 +147,7 @@ export interface Location {
   public_profile_enabled?: boolean;
   cover_image?: string;
   booking_url?: string;
+  organization_id?: string;
 }
 
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';
@@ -203,6 +206,8 @@ export interface Review {
   replied_at?: string;
   staff_attributed_to?: string;
   staff_name_detected?: string;
+  external_id?: string;
+  customer_email?: string;
 }
 
 export interface ThemeWeight {
@@ -238,6 +243,7 @@ export interface Competitor {
   address: string;
   strengths: string[];
   weaknesses: string[];
+  organization_id?: string;
 }
 
 export type TriggerType = 'review_created'; 

@@ -1,10 +1,9 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail, Facebook, Ticket } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from '../components/ui';
 import { Offer, Coupon } from '../types';
 
 const POSITIVE_TAGS = ['Accueil', 'Rapidité', 'Propreté', 'Qualité', 'Ambiance', 'Conseil'];
@@ -418,74 +417,4 @@ export const ReviewFunnel = () => {
                     )}
 
                     {/* STEP 4: SUCCESS (End of Negative Flow) */}
-                    {step === 'success' && (
-                        <div className="animate-in zoom-in-95 duration-300">
-                             <div className="h-20 w-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-400">
-                                <CheckCircle2 className="h-10 w-10" />
-                            </div>
-                            <h2 className="text-xl font-bold text-slate-900 mb-2">Merci pour votre retour</h2>
-                            <p className="text-slate-600 mb-8">
-                                Votre message a bien été transmis à la direction. Nous prenons vos remarques très au sérieux pour nous améliorer.
-                            </p>
-                            <Button variant="outline" onClick={() => window.location.reload()}>Fermer</Button>
-                        </div>
-                    )}
-
-                    {/* STEP 5: REWARD (New) */}
-                    {step === 'reward' && activeOffer && (
-                        <div className="animate-in zoom-in-95 duration-500">
-                            {!revealed ? (
-                                <>
-                                    <div className="mb-6 relative">
-                                        <div className="absolute inset-0 bg-indigo-500 rounded-full blur-xl opacity-20 animate-pulse"></div>
-                                        <Ticket className="h-20 w-20 text-indigo-600 mx-auto relative z-10" />
-                                    </div>
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Attendez !</h2>
-                                    <p className="text-slate-600 mb-8 text-lg">
-                                        Pour vous remercier de votre avis, nous avons un cadeau pour vous.
-                                    </p>
-                                    <Button 
-                                        size="lg" 
-                                        className="w-full h-14 text-lg shadow-xl shadow-indigo-200 animate-bounce"
-                                        onClick={handleRevealReward}
-                                        isLoading={loading}
-                                    >
-                                        <Gift className="mr-2 h-6 w-6" />
-                                        Découvrir mon cadeau
-                                    </Button>
-                                </>
-                            ) : (
-                                <div className="bg-slate-900 rounded-xl p-6 text-white relative overflow-hidden animate-in flip-in-y duration-700">
-                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 to-amber-600"></div>
-                                    <h3 className="font-bold text-xl mb-1 text-yellow-400">Félicitations !</h3>
-                                    <p className="text-indigo-200 mb-6 text-sm">Vous avez gagné :</p>
-                                    
-                                    <div className="bg-white/10 rounded-lg p-4 mb-6 backdrop-blur-sm border border-white/20">
-                                        <div className="text-3xl font-bold mb-1">{coupon?.offer_title}</div>
-                                        <div className="text-sm opacity-80">{coupon?.discount_detail}</div>
-                                    </div>
-
-                                    <div className="bg-white text-slate-900 font-mono text-xl font-bold py-3 rounded-lg mb-4 tracking-widest border-2 border-dashed border-slate-400">
-                                        {coupon?.code}
-                                    </div>
-                                    
-                                    <p className="text-xs text-slate-400 mb-6">
-                                        Faites une capture d'écran ou présentez ce code lors de votre prochaine visite. Valable jusqu'au {new Date(coupon?.expires_at!).toLocaleDateString()}.
-                                    </p>
-
-                                    <Button variant="secondary" className="w-full" onClick={() => window.location.reload()}>Terminer</Button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-                
-                {/* Footer Branding */}
-                <div className="bg-slate-50 p-4 text-center border-t border-slate-100 flex items-center justify-center gap-2 mt-auto">
-                    <span className="text-xs text-slate-400 font-medium">Powered by</span>
-                    <span className="text-xs font-bold text-indigo-600">Reviewflow</span>
-                </div>
-            </div>
-        </div>
-    );
-};
+                    {step === 'success

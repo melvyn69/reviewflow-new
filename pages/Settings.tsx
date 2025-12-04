@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
-import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle } from '../components/ui';
+import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation } from '../components/ui';
 import { 
     Building2, 
     Plus, 
@@ -26,7 +26,7 @@ import {
     Activity, 
     ExternalLink, 
     Check, 
-    Briefcase,
+    Briefcase, 
     Globe,
     Phone,
     MapPin,
@@ -423,6 +423,8 @@ export const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(true);
   const toast = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Modals state
   const [showLocationModal, setShowLocationModal] = useState(false);

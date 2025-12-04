@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { Card, Button } from '../components/ui';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 
 declare global {
   interface Window {

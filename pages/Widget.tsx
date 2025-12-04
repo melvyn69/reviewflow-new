@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from '../components/ui';
 import { api } from '../lib/api';
 import { Star, MessageCircle, Loader2 } from 'lucide-react';
 

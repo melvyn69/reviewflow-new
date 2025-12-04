@@ -18,7 +18,7 @@ import {
     Lock
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 
 // Template styles
 const TEMPLATES = [

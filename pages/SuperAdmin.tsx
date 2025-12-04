@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { Users, CreditCard, Activity, TrendingUp, Search, LogIn, ShieldAlert, DollarSign, Building } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 
 const AdminKPI = ({ title, value, subtext, icon: Icon, color }: any) => (
     <Card>

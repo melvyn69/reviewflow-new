@@ -19,7 +19,7 @@ import {
   ShieldAlert,
   ArrowRight
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 import { useTranslation } from '../lib/i18n';
 
 const KPI = ({ title, value, change, icon: Icon, trend, loading }: any) => (

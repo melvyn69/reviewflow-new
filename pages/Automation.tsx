@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
 import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select } from '../components/ui';
 import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 

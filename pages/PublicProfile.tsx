@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from '../components/ui';
 import { api } from '../lib/api';
 import { Review, Location } from '../types';
 import { Button, Card, CardContent, Skeleton } from '../components/ui';

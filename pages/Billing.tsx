@@ -7,7 +7,7 @@ import { Organization } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useTranslation } from '../lib/i18n';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from '../components/ui';
 
 const Confetti = () => (
     <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">

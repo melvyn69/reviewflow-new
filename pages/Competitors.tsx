@@ -20,7 +20,7 @@ import {
     Shield,
     Lock
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 
 export const CompetitorsPage = () => {
     const [trackedCompetitors, setTrackedCompetitors] = useState<Competitor[]>([]);

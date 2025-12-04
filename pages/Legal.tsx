@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../components/ui';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui';
 
