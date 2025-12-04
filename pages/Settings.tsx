@@ -402,7 +402,8 @@ export const SettingsPage = () => {
     api.organization.saveGoogleTokens().then((success) => {
         if (success) {
             toast.success("Compte Google connecté et sauvegardé pour l'accès offline.");
-            loadData(); // Recharger pour mettre à jour l'UI
+            // On recharge tout pour mettre à jour l'état visuel (case cochée verte)
+            loadData(); 
         } else {
             loadData();
         }

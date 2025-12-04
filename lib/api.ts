@@ -101,11 +101,12 @@ const authService = {
     },
     connectGoogleBusiness: async () => {
         const db = requireSupabase();
-        // Force 'access_type=offline' et 'prompt=consent' pour obtenir le refresh_token
+        // Force 'access_type=offline' et 'prompt=consent' pour obtenir le refresh_token indispensable pour l'accès offline/cron
+        // Redirect to /settings so the user lands back where they started
         const { error } = await db.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.href, 
+                redirectTo: window.location.origin + '/settings', 
                 scopes: 'https://www.googleapis.com/auth/business.manage', 
                 queryParams: { access_type: 'offline', prompt: 'consent' }
             }
@@ -173,19 +174,38 @@ const organizationService = {
           }
           return INITIAL_ORG;
       },
-      // Nouvelle méthode pour sauvegarder le refresh token Google
+      // Nouvelle méthode robuste pour sauvegarder le refresh token Google sans écraser les autres données
       saveGoogleTokens: async () => {
+          console.log("🔐 Vérification du Refresh Token Google...");
           const { data } = await supabase!.auth.getSession();
+          // Le provider_refresh_token n'est présent qu'immédiatement après le callback OAuth avec access_type=offline
           const refreshToken = data.session?.provider_refresh_token;
           
           if (refreshToken) {
+              console.log("✅ Token trouvé ! Sauvegarde en cours...");
               const user = await authService.getUser();
               if (user?.organization_id) {
-                  // On active aussi le flag d'intégration
-                  await requireSupabase().from('organizations').update({ 
+                  // 1. On récupère d'abord l'objet integrations existant pour ne pas écraser Facebook ou autres
+                  const { data: currentOrg } = await requireSupabase()
+                      .from('organizations')
+                      .select('integrations')
+                      .eq('id', user.organization_id)
+                      .single();
+                  
+                  const currentIntegrations = currentOrg?.integrations || {};
+                  
+                  // 2. On met à jour avec le nouveau token et le flag google activé
+                  const { error } = await requireSupabase().from('organizations').update({ 
                       google_refresh_token: refreshToken,
-                      integrations: { google: true } // Partiel update, attention en prod à merger l'objet JSONB
+                      integrations: { ...currentIntegrations, google: true }
                   }).eq('id', user.organization_id);
+                  
+                  if (error) {
+                      console.error("❌ Erreur sauvegarde token:", error);
+                      return false;
+                  }
+
+                  console.log("🎉 Token Google sauvegardé avec succès pour l'organisation.");
                   return true;
               }
           }
@@ -286,6 +306,7 @@ const googleService = {
     },
     
     fetchAllGoogleLocations: async () => {
+        // Pour lister les établissements la première fois, on a besoin du token temporaire de la session
         const token = await googleService.getToken();
         
         if (!token) {
@@ -310,8 +331,8 @@ const googleService = {
     },
 
     syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
-        // Nouvelle logique : on n'envoie PAS de token depuis le client.
-        // Le backend va utiliser le refresh_token stocké dans l'organisation.
+        // Logique Backend : on n'envoie PAS de token depuis le client.
+        // Le backend va utiliser le refresh_token stocké de manière sécurisée dans l'organisation.
         const user = await authService.getUser();
         if (!user?.organization_id) throw new Error("Organisation manquante");
 
