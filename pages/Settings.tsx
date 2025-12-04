@@ -233,7 +233,7 @@ const GoogleMappingModal = ({ locations, onClose, onSave }: { locations: Locatio
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-            <Card className="w-full max-w-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+            <Card className="w-full max-w-3xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
                 <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
                     <h3 className="font-bold text-slate-900 flex items-center gap-2">
                         <LinkIcon className="h-5 w-5 text-indigo-600" /> Mapping des Établissements
@@ -270,16 +270,16 @@ const GoogleMappingModal = ({ locations, onClose, onSave }: { locations: Locatio
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-slate-400 hidden sm:inline">→</span>
-                                        <div className="relative w-full sm:w-64">
+                                        <div className="relative w-full sm:w-80">
                                             <select 
-                                                className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none pr-8"
+                                                className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none appearance-none pr-8 truncate"
                                                 value={mappings[loc.id] || ''}
                                                 onChange={(e) => setMappings({...mappings, [loc.id]: e.target.value})}
                                             >
-                                                <option value="">Sélectionner...</option>
+                                                <option value="">Sélectionner une fiche Google...</option>
                                                 {googleLocations.map((gLoc, i) => (
                                                     <option key={i} value={gLoc.name}>
-                                                        {gLoc.title} ({gLoc.storeCode || 'Sans code'})
+                                                        {gLoc.title} ({gLoc.storeCode}) - {gLoc.address}
                                                     </option>
                                                 ))}
                                             </select>
@@ -296,7 +296,7 @@ const GoogleMappingModal = ({ locations, onClose, onSave }: { locations: Locatio
 
                 <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-white">
                     <Button variant="ghost" onClick={onClose}>Annuler</Button>
-                    <Button onClick={handleSubmit} disabled={loading || !!error} isLoading={loading}>Enregistrer</Button>
+                    <Button onClick={handleSubmit} disabled={loading || !!error} isLoading={loading}>Enregistrer et Synchroniser</Button>
                 </div>
             </Card>
         </div>
@@ -401,7 +401,7 @@ export const SettingsPage = () => {
     // Tentative de capture du token au chargement si retour de login
     api.organization.saveGoogleTokens().then((success) => {
         if (success) {
-            toast.success("Compte Google connecté et sauvegardé pour l'accès offline.");
+            toast.success("Compte connecté avec succès !");
             // On recharge tout pour mettre à jour l'état visuel (case cochée verte)
             loadData(); 
         } else {
@@ -602,6 +602,10 @@ export const SettingsPage = () => {
               }
           }
           toast.success("Configuration sauvegardée !");
+          
+          // Trigger sync immediately after saving
+          await handleSyncNow();
+          
           loadData();
       } catch (e) {
           toast.error("Erreur de sauvegarde");
