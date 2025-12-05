@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Heart, Gift, Mail } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
@@ -52,7 +53,7 @@ export const ReviewFunnel = () => {
     const handleRatingSelect = async (score: number) => {
         setRating(score);
         
-        // Sauvegarde de l'intention (note seule) pour stats
+        // Sauvegarde de l'intention (note seule) pour stats avant redirection
         if (locationId) {
             api.public.submitFeedback(locationId, score, "", "", [], staffName || undefined).catch(console.error);
         }
@@ -60,12 +61,11 @@ export const ReviewFunnel = () => {
         if (score >= 4) {
             // FLUX POSITIF (4-5 étoiles)
             if (locationInfo?.googleUrl && locationInfo.googleUrl.length > 5) {
-                // REDIRECTION GOOGLE DIRECTE
+                // REDIRECTION GOOGLE DIRECTE avec petit délai pour l'effet
                 setStep('redirecting'); 
-                // Délai pour les confettis
                 setTimeout(() => {
                     window.location.href = locationInfo.googleUrl!;
-                }, 2000); 
+                }, 2500); 
             } else {
                 // Pas de lien Google, on finit là
                 setStep('success'); 
@@ -103,7 +103,7 @@ export const ReviewFunnel = () => {
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-            {(step === 'redirecting' || step === 'success' && rating >=4) && <Confetti />}
+            {(step === 'redirecting' || (step === 'success' && rating >= 4)) && <Confetti />}
             
             <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden relative z-10 min-h-[500px] flex flex-col">
                 <div className="bg-indigo-600 h-32 relative flex items-center justify-center shrink-0">
@@ -152,6 +152,7 @@ export const ReviewFunnel = () => {
                             <p className="text-slate-600 mb-8 font-medium">
                                 Redirection vers Google pour confirmer votre note...
                             </p>
+                            <Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-500 opacity-50" />
                         </div>
                     )}
 

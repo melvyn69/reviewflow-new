@@ -1,17 +1,18 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, SavedReply } from '../types';
-import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation } from '../components/ui';
+import { Organization, Location, BrandSettings, User, IndustryType, SavedReply } from '../types';
+import { Card, CardContent, Button, Input, Select, Toggle, useToast, CardHeader, CardTitle, useNavigate, useLocation } from '../components/ui';
 import { 
-    Building2, Plus, X, Sparkles, User as UserIcon, Mail, Trash2, Loader2, AlertCircle, 
+    Building2, Plus, X, Sparkles, User as UserIcon, Mail, Trash2, Loader2, 
     BookOpen, ExternalLink, ImageIcon, UploadCloud
 } from 'lucide-react';
 
-// Helper to remove button focus immediately
+// Helper pour retirer le focus du bouton après le clic
 const handleAction = (e: React.MouseEvent, action: () => void | Promise<void>) => {
     e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.blur(); 
+    // Enlève le focus pour éviter que le bouton reste bleu/sélectionné
+    e.currentTarget.blur();
     action();
 };
 
@@ -30,7 +31,6 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
         cover_image: location?.cover_image || ''
     });
     const [saving, setSaving] = useState(false);
-    const [uploading, setUploading] = useState(false);
     const [tab, setTab] = useState<'info' | 'profile'>('info');
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -43,9 +43,13 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0] && location && onUpload) {
-            setUploading(true);
-            await onUpload(e.target.files[0], location.id);
-            setUploading(false);
+            // Logique d'upload simplifiée pour l'exemple
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData({...formData, cover_image: reader.result as string});
+            };
+            reader.readAsDataURL(file);
         }
     };
 
@@ -88,8 +92,9 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                                 <div className="space-y-3 pt-2">
                                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Liens de Collecte (Review Funnel)</h4>
                                     <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                                        <label className="block text-xs font-bold text-indigo-900 mb-1">Google Avis (Prioritaire)</label>
+                                        <label className="block text-xs font-bold text-indigo-900 mb-1">Lien Google Avis (Important)</label>
                                         <Input value={formData.google_review_url} onChange={e => setFormData({...formData, google_review_url: e.target.value})} placeholder="https://g.page/r/..." className="bg-white text-xs" />
+                                        <p className="text-[10px] text-indigo-700 mt-1">Nécessaire pour rediriger les clients satisfaits.</p>
                                     </div>
                                 </div>
                             </>
@@ -124,8 +129,9 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                                                         onChange={e => setFormData({...formData, cover_image: e.target.value})} 
                                                         placeholder="https://..." 
                                                     />
-                                                    <div className="h-10 w-10 bg-slate-100 rounded border border-slate-200 overflow-hidden shrink-0">
+                                                    <div className="h-10 w-10 bg-slate-100 rounded border border-slate-200 overflow-hidden shrink-0 relative group cursor-pointer">
                                                         {formData.cover_image ? <img src={formData.cover_image} className="w-full h-full object-cover" /> : <ImageIcon className="h-5 w-5 m-auto mt-2 text-slate-300"/>}
+                                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*" />
                                                     </div>
                                                 </div>
                                             </div>
@@ -193,10 +199,11 @@ export const SettingsPage = () => {
     const tabParam = params.get('tab');
     if (tabParam) setActiveTab(tabParam);
 
+    // Check for tokens in URL but don't show toast if we are just navigating inside app
     if (window.location.hash.includes('access_token') || window.location.search.includes('code=')) {
         api.organization.saveGoogleTokens().then((success) => {
             if (success) {
-                toast.success("Compte connecté avec succès !");
+                // Clean URL
                 window.history.replaceState(null, '', window.location.pathname + window.location.search);
                 loadData(); 
             }
@@ -280,6 +287,7 @@ export const SettingsPage = () => {
       const updatedTemplates = org.saved_replies?.filter(t => t.id !== id) || [];
       await api.organization.update({ saved_replies: updatedTemplates });
       setOrg({ ...org, saved_replies: updatedTemplates });
+      toast.success("Modèle supprimé");
   };
 
   const handleSaveBrand = async () => {
@@ -299,6 +307,7 @@ export const SettingsPage = () => {
 
   const handleTestVoice = async () => {
       setTestingVoice(true);
+      setTestResponse("");
       try {
           const mockReview = {
               rating: 3,
@@ -316,6 +325,7 @@ export const SettingsPage = () => {
           setTestResponse(text);
       } catch (e: any) {
           setTestResponse("Erreur : " + e.message);
+          toast.error("Erreur test IA: " + e.message);
       } finally {
           setTestingVoice(false);
       }
@@ -349,6 +359,7 @@ export const SettingsPage = () => {
         </div>
 
         <div className="p-6 md:p-8">
+            {/* TAB: PROFILE */}
             {activeTab === 'profile' && (
                 <div className="max-w-xl space-y-6">
                     <div className="space-y-4">
@@ -365,8 +376,9 @@ export const SettingsPage = () => {
                 </div>
             )}
 
+            {/* TAB: ORGANIZATION & TEMPLATES */}
             {activeTab === 'organization' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                     <div className="space-y-6">
                         <h4 className="font-bold text-lg text-slate-900">Détails Entreprise</h4>
                         <div className="space-y-4">
@@ -387,37 +399,47 @@ export const SettingsPage = () => {
                         </div>
                     </div>
 
-                    <div className="space-y-6 border-l border-slate-100 pl-8">
+                    <div className="space-y-6 lg:border-l lg:border-slate-100 lg:pl-10">
                         <h4 className="font-bold text-lg text-slate-900 flex items-center gap-2">
                             <BookOpen className="h-5 w-5 text-indigo-600" />
                             Modèles de réponse
                         </h4>
-                        <p className="text-sm text-slate-500">Créez des réponses types à insérer rapidement dans l'Inbox.</p>
+                        <p className="text-sm text-slate-500">Ces modèles apparaîtront dans votre boîte de réception pour répondre en un clic.</p>
                         
                         <div className="space-y-4">
-                            {org?.saved_replies?.map(tpl => (
-                                <div key={tpl.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex justify-between items-center group">
-                                    <div>
-                                        <div className="font-medium text-sm text-slate-900">{tpl.title}</div>
-                                        <div className="text-xs text-slate-500 truncate max-w-xs">{tpl.content}</div>
+                            <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                                {org?.saved_replies && org.saved_replies.length > 0 ? org.saved_replies.map(tpl => (
+                                    <div key={tpl.id} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex justify-between items-center group hover:border-indigo-200 transition-colors">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-sm text-slate-900 truncate">{tpl.title}</div>
+                                            <div className="text-xs text-slate-500 truncate" title={tpl.content}>{tpl.content}</div>
+                                        </div>
+                                        <button onClick={(e) => handleAction(e, () => handleDeleteTemplate(tpl.id))} className="text-slate-400 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
                                     </div>
-                                    <button onClick={() => handleDeleteTemplate(tpl.id)} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            ))}
+                                )) : (
+                                    <div className="text-sm text-slate-400 italic">Aucun modèle enregistré.</div>
+                                )}
+                            </div>
                             
-                            <div className="pt-4 border-t border-slate-100 space-y-3">
-                                <Input placeholder="Titre (ex: Remerciement Standard)" value={newTemplateTitle} onChange={e => setNewTemplateTitle(e.target.value)} className="text-sm" />
+                            <div className="pt-4 border-t border-slate-100 space-y-3 bg-slate-50/50 p-4 rounded-xl">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Créer un nouveau modèle</label>
+                                <Input 
+                                    placeholder="Titre (ex: Remerciement Standard)" 
+                                    value={newTemplateTitle} 
+                                    onChange={e => setNewTemplateTitle(e.target.value)} 
+                                    className="text-sm bg-white"
+                                />
                                 <textarea 
-                                    className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" 
+                                    className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white" 
                                     placeholder="Contenu du modèle..." 
                                     rows={3}
                                     value={newTemplateContent}
                                     onChange={e => setNewTemplateContent(e.target.value)}
                                 />
-                                <Button size="sm" variant="outline" onClick={(e) => handleAction(e, handleSaveTemplate)} disabled={!newTemplateTitle}>
-                                    <Plus className="h-4 w-4 mr-2" /> Ajouter un modèle
+                                <Button size="sm" variant="outline" onClick={(e) => handleAction(e, handleSaveTemplate)} disabled={!newTemplateTitle || !newTemplateContent} className="w-full">
+                                    <Plus className="h-4 w-4 mr-2" /> Ajouter le modèle
                                 </Button>
                             </div>
                         </div>
@@ -425,46 +447,62 @@ export const SettingsPage = () => {
                 </div>
             )}
 
+            {/* TAB: BRAND / AI IDENTITY */}
             {activeTab === 'brand' && (
                 <div className="max-w-2xl space-y-6">
                     <div className="bg-gradient-to-r from-indigo-50 to-violet-50 p-6 rounded-xl border border-indigo-100">
                         <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">
                             <Sparkles className="h-5 w-5" /> Brand Voice IA
                         </h4>
+                        <p className="text-sm text-indigo-800 mb-6">Définissez comment l'IA doit parler pour refléter votre identité.</p>
+                        
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-indigo-900 mb-1">Ton</label>
-                                    <Select value={brandTone} onChange={e => setBrandTone(e.target.value)}>
+                                    <Select value={brandTone} onChange={e => setBrandTone(e.target.value)} className="bg-white">
                                         <option value="professionnel">Professionnel</option>
                                         <option value="amical">Amical & Chaleureux</option>
                                         <option value="luxe">Luxe & Distingué</option>
+                                        <option value="enthusiastic">Enthousiaste</option>
                                     </Select>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-indigo-900 mb-1">Style</label>
-                                    <Select value={languageStyle} onChange={e => setLanguageStyle(e.target.value as any)}>
-                                        <option value="formal">Vouvoiement</option>
-                                        <option value="casual">Tutoiement</option>
+                                    <Select value={languageStyle} onChange={e => setLanguageStyle(e.target.value as any)} className="bg-white">
+                                        <option value="formal">Vouvoiement (Vous)</option>
+                                        <option value="casual">Tutoiement (Tu)</option>
                                     </Select>
                                 </div>
                             </div>
+                            
                             <div>
-                                <label className="block text-xs font-bold text-indigo-900 mb-1">Contexte & Instructions</label>
+                                <label className="block text-xs font-bold text-indigo-900 mb-1">Base de connaissances (Contexte)</label>
                                 <textarea 
-                                    className="w-full p-3 rounded-lg border border-indigo-200 text-sm h-32 focus:ring-2 focus:ring-indigo-500"
-                                    placeholder="Ex: Nous sommes fermés le lundi. Le chef s'appelle Mario..."
+                                    className="w-full p-3 rounded-lg border border-indigo-200 text-sm h-32 focus:ring-2 focus:ring-indigo-500 bg-white"
+                                    placeholder="Ex: Nous sommes fermés le lundi. Le chef s'appelle Mario. On ne fait pas de remboursement sans ticket..."
                                     value={brandKnowledge}
                                     onChange={e => setBrandKnowledge(e.target.value)}
                                 />
+                                <p className="text-[10px] text-indigo-600 mt-1">L'IA utilisera ces infos pour répondre aux questions spécifiques dans les avis.</p>
                             </div>
-                            <div className="flex justify-between items-center pt-2">
-                                <Button variant="secondary" size="sm" onClick={(e) => handleAction(e, handleTestVoice)} isLoading={testingVoice}>Tester la voix</Button>
+
+                            <div className="flex items-center gap-2">
+                                <Toggle checked={useEmojis} onChange={setUseEmojis} />
+                                <span className="text-sm text-indigo-900">Utiliser des emojis 😉</span>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-4 border-t border-indigo-200/50">
+                                <Button variant="secondary" size="sm" onClick={(e) => handleAction(e, handleTestVoice)} isLoading={testingVoice} className="bg-white text-indigo-700 border-indigo-200">
+                                    Tester la voix
+                                </Button>
                                 <Button onClick={(e) => handleAction(e, handleSaveBrand)}>Sauvegarder</Button>
                             </div>
+                            
                             {testResponse && (
-                                <div className="mt-4 p-4 bg-white rounded-lg border border-indigo-100 text-sm text-slate-600 italic">
-                                    "{testResponse}"
+                                <div className="mt-4 p-4 bg-white rounded-lg border border-indigo-100 text-sm text-slate-700 relative animate-in fade-in slide-in-from-top-2">
+                                    <div className="absolute top-0 left-0 bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-br font-bold uppercase">Réponse IA</div>
+                                    <div className="pt-3 italic">"{testResponse}"</div>
                                 </div>
                             )}
                         </div>
@@ -472,6 +510,7 @@ export const SettingsPage = () => {
                 </div>
             )}
 
+            {/* TAB: LOCATIONS */}
             {activeTab === 'locations' && (
                 <div className="space-y-6">
                     <div className="flex justify-between items-center">
@@ -479,16 +518,27 @@ export const SettingsPage = () => {
                         <Button icon={Plus} onClick={(e) => handleAction(e, () => { setEditingLocation(null); setShowLocationModal(true); })}>Ajouter</Button>
                     </div>
                     {org?.locations?.map(loc => (
-                        <Card key={loc.id}>
+                        <Card key={loc.id} className="hover:shadow-md transition-shadow">
                             <CardContent className="p-4 flex justify-between items-center">
                                 <div>
                                     <h4 className="font-bold text-slate-900">{loc.name}</h4>
                                     <p className="text-sm text-slate-500">{loc.address}</p>
+                                    {loc.google_review_url ? (
+                                        <span className="text-[10px] text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100 mt-1 inline-block">Google Connecté</span>
+                                    ) : (
+                                        <span className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-100 mt-1 inline-block">Lien Google manquant</span>
+                                    )}
                                 </div>
                                 <Button size="xs" variant="ghost" onClick={(e) => handleAction(e, () => { setEditingLocation(loc); setShowLocationModal(true); })}>Modifier</Button>
                             </CardContent>
                         </Card>
                     ))}
+                    {(!org?.locations || org.locations.length === 0) && (
+                        <div className="text-center p-8 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                            <Building2 className="h-10 w-10 text-slate-400 mx-auto mb-2" />
+                            <p className="text-slate-500">Aucun établissement configuré.</p>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

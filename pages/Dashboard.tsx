@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { AnalyticsSummary, Review, SetupStatus, User } from '../types';
@@ -154,7 +155,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
                                 <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
                                 <p className="text-xs text-slate-500">{step.desc}</p>
                             </div>
-                            {/* Always show button, styled differently if done */}
+                            {/* Modification : Bouton 'Modifier' toujours visible pour accéder à la config */}
                             <Button 
                                 size="xs" 
                                 variant={step.done ? "ghost" : "outline"} 
