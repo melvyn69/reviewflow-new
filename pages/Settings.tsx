@@ -128,6 +128,14 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Manual Validation to prevent silent failures across tabs
+        if (!formData.name || !formData.city) {
+            setTab('info');
+            toast.error("Le nom et la ville sont obligatoires.");
+            return;
+        }
+
         setSaving(true);
         try {
             await onSave(formData);
@@ -157,12 +165,13 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                 </div>
                 
                 <div className="flex border-b border-slate-200">
-                    <button onClick={() => setTab('info')} className={`flex-1 py-3 text-sm font-medium border-b-2 ${tab === 'info' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>Informations</button>
-                    <button onClick={() => setTab('profile')} className={`flex-1 py-3 text-sm font-medium border-b-2 ${tab === 'profile' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>Profil Public (SEO)</button>
+                    <button type="button" onClick={() => setTab('info')} className={`flex-1 py-3 text-sm font-medium border-b-2 ${tab === 'info' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>Informations</button>
+                    <button type="button" onClick={() => setTab('profile')} className={`flex-1 py-3 text-sm font-medium border-b-2 ${tab === 'profile' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>Profil Public (SEO)</button>
                 </div>
 
                 <div className="p-6 overflow-y-auto flex-1">
-                    <form id="loc-form" onSubmit={handleSubmit} className="space-y-4">
+                    {/* noValidate disables default HTML5 validation (which blocks submit if hidden fields are invalid) */}
+                    <form id="loc-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
                         {tab === 'info' && (
                             <>
                                 <div>
@@ -671,15 +680,20 @@ export const SettingsPage = () => {
   };
 
   const handleSaveLocation = async (data: any) => {
-      // Allow error to propagate so the modal stays open on error
-      if (editingLocation) {
-          await api.locations.update(editingLocation.id, data);
-          toast.success("Établissement modifié");
-      } else {
-          await api.locations.create(data);
-          toast.success("Établissement ajouté");
+      try {
+          if (editingLocation) {
+              await api.locations.update(editingLocation.id, data);
+              toast.success("Établissement modifié");
+          } else {
+              await api.locations.create(data);
+              toast.success("Établissement ajouté");
+          }
+          await loadData();
+          // The modal is closed by the calling component on success, or we rely on the component handling
+      } catch (e: any) {
+          toast.error(e.message || "Erreur lors de la sauvegarde.");
+          throw e; // Propagate error to keep modal open
       }
-      await loadData();
   };
 
   const handleImportCsv = async (file: File, locationId: string) => {
