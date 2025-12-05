@@ -8,14 +8,14 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     define: {
       // Injection sécurisée pour le SDK Google Client-side
-      'process.env': {
-        API_KEY: env.API_KEY || env.VITE_API_KEY,
-        NODE_ENV: JSON.stringify(mode),
-      },
+      // On injecte les clés spécifiques plutôt que d'écraser tout l'objet process.env
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY),
+      // Fallback safe pour NODE_ENV si nécessaire, mais Vite le gère généralement
+      'process.env.NODE_ENV': JSON.stringify(mode),
     },
     build: {
       target: 'esnext',
-      // Ignorer l'API serverless lors du build frontend
+      // Ignorer l'API serverless lors du build frontend pour accélérer le build
       rollupOptions: {
         external: [/\/api\/.*/, /\/supabase\/.*/],
       },
