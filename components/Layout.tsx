@@ -23,11 +23,12 @@ import {
   PlusCircle, 
   Target, 
   Gift,
-  Share2 // New Icon
+  Share2
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { useTranslation } from '../lib/i18n';
 
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => {
   const location = useLocation();
@@ -52,6 +53,7 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: st
 const BottomNav = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { t } = useTranslation();
     
     const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
@@ -62,28 +64,28 @@ const BottomNav = () => {
                 className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/dashboard') ? 'text-indigo-600' : 'text-slate-400'}`}
             >
                 <LayoutDashboard className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">Accueil</span>
+                <span className="text-[10px] mt-1 font-medium">{t('sidebar.dashboard')}</span>
             </button>
             <button 
                 onClick={() => navigate('/inbox')}
                 className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/inbox') ? 'text-indigo-600' : 'text-slate-400'}`}
             >
                 <Inbox className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">Avis</span>
+                <span className="text-[10px] mt-1 font-medium">{t('sidebar.inbox')}</span>
             </button>
             <button 
                 onClick={() => navigate('/collect')}
                 className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/collect') ? 'text-indigo-600' : 'text-slate-400'}`}
             >
                 <QrCode className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">Collecte</span>
+                <span className="text-[10px] mt-1 font-medium">{t('sidebar.collect')}</span>
             </button>
             <button 
                 onClick={() => navigate('/settings')}
                 className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/settings') ? 'text-indigo-600' : 'text-slate-400'}`}
             >
                 <Settings className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">Réglages</span>
+                <span className="text-[10px] mt-1 font-medium">{t('sidebar.settings')}</span>
             </button>
         </div>
     );
@@ -98,6 +100,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstall, setShowInstall] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -146,29 +149,29 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Plateforme</div>
-          <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Tableau de bord" exact onClick={onClose} />
-          <SidebarItem to="/inbox" icon={Inbox} label="Boîte de réception" onClick={onClose} />
-          <SidebarItem to="/social" icon={Share2} label="Social Studio" onClick={onClose} />
-          <SidebarItem to="/analytics" icon={BarChart3} label="Statistiques" onClick={onClose} />
-          <SidebarItem to="/competitors" icon={Target} label="Veille Concurrentielle" onClick={onClose} />
-          <SidebarItem to="/team" icon={Users} label="Équipe & Classement" onClick={onClose} />
-          <SidebarItem to="/collect" icon={QrCode} label="Collecte d'avis" onClick={onClose} />
-          <SidebarItem to="/offers" icon={Gift} label="Offres & Fidélité" onClick={onClose} />
-          <SidebarItem to="/reports" icon={FileText} label="Rapports" onClick={onClose} />
-          <SidebarItem to="/automation" icon={Workflow} label="Automatisation" onClick={onClose} />
+          <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.platform')}</div>
+          <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
+          <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
+          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} />
+          <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
+          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} />
+          <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
+          <SidebarItem to="/collect" icon={QrCode} label={t('sidebar.collect')} onClick={onClose} />
+          <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
+          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} />
+          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} />
 
-          <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Organisation</div>
-          <SidebarItem to="/billing" icon={CreditCard} label="Abonnement" onClick={onClose} />
-          <SidebarItem to="/settings" icon={Settings} label="Paramètres" onClick={onClose} />
-          <SidebarItem to="/help" icon={HelpCircle} label="Centre d'Aide" onClick={onClose} />
+          <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.org')}</div>
+          <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />
+          <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={onClose} />
+          <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />
           
           {user?.role === 'super_admin' && (
             <>
                 <div className="px-3 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
-                    <ShieldAlert className="h-3 w-3" /> Zone Admin
+                    <ShieldAlert className="h-3 w-3" /> {t('sidebar.admin')}
                 </div>
-                <SidebarItem to="/admin" icon={ShieldAlert} label="Super Admin" onClick={onClose} />
+                <SidebarItem to="/admin" icon={ShieldAlert} label={t('sidebar.super_admin')} onClick={onClose} />
             </>
           )}
         
@@ -181,8 +184,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
                 <div className="flex items-center gap-2 text-xs font-bold text-left">
                   <Download className="h-4 w-4" />
                   <div>
-                    Installer l'App
-                    <div className="font-normal opacity-80 text-[10px]">Sur votre mobile</div>
+                    {t('sidebar.install')}
+                    <div className="font-normal opacity-80 text-[10px]">{t('sidebar.install_sub')}</div>
                   </div>
                 </div>
               </button>
@@ -209,7 +212,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
             className="flex items-center gap-3 px-3 py-2 w-full rounded-md text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-red-600 transition-colors"
           >
             <LogOut className="h-5 w-5 shrink-0" />
-            Déconnexion
+            {t('sidebar.logout')}
           </button>
         </div>
       </div>

@@ -228,9 +228,9 @@ export const DashboardPage = () => {
 
   const getGreeting = () => {
       const hour = new Date().getHours();
-      if (hour < 12) return "Bonjour";
-      if (hour < 18) return "Bonne après-midi";
-      return "Bonsoir";
+      if (hour < 12) return t('dashboard.greeting_morning');
+      if (hour < 18) return t('dashboard.greeting_afternoon');
+      return t('dashboard.greeting_evening');
   };
 
   // Logic for empty state or new account
@@ -272,7 +272,7 @@ export const DashboardPage = () => {
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
               {getGreeting()}, <span className="text-indigo-600">{user?.name?.split(' ')[0] || 'Chef'}</span> 👋
           </h1>
-          <p className="text-slate-500">Voici ce qu'il se passe sur vos établissements aujourd'hui.</p>
+          <p className="text-slate-500">{t('dashboard.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
             <div className="flex bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
@@ -295,29 +295,29 @@ export const DashboardPage = () => {
               <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <QrCode className="h-5 w-5" />
               </div>
-              <div className="font-bold text-slate-900 text-sm">QR Code</div>
-              <div className="text-xs text-slate-500">Imprimer le kit</div>
+              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.qrcode')}</div>
+              <div className="text-xs text-slate-500">{t('dashboard.actions.print')}</div>
           </button>
           <button onClick={openFunnel} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all text-left group">
               <div className="bg-green-50 text-green-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <ExternalLink className="h-5 w-5" />
               </div>
-              <div className="font-bold text-slate-900 text-sm">Formulaire</div>
-              <div className="text-xs text-slate-500">Lien public</div>
+              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.funnel')}</div>
+              <div className="text-xs text-slate-500">{t('dashboard.actions.link')}</div>
           </button>
           <button onClick={() => navigate('/inbox')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left group">
               <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <MessageSquare className="h-5 w-5" />
               </div>
-              <div className="font-bold text-slate-900 text-sm">Répondre</div>
-              <div className="text-xs text-slate-500">Boîte de réception</div>
+              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.reply')}</div>
+              <div className="text-xs text-slate-500">{t('dashboard.actions.inbox')}</div>
           </button>
           <button onClick={() => navigate('/social')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-pink-300 hover:shadow-md transition-all text-left group">
               <div className="bg-pink-50 text-pink-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <Sparkles className="h-5 w-5" />
               </div>
-              <div className="font-bold text-slate-900 text-sm">Social Post</div>
-              <div className="text-xs text-slate-500">Créer un visuel</div>
+              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.social')}</div>
+              <div className="text-xs text-slate-500">{t('dashboard.actions.create')}</div>
           </button>
       </div>
 
@@ -337,8 +337,8 @@ export const DashboardPage = () => {
                 <CardHeader className="border-b border-slate-100 pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <AlertCircle className="h-5 w-5 text-amber-500" />
-                        À traiter en priorité
-                        <Badge variant="neutral" className="ml-auto">{urgentReviews.length} avis</Badge>
+                        {t('dashboard.urgent')}
+                        <Badge variant="neutral" className="ml-auto">{urgentReviews.length} {t('dashboard.urgent_sub')}</Badge>
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -360,7 +360,9 @@ export const DashboardPage = () => {
                                         </div>
                                         <p className="text-sm text-slate-600 line-clamp-1">{review.body}</p>
                                     </div>
-                                    <Button size="xs" variant="outline" className="opacity-0 group-hover:opacity-100 transition-opacity">Répondre</Button>
+                                    <Button size="xs" variant="outline" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {t('dashboard.actions.reply')}
+                                    </Button>
                                 </div>
                             ))}
                         </div>
@@ -369,8 +371,8 @@ export const DashboardPage = () => {
                             <div className="bg-green-50 p-3 rounded-full mb-3">
                                 <CheckCircle2 className="h-6 w-6 text-green-600" />
                             </div>
-                            <p className="font-medium text-slate-900">Tout est sous contrôle !</p>
-                            <p className="text-slate-400">Aucun avis négatif en attente.</p>
+                            <p className="font-medium text-slate-900">{t('dashboard.all_good')}</p>
+                            <p className="text-slate-400">{t('dashboard.no_urgent')}</p>
                         </div>
                     )}
                 </CardContent>
@@ -383,18 +385,18 @@ export const DashboardPage = () => {
                         <CardContent className="p-5">
                             <div className="flex items-center gap-2 mb-2">
                                 <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                                <h4 className="text-sm font-bold text-green-900 uppercase tracking-wide">Points Forts</h4>
+                                <h4 className="text-sm font-bold text-green-900 uppercase tracking-wide">{t('dashboard.strengths')}</h4>
                             </div>
-                            <p className="text-sm text-green-800 leading-relaxed">{stats.strengths_summary || "Analyse en cours..."}</p>
+                            <p className="text-sm text-green-800 leading-relaxed">{stats.strengths_summary || t('dashboard.analyzing')}</p>
                         </CardContent>
                     </Card>
                     <Card className="bg-red-50/50 border-red-100">
                         <CardContent className="p-5">
                             <div className="flex items-center gap-2 mb-2">
                                 <div className="h-2 w-2 rounded-full bg-red-500"></div>
-                                <h4 className="text-sm font-bold text-red-900 uppercase tracking-wide">Points de Vigilance</h4>
+                                <h4 className="text-sm font-bold text-red-900 uppercase tracking-wide">{t('dashboard.weaknesses')}</h4>
                             </div>
-                            <p className="text-sm text-red-800 leading-relaxed">{stats.problems_summary || "Analyse en cours..."}</p>
+                            <p className="text-sm text-red-800 leading-relaxed">{stats.problems_summary || t('dashboard.analyzing')}</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -406,7 +408,7 @@ export const DashboardPage = () => {
             <Card className="h-full flex flex-col border-slate-200 shadow-sm">
                 <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
                     <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
-                        <Activity className="h-4 w-4" /> Flux d'activité
+                        <Activity className="h-4 w-4" /> {t('dashboard.activity')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 flex-1 overflow-hidden">
