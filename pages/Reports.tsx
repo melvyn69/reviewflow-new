@@ -1,16 +1,14 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../lib/api';
-import { ReportConfig, AnalyticsSummary } from '../types';
-import { Button, Card, Badge, Toggle, useToast, Input, Select, CardHeader, CardTitle, CardContent } from '../components/ui';
+import { ReportConfig, AnalyticsSummary, Organization } from '../types';
+import { Button, Card, Badge, Toggle, useToast, Input, Select, CardHeader, CardTitle, CardContent, ProLock } from '../components/ui';
 import { FileText, Plus, Download, Mail, Trash2, X, PieChart, TrendingUp, Award, Calendar } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng } from 'html-to-image';
 
 // --- VISUAL TEMPLATES FOR PDF GENERATION ---
-// Ces composants sont rendus hors écran, convertis en images, puis injectés dans le PDF.
-
 const ReportCoverTemplate = React.forwardRef<HTMLDivElement, { title: string, date: string, orgName: string }>(({ title, date, orgName }, ref) => (
     <div ref={ref} className="w-[800px] h-[1130px] bg-slate-900 text-white p-16 flex flex-col justify-between relative overflow-hidden">
         {/* Background Accents */}
@@ -118,6 +116,7 @@ const ReportSummaryTemplate = React.forwardRef<HTMLDivElement, { analytics: Anal
 
 export const ReportsPage = () => {
   const [reports, setReports] = useState<ReportConfig[]>([]);
+  const [org, setOrg] = useState<Organization | null>(null);
   const toast = useToast();
   
   // Refs for Image Generation
@@ -131,27 +130,33 @@ export const ReportsPage = () => {
   const [editFrequency, setEditFrequency] = useState<'weekly'|'monthly'|'daily'>('weekly');
 
   useEffect(() => {
-    // Mock initial data
-    setReports([
-      {
-        id: 'rep1',
-        name: 'Rapport Mensuel Performance',
-        format: 'pdf',
-        frequency: 'monthly',
-        time: '08:00',
-        enabled: true,
-        last_sent: '2023-10-01'
-      },
-      {
-        id: 'rep2',
-        name: 'Audit Concurrentiel',
-        format: 'pdf',
-        frequency: 'monthly',
-        time: '09:00',
-        enabled: false,
-        last_sent: '-'
-      }
-    ]);
+    // Initial fetch
+    const init = async () => {
+        const organization = await api.organization.get();
+        setOrg(organization);
+        // Mock data for demo UI
+        setReports([
+          {
+            id: 'rep1',
+            name: 'Rapport Mensuel Performance',
+            format: 'pdf',
+            frequency: 'monthly',
+            time: '08:00',
+            enabled: true,
+            last_sent: '2023-10-01'
+          },
+          {
+            id: 'rep2',
+            name: 'Audit Concurrentiel',
+            format: 'pdf',
+            frequency: 'monthly',
+            time: '09:00',
+            enabled: false,
+            last_sent: '-'
+          }
+        ]);
+    };
+    init();
   }, []);
 
   const handleCreate = () => {
@@ -279,6 +284,43 @@ export const ReportsPage = () => {
       }
   };
 
+  // PAYWALL: Block Free AND Starter plans
+  if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
+      return (
+          <div className="max-w-6xl mx-auto mt-8">
+              <div className="mb-8">
+                  <h1 className="text-2xl font-bold text-slate-900">Rapports Automatisés</h1>
+                  <p className="text-slate-500">Envoyez des PDF professionnels à votre direction chaque lundi.</p>
+              </div>
+              <ProLock 
+                  title="Débloquez le Reporting" 
+                  description="Générez des rapports PDF en marque blanche, planifiez des envois automatiques et analysez votre ROI."
+              >
+                  <Card className="opacity-50 pointer-events-none filter blur-sm">
+                      <table className="min-w-full divide-y divide-slate-200">
+                          <thead className="bg-slate-50">
+                              <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nom</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Fréquence</th>
+                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
+                              </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-slate-200">
+                              {[1, 2, 3].map(i => (
+                                  <tr key={i}>
+                                      <td className="px-6 py-4">Rapport Mensuel</td>
+                                      <td className="px-6 py-4">Mensuel</td>
+                                      <td className="px-6 py-4"><Badge>Actif</Badge></td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </Card>
+              </ProLock>
+          </div>
+      );
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       
@@ -304,7 +346,10 @@ export const ReportsPage = () => {
 
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Rapports</h1>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              Rapports
+              <Badge variant="pro">GROWTH</Badge>
+          </h1>
           <p className="text-slate-500">Génération de documents PDF qualité "Agence".</p>
         </div>
         <Button icon={Plus} onClick={handleCreate}>Créer un rapport</Button>

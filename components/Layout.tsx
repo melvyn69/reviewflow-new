@@ -24,12 +24,14 @@ import {
   Target, 
   Gift,
   Share2,
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { AppNotification, User } from '../types';
+import { AppNotification, User, Organization } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
+import { Badge } from './ui';
 
 // ... (SidebarItem and BottomNav components remain the same)
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => {
@@ -93,14 +95,14 @@ const BottomNav = () => {
     );
 };
 
-// ... (Sidebar component remains the same)
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   user?: User;
+  org?: Organization | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstall, setShowInstall] = useState(false);
   const { t } = useTranslation();
@@ -124,6 +126,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
     }
     setDeferredPrompt(null);
   };
+
+  const plan = org?.subscription_plan || 'free';
 
   return (
     <>
@@ -150,6 +154,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
             <X className="h-6 w-6" />
           </button>
         </div>
+
+        {/* PLAN BADGE */}
+        {org && (
+            <div className="px-6 pt-4">
+                <div className={`flex items-center justify-between p-2 rounded-lg border text-xs font-bold uppercase tracking-wide ${plan === 'pro' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : plan === 'starter' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                    <span>Plan {plan}</span>
+                    {plan !== 'pro' && (
+                        <Link to="/billing" onClick={onClose} className="text-[10px] underline hover:text-indigo-600">Upgrade</Link>
+                    )}
+                </div>
+            </div>
+        )}
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.platform')}</div>
@@ -397,9 +413,15 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
 export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<User | undefined>(undefined);
+  const [org, setOrg] = useState<Organization | null>(null);
 
   useEffect(() => {
-      api.auth.getUser().then(u => setUser(u || undefined));
+      api.auth.getUser().then(u => {
+          setUser(u || undefined);
+          if (u) {
+              api.organization.get().then(setOrg);
+          }
+      });
   }, []);
 
   return (
@@ -408,6 +430,7 @@ export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
         isOpen={sidebarOpen} 
         onClose={() => setSidebarOpen(false)} 
         user={user}
+        org={org}
       />
       
       <div className="flex-1 flex flex-col min-w-0">

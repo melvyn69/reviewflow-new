@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
-import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation } from '../components/ui';
+import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation, ProLock } from '../components/ui';
 import { 
     Building2, 
     Plus, 
@@ -596,7 +597,7 @@ export const SettingsPage = () => {
       await api.organization.update({ 
           name: orgCommercialName, 
           legal_name: orgLegalName, 
-          siret: orgSiret,
+          siret: orgSiret, 
           address: orgAddress,
           industry: industry as any 
       });
@@ -1175,63 +1176,84 @@ export const SettingsPage = () => {
 
             {activeTab === 'developer' && (
                 <div className="space-y-8">
-                    {/* API Keys */}
-                    <section>
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-lg flex items-center gap-2"><Key className="h-5 w-5 text-indigo-600"/> Clés API</h3>
-                            <div className="flex gap-2">
-                                <Input placeholder="Nom de la clé (ex: Zapier)" className="w-48 h-9 text-xs" value={keyName} onChange={e => setKeyName(e.target.value)} />
-                                <Button size="sm" onClick={handleGenerateKey} disabled={!keyName}>Générer</Button>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            {org?.api_keys?.map(apiKey => (
-                                <div key={apiKey.id} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
-                                    <div>
-                                        <div className="font-bold text-sm text-slate-900">{apiKey.name}</div>
-                                        <div className="font-mono text-xs text-slate-500 mt-1">{apiKey.key.substring(0, 12)}...</div>
+                    {/* PAYWALL - Enterprise Only */}
+                    {(org?.subscription_plan === 'free' || org?.subscription_plan === 'starter') ? (
+                        <ProLock 
+                            title="Débloquez l'API & Webhooks" 
+                            description="Intégrez Reviewflow à votre système existant (CRM, ERP) avec le plan Enterprise."
+                        >
+                            <div className="filter blur-[3px] pointer-events-none opacity-50 space-y-8">
+                                 {/* Fake Content for blur */}
+                                <section>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold text-lg flex items-center gap-2"><Key className="h-5 w-5 text-indigo-600"/> Clés API</h3>
                                     </div>
-                                    <button onClick={() => handleRevokeKey(apiKey.id)} className="text-xs text-red-600 hover:underline">Révoquer</button>
-                                </div>
-                            ))}
-                            {(!org?.api_keys || org.api_keys.length === 0) && <p className="text-sm text-slate-500 italic">Aucune clé active.</p>}
-                        </div>
-                    </section>
-
-                    {/* Webhooks */}
-                    <section>
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-bold text-lg flex items-center gap-2"><Webhook className="h-5 w-5 text-indigo-600"/> Webhooks</h3>
-                        </div>
-                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
-                            <div className="flex gap-2">
-                                <Input placeholder="https://votre-api.com/webhook" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} />
-                                <Button onClick={handleAddWebhook}>Ajouter</Button>
+                                </section>
                             </div>
-                        </div>
-                        <div className="space-y-2">
-                            {org?.webhooks?.map(hook => (
-                                <div key={hook.id} className="flex items-center justify-between p-3 bg-white rounded border border-slate-200">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`h-2 w-2 rounded-full ${hook.active ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                        <div className="text-sm font-mono text-slate-700 truncate max-w-xs">{hook.url}</div>
-                                    </div>
+                        </ProLock>
+                    ) : (
+                        <>
+                            {/* API Keys */}
+                            <section>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-lg flex items-center gap-2"><Key className="h-5 w-5 text-indigo-600"/> Clés API</h3>
                                     <div className="flex gap-2">
-                                        <Button size="xs" variant="outline" onClick={() => handleTestWebhook(hook.id)}>Tester</Button>
-                                        <button onClick={() => handleDeleteWebhook(hook.id)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                                        <Input placeholder="Nom de la clé (ex: Zapier)" className="w-48 h-9 text-xs" value={keyName} onChange={e => setKeyName(e.target.value)} />
+                                        <Button size="sm" onClick={handleGenerateKey} disabled={!keyName}>Générer</Button>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    </section>
+                                <div className="space-y-2">
+                                    {org?.api_keys?.map(apiKey => (
+                                        <div key={apiKey.id} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
+                                            <div>
+                                                <div className="font-bold text-sm text-slate-900">{apiKey.name}</div>
+                                                <div className="font-mono text-xs text-slate-500 mt-1">{apiKey.key.substring(0, 12)}...</div>
+                                            </div>
+                                            <button onClick={() => handleRevokeKey(apiKey.id)} className="text-xs text-red-600 hover:underline">Révoquer</button>
+                                        </div>
+                                    ))}
+                                    {(!org?.api_keys || org.api_keys.length === 0) && <p className="text-sm text-slate-500 italic">Aucune clé active.</p>}
+                                </div>
+                            </section>
+
+                            {/* Webhooks */}
+                            <section>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-lg flex items-center gap-2"><Webhook className="h-5 w-5 text-indigo-600"/> Webhooks</h3>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                                    <div className="flex gap-2">
+                                        <Input placeholder="https://votre-api.com/webhook" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} />
+                                        <Button onClick={handleAddWebhook}>Ajouter</Button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    {org?.webhooks?.map(hook => (
+                                        <div key={hook.id} className="flex items-center justify-between p-3 bg-white rounded border border-slate-200">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`h-2 w-2 rounded-full ${hook.active ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                                <div className="text-sm font-mono text-slate-700 truncate max-w-xs">{hook.url}</div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button size="xs" variant="outline" onClick={() => handleTestWebhook(hook.id)}>Tester</Button>
+                                                <button onClick={() => handleDeleteWebhook(hook.id)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        </>
+                    )}
 
                     {/* Billing Simulator (Dev Only) */}
-                    <section className="pt-8 border-t border-slate-200">
-                        <h3 className="font-bold text-sm text-slate-400 uppercase mb-4">Zone de Test (Simulation)</h3>
-                        <Button variant="outline" onClick={handleSimulateStripe} icon={CreditCard}>
-                            Simuler Webhook Stripe (Upgrade Pro)
-                        </Button>
-                    </section>
+                    {process.env.NODE_ENV === 'development' && (
+                        <section className="pt-8 border-t border-slate-200">
+                            <h3 className="font-bold text-sm text-slate-400 uppercase mb-4">Zone de Test (Simulation)</h3>
+                            <Button variant="outline" onClick={handleSimulateStripe} icon={CreditCard}>
+                                Simuler Webhook Stripe (Upgrade Pro)
+                            </Button>
+                        </section>
+                    )}
                 </div>
             )}
 
