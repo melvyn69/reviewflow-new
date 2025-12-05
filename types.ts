@@ -369,3 +369,23 @@ export interface Customer {
       last_updated: string;
   };
 }
+
+export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin';
+
+export interface SocialPost {
+    id: string;
+    platform: SocialPlatform;
+    content: string;
+    image_url?: string;
+    scheduled_date: string; // ISO String
+    status: 'scheduled' | 'published' | 'failed';
+    review_id?: string; // Original review
+}
+
+export interface SocialAccount {
+    id: string;
+    platform: SocialPlatform;
+    name: string;
+    connected: boolean;
+    avatar_url?: string;
+}

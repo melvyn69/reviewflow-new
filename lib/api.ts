@@ -1,7 +1,9 @@
 
 
+
+
 import { supabase } from './supabase';
-import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport } from '../types';
+import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
 
 // --- DEMO MODE UTILS ---
@@ -737,6 +739,39 @@ export const api = {
               firstReviewReplied: reviews.length > 0 && reviews[0].status === 'sent',
               completionPercentage: isDemoMode() ? 100 : 0 
           };
+      }
+  },
+  social: {
+      getPosts: async (): Promise<SocialPost[]> => {
+          if (isDemoMode()) {
+              return JSON.parse(localStorage.getItem('social_posts') || '[]');
+          }
+          // Fallback simple cloud storage for now until proper table is set
+          const stored = localStorage.getItem('social_posts');
+          return stored ? JSON.parse(stored) : [];
+      },
+      schedulePost: async (post: Omit<SocialPost, 'id' | 'status'>) => {
+          const newPost = { ...post, id: Date.now().toString(), status: 'scheduled' };
+          const posts = await api.social.getPosts();
+          posts.push(newPost as SocialPost);
+          localStorage.setItem('social_posts', JSON.stringify(posts));
+          return newPost;
+      },
+      deletePost: async (id: string) => {
+          const posts = await api.social.getPosts();
+          const filtered = posts.filter(p => p.id !== id);
+          localStorage.setItem('social_posts', JSON.stringify(filtered));
+      },
+      connectAccount: async (platform: SocialPlatform, active: boolean) => {
+          const org = await api.organization.get();
+          if (org && supabase) {
+              const integrationKey = platform === 'instagram' ? 'instagram_posting' : 
+                                     platform === 'facebook' ? 'facebook_posting' : 'linkedin_posting';
+              
+              await supabase.from('organizations').update({
+                  integrations: { ...org.integrations, [integrationKey]: active }
+              }).eq('id', org.id);
+          }
       }
   },
   seedCloudDatabase: async () => {
