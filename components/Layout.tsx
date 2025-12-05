@@ -25,7 +25,8 @@ import {
   Gift,
   Share2,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  ChevronDown
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
@@ -246,8 +247,11 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  
   const notifRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -260,6 +264,9 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
       }
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setSearchResults([]);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -393,17 +400,54 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
         </div>
 
         <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+        
+        {/* User Menu */}
         {user && (
-          <div className="flex items-center gap-3">
-            <div className="text-right hidden md:block">
-              <div className="text-sm font-medium text-slate-900">{user.name}</div>
-              <div className="text-xs text-slate-500 capitalize">
-                  {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : user.role === 'editor' ? 'Éditeur' : 'Lecteur'}
-              </div>
-            </div>
-            <div className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200">
-                {user.name.charAt(0)}
-            </div>
+          <div className="relative" ref={userMenuRef}>
+            <button 
+                className="flex items-center gap-2 hover:bg-slate-50 p-1 pr-2 rounded-full transition-colors border border-transparent hover:border-slate-200"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+            >
+                <div className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200">
+                    {user.name.charAt(0)}
+                </div>
+                <div className="text-right hidden md:block">
+                  <div className="text-xs font-bold text-slate-700 leading-tight">{user.name}</div>
+                </div>
+                <ChevronDown className="h-3 w-3 text-slate-400 hidden md:block" />
+            </button>
+
+            {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="p-4 border-b border-slate-50">
+                        <div className="text-sm font-bold text-slate-900">{user.name}</div>
+                        <div className="text-xs text-slate-500">{user.email}</div>
+                        <div className="mt-2 text-[10px] uppercase tracking-wider font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded w-fit">
+                            {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'Membre'}
+                        </div>
+                    </div>
+                    
+                    <div className="p-1">
+                        <button 
+                            onClick={() => {
+                                setShowUserMenu(false);
+                                navigate('/settings');
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 mb-1 transition-colors"
+                        >
+                            <Settings className="h-4 w-4 text-slate-400" /> Paramètres
+                        </button>
+                        <button 
+                            onClick={() => {
+                                api.auth.logout().then(() => window.location.reload());
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 transition-colors"
+                        >
+                            <LogOut className="h-4 w-4" /> Déconnexion
+                        </button>
+                    </div>
+                </div>
+            )}
           </div>
         )}
       </div>

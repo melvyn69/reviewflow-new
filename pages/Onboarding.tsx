@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from '../components/ui';
 import { api } from '../lib/api';
 import { Button, Input, Select, useToast, Card } from '../components/ui';
-import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw } from 'lucide-react';
+import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 
 const GoogleIcon = () => (
@@ -78,8 +78,19 @@ export const OnboardingPage = () => {
         }
     };
 
+    const handleLogout = async () => {
+        await api.auth.logout();
+        window.location.reload();
+    };
+
     return (
-        <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
+        <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 relative">
+            <div className="absolute top-4 right-4">
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-400 hover:text-red-600">
+                    <LogOut className="h-4 w-4 mr-2" /> Déconnexion
+                </Button>
+            </div>
+
             {/* Progress Bar */}
             <div className="w-full max-w-md mb-8 flex gap-2">
                 {[1, 2, 3].map(i => (
