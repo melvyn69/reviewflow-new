@@ -246,6 +246,27 @@ export interface Competitor {
   organization_id?: string;
 }
 
+export interface MarketReport {
+    id: string;
+    created_at: string;
+    sector: string;
+    location: string;
+    trends: string[];
+    swot: {
+        strengths: string[];
+        weaknesses: string[];
+        opportunities: string[];
+        threats: string[];
+    };
+    competitors_detailed?: {
+        name: string;
+        last_month_growth: string;
+        sentiment_trend: string;
+        top_complaint: string;
+    }[];
+    data?: any;
+}
+
 export type TriggerType = 'review_created'; 
 export type Operator = 'equals' | 'gte' | 'lte' | 'contains' | 'not_contains';
 

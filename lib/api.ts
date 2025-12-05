@@ -1,6 +1,7 @@
 
+
 import { supabase } from './supabase';
-import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember } from '../types';
+import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
 
 // --- DEMO MODE UTILS ---
@@ -562,15 +563,67 @@ export const api = {
           return results;
       },
       // Uses the Real Gemini Analysis Edge Function
-      getDeepAnalysis: async () => {
-          if (isDemoMode()) return { trends: ["Montée des prix", "Demande bio"], swot: { strengths: ["Localisation"], weaknesses: ["Prix"] } };
-          const competitors = await api.competitors.list();
+      getDeepAnalysis: async (sector?: string, location?: string, competitors?: Competitor[]) => {
+          const comps = competitors || await api.competitors.list();
+          
+          if (isDemoMode()) {
+              return { 
+                  trends: ["Montée des prix généralisée dans le secteur " + (sector || "local"), "Demande croissante pour des produits bio/locaux"], 
+                  swot: { 
+                      strengths: ["Bonne réputation locale", "Qualité de service"], 
+                      weaknesses: ["Prix perçus comme élevés", "Temps d'attente"],
+                      opportunities: ["Développer la livraison", "Partenariats locaux"],
+                      threats: ["Nouveaux entrants agressifs sur les prix"]
+                  },
+                  competitors_detailed: comps.slice(0, 3).map(c => ({
+                      name: c.name,
+                      last_month_growth: "+5%",
+                      sentiment_trend: "Stable",
+                      top_complaint: "Prix"
+                  }))
+              };
+          }
+          
           const data = await invoke('analyze_market', {
-              competitors: competitors,
-              sector: 'Commerce',
-              location: 'Locale'
+              competitors: comps,
+              sector: sector || 'Commerce',
+              location: location || 'Locale'
           });
           return data;
+      },
+      saveReport: async (report: Omit<MarketReport, 'id'>) => {
+          if (isDemoMode()) {
+              const saved = JSON.parse(localStorage.getItem('demo_market_reports') || '[]');
+              saved.push({ ...report, id: Date.now().toString() });
+              localStorage.setItem('demo_market_reports', JSON.stringify(saved));
+              return;
+          }
+          // Try to save to DB, if table exists. Otherwise, fallback to local storage or fail silently.
+          try {
+              if (supabase) {
+                  await supabase.from('market_reports').insert(report);
+              }
+          } catch (e) {
+              console.warn("Could not save report to DB (Table might not exist), saving to LocalStorage");
+              const saved = JSON.parse(localStorage.getItem('market_reports') || '[]');
+              saved.push({ ...report, id: Date.now().toString() });
+              localStorage.setItem('market_reports', JSON.stringify(saved));
+          }
+      },
+      getReports: async (): Promise<MarketReport[]> => {
+          if (isDemoMode()) {
+              return JSON.parse(localStorage.getItem('demo_market_reports') || '[]');
+          }
+          try {
+              if (supabase) {
+                  const { data, error } = await supabase.from('market_reports').select('*').order('created_at', { ascending: false });
+                  if (!error) return data || [];
+                  throw error; // Fallback
+              }
+              return [];
+          } catch (e) {
+              return JSON.parse(localStorage.getItem('market_reports') || '[]');
+          }
       }
   },
   automation: {
