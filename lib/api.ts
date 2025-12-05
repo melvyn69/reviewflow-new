@@ -758,6 +758,50 @@ export const api = {
       delete: async (id: string) => {
           if (isDemoMode()) return;
           await supabase!.from('locations').delete().eq('id', id);
+      },
+      importFromGoogle: async () => {
+          if (isDemoMode()) {
+              // Simulate import
+              await new Promise(r => setTimeout(r, 1500));
+              return 3;
+          }
+          
+          // 1. Get Google Locations from API
+          const gLocations = await api.google.fetchAllGoogleLocations();
+          if (gLocations.length === 0) return 0;
+
+          const org = await api.organization.get();
+          if (!org) throw new Error("Organisation introuvable");
+
+          let count = 0;
+          for (const gLoc of gLocations) {
+               // Check duplication (prevent creating duplicates)
+               const { data: existing } = await supabase!
+                  .from('locations')
+                  .select('id')
+                  .eq('external_reference', gLoc.name) // gLoc.name is the resource ID (accounts/../locations/..)
+                  .eq('organization_id', org.id)
+                  .maybeSingle();
+
+               if (!existing) {
+                   // Parse address for City/Country (simple heuristic or default)
+                   const parts = gLoc.address.split(',');
+                   const city = parts.length > 1 ? parts[parts.length - 2].trim().split(' ')[1] || parts[parts.length - 2].trim() : 'Inconnue'; // Very rough parsing
+                   
+                   await supabase!.from('locations').insert({
+                       organization_id: org.id,
+                       name: gLoc.title,
+                       address: gLoc.address,
+                       city: city || 'À définir',
+                       country: 'France',
+                       external_reference: gLoc.name, // Store the Google Resource Name as ID
+                       connection_status: 'connected',
+                       google_review_url: `https://search.google.com/local/writereview?placeid=${gLoc.place_id || ''}` // Place ID might need a specific fetch but we link generic for now
+                   });
+                   count++;
+               }
+          }
+          return count;
       }
   },
   google: {

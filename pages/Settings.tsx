@@ -422,6 +422,7 @@ export const SettingsPage = () => {
   const [team, setTeam] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -726,6 +727,23 @@ export const SettingsPage = () => {
       }
   };
 
+  const handleImportGoogle = async () => {
+      setImporting(true);
+      try {
+          const count = await api.locations.importFromGoogle();
+          if (count > 0) {
+              toast.success(`${count} établissements importés avec succès !`);
+              loadData();
+          } else {
+              toast.info("Aucun nouvel établissement trouvé ou erreur de token. (Reconnectez Google si nécessaire)");
+          }
+      } catch (e: any) {
+          toast.error("Erreur d'import : " + e.message);
+      } finally {
+          setImporting(false);
+      }
+  };
+
   const handleGenerateKey = async () => {
       if (!keyName) return;
       await api.organization.generateApiKey(keyName);
@@ -926,6 +944,7 @@ export const SettingsPage = () => {
                     <div className="flex justify-between items-center">
                         <h3 className="font-bold text-lg">Vos Établissements</h3>
                         <div className="flex gap-2">
+                            <Button variant="outline" onClick={handleImportGoogle} isLoading={importing} icon={UploadCloud}>Importer depuis Google</Button>
                             <Button variant="outline" onClick={() => setShowMappingModal(true)}>Mapper Google</Button>
                             <Button icon={Plus} onClick={() => { setEditingLocation(null); setShowLocationModal(true); }}>Ajouter</Button>
                         </div>

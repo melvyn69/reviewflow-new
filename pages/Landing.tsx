@@ -228,7 +228,7 @@ export const LandingPage = () => {
               <a href="#faq" className="hover:text-indigo-600 transition-colors">FAQ</a>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <select 
                 value={lang} 
                 onChange={(e) => setLang(e.target.value)} 
@@ -238,10 +238,18 @@ export const LandingPage = () => {
                 <option value="fr">🇫🇷 FR</option>
                 <option value="es">🇪🇸 ES</option>
             </select>
-            <button onClick={() => navigate('/login')} className="text-sm font-bold text-slate-900 hover:text-indigo-600 px-4 transition-colors hidden sm:block">
+            
+            <button 
+                onClick={() => navigate('/login')} 
+                className="text-sm font-bold text-slate-900 hover:text-indigo-600 px-2 sm:px-4 transition-colors whitespace-nowrap"
+            >
               {t('nav.login')}
             </button>
-            <Button onClick={handleBookDemo} className="shadow-lg shadow-indigo-600/20 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 transition-all hover:scale-105 hover:shadow-indigo-600/30">
+            
+            <Button 
+                onClick={handleBookDemo} 
+                className="shadow-lg shadow-indigo-600/20 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-4 sm:px-6 transition-all hover:scale-105 hover:shadow-indigo-600/30 whitespace-nowrap text-xs sm:text-sm"
+            >
               {t('nav.demo')}
             </Button>
           </div>
