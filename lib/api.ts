@@ -982,6 +982,16 @@ export const api = {
       }
   },
   offers: {
+      create: async (data: Partial<Offer>) => {
+          if (isDemoMode()) {
+              DEMO_ORG.offers?.push({ id: Date.now().toString(), active: true, stats: { distributed: 0, redeemed: 0 }, ...data } as Offer);
+              return;
+          }
+          if (supabase) {
+              const org = await api.organization.get();
+              await supabase.from('offers').insert({ ...data, organization_id: org?.id, stats: { distributed: 0, redeemed: 0 } });
+          }
+      },
       generateCoupon: async (offerId: string, email: string): Promise<any> => {
           if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Demo Offer' };
           return await invoke('manage_coupons', { action: 'create', offerId, email });
@@ -993,6 +1003,20 @@ export const api = {
       redeem: async (code: string) => {
           if (isDemoMode()) return { success: true };
           return await invoke('manage_coupons', { action: 'redeem', code });
+      },
+      distributeCampaign: async (offerId: string, segment: string, channel: string) => {
+          if (isDemoMode()) {
+              await new Promise(r => setTimeout(r, 1000));
+              // Find offer and update stats locally
+              const offer = DEMO_ORG.offers?.find(o => o.id === offerId);
+              if (offer) {
+                  offer.stats.distributed += 12; // Simulate sending to 12 people
+              }
+              return { sent_count: 12 };
+          }
+          // Real backend call would be here
+          // return await invoke('distribute_campaign', { offerId, segment, channel });
+          return { sent_count: 0 };
       }
   },
   admin: {

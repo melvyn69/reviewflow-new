@@ -64,6 +64,14 @@ export interface Offer {
     stats: {
         distributed: number;
         redeemed: number;
+        revenue_generated?: number;
+    };
+    // Campaign Fields
+    audience_segment?: 'all' | 'vip' | 'risk' | 'new';
+    distribution_channel?: 'email' | 'sms' | 'qr';
+    email_template?: {
+        subject: string;
+        body: string;
     };
 }
 
