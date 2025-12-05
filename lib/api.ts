@@ -523,7 +523,6 @@ export const api = {
               return "Bonjour " + review.author_name + ", merci pour votre avis 5 étoiles ! Nous sommes ravis que l'expérience vous ait plu.";
           }
           
-          // Use Client-Side GenAI instead of Edge Function to avoid connection errors
           const ai = getAIClient();
           const prompt = `
             Rôle: Tu es le propriétaire d'un établissement répondant à un avis client.
@@ -1069,7 +1068,82 @@ export const api = {
       },
       submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[], staffName?: string) => {
           if (isDemoMode()) return;
-          await invoke('submit_review', { locationId, rating, feedback, contact, tags, staffName });
+          if (!supabase) return;
+
+          // LOGIQUE DE DÉTECTION DU PERSONNEL (CLIENT-SIDE)
+          // Si staffName n'est pas fourni (pas de QR code spécifique), on cherche dans le texte
+          let detectedStaffName = staffName;
+          let internalNoteText = '';
+
+          if (!detectedStaffName && feedback && feedback.length > 0) {
+              // 1. Récupérer l'ID de l'organisation
+              const { data: location } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
+              
+              if (location) {
+                  // 2. Récupérer les membres du staff
+                  const { data: staffMembers } = await supabase.from('staff_members').select('*').eq('organization_id', location.organization_id);
+                  
+                  if (staffMembers && staffMembers.length > 0) {
+                      // 3. Chercher une correspondance
+                      // On trie par longueur de nom décroissante pour matcher "Jean-Pierre" avant "Jean"
+                      const sortedStaff = staffMembers.sort((a, b) => b.name.length - a.name.length);
+                      
+                      for (const member of sortedStaff) {
+                          // Regex simple pour trouver le nom entier (mot complet)
+                          const regex = new RegExp(`\\b${member.name}\\b`, 'i');
+                          if (regex.test(feedback)) {
+                              detectedStaffName = member.name;
+                              internalNoteText = `Attribué automatiquement à ${member.name} (détecté dans le texte de l'avis).`;
+                              
+                              // Incrémenter le compteur directement
+                              await supabase.from('staff_members')
+                                  .update({ reviews_count: (member.reviews_count || 0) + 1 })
+                                  .eq('id', member.id);
+                              
+                              break; // On s'arrête au premier trouvé
+                          }
+                      }
+                  }
+              }
+          } else if (detectedStaffName) {
+              // Cas où staffName est déjà là (QR Code), on incrémente aussi le compteur si on trouve le membre
+              const { data: location } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
+              if (location) {
+                  const { data: staff } = await supabase.from('staff_members')
+                      .select('id, reviews_count')
+                      .eq('organization_id', location.organization_id)
+                      .eq('name', detectedStaffName) // On suppose que staffName du QR code match le name en base
+                      .single();
+                  
+                  if (staff) {
+                      internalNoteText = `Attribué via QR Code à ${detectedStaffName}.`;
+                      await supabase.from('staff_members')
+                          .update({ reviews_count: (staff.reviews_count || 0) + 1 })
+                          .eq('id', staff.id);
+                  }
+              }
+          }
+
+          const newReview = {
+              location_id: locationId,
+              rating: rating,
+              text: feedback || '',
+              author_name: contact || 'Client Anonyme (Funnel)',
+              source: 'direct',
+              status: 'pending',
+              received_at: new Date().toISOString(),
+              language: 'fr',
+              staff_attributed_to: detectedStaffName || null,
+              internal_notes: internalNoteText ? [{ id: Date.now().toString(), text: internalNoteText, author_name: 'Système', created_at: new Date().toISOString() }] : [],
+              analysis: { 
+                  sentiment: rating >= 4 ? 'positive' : 'negative', 
+                  themes: tags || [], 
+                  keywords: tags || [], 
+                  flags: { hygiene: false, security: false } 
+              }
+          };
+
+          await supabase.from('reviews').insert(newReview);
       },
       getWidgetReviews: async (locationId: string) => {
           if (isDemoMode()) return DEMO_REVIEWS;
