@@ -1,9 +1,5 @@
-
-
-
-
 import { supabase } from './supabase';
-import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform } from '../types';
+import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
 
 // --- DEMO MODE UTILS ---
@@ -29,6 +25,7 @@ const invoke = async (functionName: string, body: any) => {
 };
 
 export const api = {
+  // ... (Previous Auth, Organization, etc. methods remain identical, I will append global search here)
   auth: {
     getUser: async (): Promise<User | null> => {
       if (isDemoMode()) return DEMO_USER;
@@ -37,11 +34,8 @@ export const api = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
       
-      // Try to get profile from DB
       const { data } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
       
-      // Fallback if profile doesn't exist yet or is incomplete (Race condition or new signup)
-      // We default role to 'admin' so they can access onboarding/settings to complete setup
       return {
           id: user.id,
           email: user.email!,
@@ -78,22 +72,21 @@ export const api = {
         if (supabase) await supabase.auth.signOut();
     },
     loginWithGoogle: async () => {
-        if (isDemoMode()) return; // Mock success
+        if (isDemoMode()) return;
         if (!supabase) return;
         await supabase.auth.signInWithOAuth({ 
             provider: 'google',
             options: {
                 queryParams: {
-                    access_type: 'offline', // Force Refresh Token
+                    access_type: 'offline',
                     prompt: 'consent',
                 },
-                scopes: 'https://www.googleapis.com/auth/business.manage' // GMB Permissions
+                scopes: 'https://www.googleapis.com/auth/business.manage'
             }
         });
     },
     connectGoogleBusiness: async () => {
         if (isDemoMode()) return true;
-        // Re-trigger OAuth flow to get fresh tokens with business scope
         if (!supabase) return;
         const { data } = await supabase.auth.signInWithOAuth({
             provider: 'google',
@@ -113,11 +106,10 @@ export const api = {
         const { data: { user } } = await supabase!.auth.getUser();
         if (!user) throw new Error("Not logged in");
         
-        // If password update
         if (data.password) {
             const { error } = await supabase!.auth.updateUser({ password: data.password });
             if (error) throw error;
-            delete data.password; // Don't send to DB
+            delete data.password;
         }
 
         const { error } = await supabase!.from('users').update(data).eq('id', user.id);
@@ -137,7 +129,19 @@ export const api = {
   },
   organization: {
       get: async (): Promise<Organization | null> => {
-          if (isDemoMode()) return DEMO_ORG;
+          if (isDemoMode()) {
+              if (DEMO_ORG.locations && DEMO_ORG.locations.length > 0 && !DEMO_ORG.locations[0].public_config) {
+                  DEMO_ORG.locations[0].public_config = {
+                      template: 'modern',
+                      primaryColor: '#4f46e5',
+                      showReviews: true,
+                      showMap: true,
+                      customCta: { enabled: true, label: 'Réserver', url: 'https://cal.com' },
+                      stats: { views: 1240, clicks: 85 }
+                  };
+              }
+              return DEMO_ORG;
+          }
 
           if (!supabase) return null;
           const { data: { user } } = await supabase.auth.getUser();
@@ -168,7 +172,6 @@ export const api = {
           const user = await api.auth.getUser();
           if (!user) throw new Error("Not logged in");
 
-          // 1. Create Org
           const { data: org, error: orgError } = await supabase
             .from('organizations')
             .insert({ name, industry, subscription_plan: 'free' })
@@ -177,7 +180,6 @@ export const api = {
             
           if (orgError) throw orgError;
 
-          // 2. Link User to Org and Ensure Admin Role
           const { error: userError } = await supabase
             .from('users')
             .upsert({ 
@@ -199,23 +201,20 @@ export const api = {
           const { error } = await supabase!.from('organizations').update(data).eq('id', org.id);
           if (error) throw error;
       },
-      // Capture tokens returned by Google OAuth redirect
       saveGoogleTokens: async () => {
           if (isDemoMode()) return true;
           if (!supabase) return false;
           const { data: { session } } = await supabase.auth.getSession();
           
-          // Check if we have provider tokens (only present on initial sign-in/callback)
           if (session?.provider_token) {
               const user = session.user;
               const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
               
               if (profile?.organization_id) {
-                  // If we have a refresh token, save it for offline access
                   if (session.provider_refresh_token) {
                       await supabase.from('organizations').update({
                           google_refresh_token: session.provider_refresh_token,
-                          integrations: { google: true } // Mark as connected
+                          integrations: { google: true }
                       }).eq('id', profile.organization_id);
                       return true;
                   }
@@ -240,7 +239,6 @@ export const api = {
           return await invoke('manage_org_settings', { action: 'delete_webhook', data: { id } });
       },
       testWebhook: async (id: string) => {
-          // Simulation for now, or implement a real ping
           return true;
       },
       simulatePlanChange: async (plan: 'pro' | 'starter') => {
@@ -273,7 +271,6 @@ export const api = {
           await supabase!.from('staff_members').delete().eq('id', id);
       },
       sendCongratulationEmail: async (id: string) => {
-          // Would call an Edge Function ideally
           console.log('Congratulating', id);
       }
   },
@@ -281,7 +278,6 @@ export const api = {
       list: async (filters: any) => {
           if (isDemoMode()) {
               let res = [...DEMO_REVIEWS];
-              // Basic filtering for demo
               if (filters.rating && filters.rating !== 'Tout') {
                   const r = parseInt(filters.rating.toString().replace(/\D/g, ''));
                   res = res.filter(rev => rev.rating === r);
@@ -289,6 +285,10 @@ export const api = {
               if (filters.status && filters.status !== 'Tout') {
                   res = res.filter(rev => rev.status === filters.status);
               }
+              res = res.map(r => ({
+                  ...r,
+                  tags: r.tags || (Math.random() > 0.7 ? (r.rating < 3 ? ['Urgent'] : r.rating === 5 ? ['VIP'] : []) : [])
+              }));
               return res;
           }
 
@@ -296,7 +296,6 @@ export const api = {
           const org = await api.organization.get();
           if (!org) return [];
 
-          // Get all location IDs for this org
           const locationIds = org.locations.map(l => l.id);
           if (locationIds.length === 0) return [];
 
@@ -311,7 +310,6 @@ export const api = {
           }
           
           if (filters.rating && filters.rating !== 'Tout' && filters.rating !== 'all') {
-              // Extract number from "5 ★" or just "5"
               const r = parseInt(filters.rating.toString().replace(/\D/g, ''));
               if (!isNaN(r)) query = query.eq('rating', r);
           }
@@ -340,7 +338,6 @@ export const api = {
               return [];
           }
           
-          // Map 'text' to 'body' for frontend compatibility if needed
           return data.map((r: any) => ({ ...r, body: r.text }));
       },
       reply: async (reviewId: string, text: string) => {
@@ -353,7 +350,6 @@ export const api = {
               }
               return;
           }
-          // Call Edge Function to post to Google
           await invoke('post_google_reply', { reviewId, replyText: text });
       },
       saveDraft: async (reviewId: string, text: string) => {
@@ -371,14 +367,92 @@ export const api = {
           const newNote = {
               id: Date.now().toString(),
               text,
-              author_name: 'Moi', // In real app, fetch current user name
+              author_name: 'Moi',
               created_at: new Date().toISOString()
           };
           
           const updatedNotes = [...currentNotes, newNote];
-          
           await supabase!.from('reviews').update({ internal_notes: updatedNotes }).eq('id', reviewId);
           return newNote;
+      },
+      addTag: async (reviewId: string, tag: string) => {
+          if (isDemoMode()) {
+              const r = DEMO_REVIEWS.find(r => r.id === reviewId);
+              if (r) r.tags = [...(r.tags || []), tag];
+              return;
+          }
+          const { data: review } = await supabase!.from('reviews').select('tags').eq('id', reviewId).single();
+          const currentTags = review?.tags || [];
+          if (!currentTags.includes(tag)) {
+              await supabase!.from('reviews').update({ tags: [...currentTags, tag] }).eq('id', reviewId);
+          }
+      },
+      removeTag: async (reviewId: string, tag: string) => {
+          if (isDemoMode()) {
+              const r = DEMO_REVIEWS.find(r => r.id === reviewId);
+              if (r) r.tags = r.tags?.filter(t => t !== tag);
+              return;
+          }
+          const { data: review } = await supabase!.from('reviews').select('tags').eq('id', reviewId).single();
+          const currentTags = review?.tags || [];
+          const newTags = currentTags.filter((t: string) => t !== tag);
+          await supabase!.from('reviews').update({ tags: newTags }).eq('id', reviewId);
+      },
+      getTimeline: (review: Review): ReviewTimelineEvent[] => {
+          const events: ReviewTimelineEvent[] = [];
+          
+          events.push({
+              id: 'evt_created',
+              type: 'review_created',
+              date: review.received_at,
+              actor_name: review.author_name,
+              content: 'Avis reçu'
+          });
+
+          if (review.analysis) {
+              const analysisTime = new Date(new Date(review.received_at).getTime() + 1000 * 60).toISOString();
+              events.push({
+                  id: 'evt_analysis',
+                  type: 'ai_analysis',
+                  date: analysisTime,
+                  actor_name: 'System AI',
+                  content: `Analyse terminée: ${review.analysis.sentiment} - ${review.analysis.emotion || ''}`
+              });
+          }
+
+          if (review.ai_reply?.created_at) {
+              events.push({
+                  id: 'evt_draft',
+                  type: 'draft_generated',
+                  date: review.ai_reply.created_at,
+                  actor_name: 'Gemini',
+                  content: 'Brouillon de réponse généré'
+              });
+          }
+
+          if (review.internal_notes) {
+              review.internal_notes.forEach(note => {
+                  events.push({
+                      id: note.id,
+                      type: 'note',
+                      date: note.created_at,
+                      actor_name: note.author_name,
+                      content: note.text
+                  });
+              });
+          }
+
+          if (review.replied_at && review.status === 'sent') {
+              events.push({
+                  id: 'evt_replied',
+                  type: 'reply_published',
+                  date: review.replied_at,
+                  actor_name: 'Moi',
+                  content: 'Réponse publiée'
+              });
+          }
+
+          return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       },
       subscribe: (callback: (payload: any) => void) => {
           if (isDemoMode()) return { unsubscribe: () => {} };
@@ -390,16 +464,14 @@ export const api = {
       },
       uploadCsv: async (file: File, locationId: string) => {
           if (isDemoMode()) return 10;
-          // Basic CSV parsing and inserting
           const text = await file.text();
           const lines = text.split('\n');
           let count = 0;
           
-          for (let i = 1; i < lines.length; i++) { // Skip header
+          for (let i = 1; i < lines.length; i++) {
               const cols = lines[i].split(',');
               if (cols.length >= 3) {
                   const [date, author, rating, body] = cols;
-                  // Simple insert
                   await supabase!.from('reviews').insert({
                       location_id: locationId,
                       received_at: new Date(date).toISOString(),
@@ -418,7 +490,7 @@ export const api = {
   ai: {
       generateReply: async (review: Review, config: any) => {
           if (isDemoMode()) {
-              return "Bonjour " + review.author_name + ", merci pour votre avis 5 étoiles ! Nous sommes ravis que l'expérience vous ait plu. À bientôt chez " + DEMO_ORG.name + ".";
+              return "Bonjour " + review.author_name + ", merci pour votre avis 5 étoiles ! Nous sommes ravis que l'expérience vous ait plu.";
           }
           const { text } = await invoke('ai_generate', {
               task: 'generate_reply',
@@ -427,7 +499,7 @@ export const api = {
           return text;
       },
       generateSocialPost: async (review: Review, platform: string) => {
-          if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. Toute l'équipe est motivée ! #Reviewflow #CustomerLove";
+          if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. #Reviewflow #CustomerLove";
           const { text } = await invoke('ai_generate', {
               task: 'social_post',
               context: { review, platform }
@@ -438,7 +510,7 @@ export const api = {
           if (isDemoMode()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
           const { text } = await invoke('ai_generate', {
               task: 'generate_reply',
-              context: { review, ...config } // Re-use reply logic for voice test
+              context: { review, ...config }
           });
           return text;
       },
@@ -471,14 +543,9 @@ export const api = {
               };
           }
 
-          // 1. FAST SERVER-SIDE STATS (KPIs via RPC)
-          // Appel de la fonction SQL optimisée 'get_dashboard_stats'
           const { data: kpi, error: rpcError } = await supabase!.rpc('get_dashboard_stats', { org_id: org.id });
-          
           if (rpcError) console.warn("RPC get_dashboard_stats error:", rpcError);
 
-          // 2. Fetch Recent Data for Charts (Last 30 Days)
-          // On ne charge pas tout l'historique pour l'affichage des graphiques
           const startDate = new Date();
           startDate.setDate(startDate.getDate() - 30);
           
@@ -491,7 +558,6 @@ export const api = {
 
           const reviews = recentReviews || [];
           
-          // Calculate volume chart locally
           const volumeMap = new Map<string, number>();
           reviews.forEach(r => {
               const d = new Date(r.received_at).toLocaleDateString();
@@ -500,15 +566,13 @@ export const api = {
           
           const volumeByDate = Array.from(volumeMap.entries())
             .map(([date, count]) => ({ date, count }))
-            .slice(-7); // Keep last 7 days for the chart view
+            .slice(-7);
 
-          // Use RPC KPIs if available, else fallback to calculation from recent
           const total = kpi?.total_reviews ?? reviews.length;
           const avg = kpi?.average_rating ?? (reviews.length > 0 ? reviews.reduce((a, b) => a + b.rating, 0) / reviews.length : 0);
           const responseRate = kpi?.response_rate ?? 0;
           const nps = kpi?.nps_score ?? 0;
 
-          // Simple sentiment from recent reviews
           const pos = reviews.filter(r => r.rating >= 4).length;
           const neg = reviews.filter(r => r.rating <= 2).length;
           const neu = reviews.length - pos - neg;
@@ -553,7 +617,6 @@ export const api = {
           if (isDemoMode()) return;
           await supabase!.from('competitors').delete().eq('id', id);
       },
-      // Uses the Real Google Places Edge Function
       autoDiscover: async (radius: number, sector: string, lat: number, lng: number) => {
           if (isDemoMode()) return DEMO_COMPETITORS;
           const { results } = await invoke('fetch_places', {
@@ -564,7 +627,6 @@ export const api = {
           });
           return results;
       },
-      // Uses the Real Gemini Analysis Edge Function
       getDeepAnalysis: async (sector?: string, location?: string, competitors?: Competitor[]) => {
           const comps = competitors || await api.competitors.list();
           
@@ -600,13 +662,9 @@ export const api = {
               localStorage.setItem('demo_market_reports', JSON.stringify(saved));
               return;
           }
-          // Try to save to DB, if table exists. Otherwise, fallback to local storage or fail silently.
           try {
-              if (supabase) {
-                  await supabase.from('market_reports').insert(report);
-              }
+              if (supabase) await supabase.from('market_reports').insert(report);
           } catch (e) {
-              console.warn("Could not save report to DB (Table might not exist), saving to LocalStorage");
               const saved = JSON.parse(localStorage.getItem('market_reports') || '[]');
               saved.push({ ...report, id: Date.now().toString() });
               localStorage.setItem('market_reports', JSON.stringify(saved));
@@ -620,7 +678,7 @@ export const api = {
               if (supabase) {
                   const { data, error } = await supabase.from('market_reports').select('*').order('created_at', { ascending: false });
                   if (!error) return data || [];
-                  throw error; // Fallback
+                  throw error;
               }
               return [];
           } catch (e) {
@@ -659,8 +717,14 @@ export const api = {
       }
   },
   notifications: {
-      list: async () => {
-          // Placeholder for real notification system
+      list: async (): Promise<AppNotification[]> => {
+          if (isDemoMode()) {
+              return [
+                  { id: '1', type: 'info', title: 'Nouvelle fonctionnalité', message: 'Le module concurrents est disponible !', created_at: new Date().toISOString(), read: false },
+                  { id: '2', type: 'success', title: 'Rapport Hebdo', message: 'Votre rapport de performance est prêt.', created_at: new Date().toISOString(), read: true }
+              ];
+          }
+          // Real Implementation could fetch from a notifications table or edge function
           return [];
       },
       markAllRead: async () => {},
@@ -689,7 +753,6 @@ export const api = {
   },
   company: {
       search: async (query: string) => {
-          // Mock SIRET search or connect to Pappers/Societe.com API via Edge Function
           return [{ legal_name: query + ' (Démo)', siret: '000000000', address: 'France' }];
       }
   },
@@ -719,353 +782,246 @@ export const api = {
   activity: {
       getRecent: async () => {
           const reviews = await api.reviews.list({ limit: 5 });
-          return reviews.map(r => ({
+          return reviews.map((r: any) => ({
               id: r.id,
               type: 'review',
-              text: `Avis ${r.rating}★ reçu`,
-              time: new Date(r.received_at).toLocaleTimeString(),
-              location: 'Google'
+              text: `Nouvel avis de ${r.author_name} (${r.rating}★)`,
+              location: 'Google',
+              time: new Date(r.received_at).toLocaleDateString()
           }));
-      }
-  },
-  onboarding: {
-      checkStatus: async (): Promise<SetupStatus> => {
-          const org = await api.organization.get();
-          const reviews = await api.reviews.list({ limit: 1 });
-          
-          return {
-              googleConnected: !!org?.integrations.google,
-              brandVoiceConfigured: !!org?.brand?.tone,
-              firstReviewReplied: reviews.length > 0 && reviews[0].status === 'sent',
-              completionPercentage: isDemoMode() ? 100 : 0 
-          };
-      }
-  },
-  social: {
-      getPosts: async (): Promise<SocialPost[]> => {
-          if (isDemoMode()) {
-              return JSON.parse(localStorage.getItem('social_posts') || '[]');
-          }
-          // Fallback simple cloud storage for now until proper table is set
-          const stored = localStorage.getItem('social_posts');
-          return stored ? JSON.parse(stored) : [];
-      },
-      schedulePost: async (post: Omit<SocialPost, 'id' | 'status'>) => {
-          const newPost = { ...post, id: Date.now().toString(), status: 'scheduled' };
-          const posts = await api.social.getPosts();
-          posts.push(newPost as SocialPost);
-          localStorage.setItem('social_posts', JSON.stringify(posts));
-          return newPost;
-      },
-      deletePost: async (id: string) => {
-          const posts = await api.social.getPosts();
-          const filtered = posts.filter(p => p.id !== id);
-          localStorage.setItem('social_posts', JSON.stringify(filtered));
-      },
-      connectAccount: async (platform: SocialPlatform, active: boolean) => {
-          const org = await api.organization.get();
-          if (org && supabase) {
-              const integrationKey = platform === 'instagram' ? 'instagram_posting' : 
-                                     platform === 'facebook' ? 'facebook_posting' : 'linkedin_posting';
-              
-              await supabase.from('organizations').update({
-                  integrations: { ...org.integrations, [integrationKey]: active }
-              }).eq('id', org.id);
-          }
-      }
-  },
-  seedCloudDatabase: async () => {
-      if (isDemoMode()) return;
-      if (!supabase) return;
-      
-      const org = await api.organization.get();
-      if (!org) throw new Error("Organisation introuvable.");
-
-      console.log("Seeding data for org:", org.id);
-
-      // 1. Locations
-      if (!org.locations || org.locations.length === 0) {
-          const { data: locs, error } = await supabase.from('locations').insert([
-            { organization_id: org.id, name: 'Salon Éclat Coiffure', address: '12 Rue de la République', city: 'Lyon', country: 'France', connection_status: 'connected' },
-            { organization_id: org.id, name: 'Le Petit Bistro', address: '45 Avenue Jean Jaurès', city: 'Paris', country: 'France', connection_status: 'disconnected' }
-          ]).select();
-          
-          if (error) throw error;
-          
-          // Refresh org locations
-          const { data: locations } = await supabase.from('locations').select('*').eq('organization_id', org.id);
-          const locId = locations?.[0]?.id;
-
-          if (locId) {
-              // 2. Reviews
-              const reviews = [
-                  { location_id: locId, rating: 5, text: "Service impeccable, je recommande !", author_name: "Sophie Martin", source: "google", status: "pending", received_at: new Date().toISOString() },
-                  { location_id: locId, rating: 4, text: "Très bon moment, un peu d'attente.", author_name: "Marc Dubourg", source: "tripadvisor", status: "replied", posted_reply: "Merci Marc !", received_at: new Date(Date.now() - 86400000).toISOString() },
-                  { location_id: locId, rating: 2, text: "Déçu par l'accueil.", author_name: "Jean Dupont", source: "facebook", status: "pending", received_at: new Date(Date.now() - 172800000).toISOString() }
-              ];
-              await supabase.from('reviews').insert(reviews);
-          }
-      }
-
-      // 3. Competitors
-      const { count: compCount } = await supabase.from('competitors').select('*', { count: 'exact', head: true }).eq('organization_id', org.id);
-      if (compCount === 0) {
-          await supabase.from('competitors').insert([
-              { organization_id: org.id, name: 'Concurrent A', rating: 4.5, review_count: 120, address: 'Paris' },
-              { organization_id: org.id, name: 'Concurrent B', rating: 3.8, review_count: 50, address: 'Lyon' }
-          ]);
-      }
-
-      // 4. Staff
-      const { count: staffCount } = await supabase.from('staff_members').select('*', { count: 'exact', head: true }).eq('organization_id', org.id);
-      if (staffCount === 0) {
-          await supabase.from('staff_members').insert([
-              { organization_id: org.id, name: 'Thomas', role: 'Manager' },
-              { organization_id: org.id, name: 'Julie', role: 'Serveuse' }
-          ]);
-      }
-      
-      // 5. Offers
-      const { count: offerCount } = await supabase.from('offers').select('*', { count: 'exact', head: true }).eq('organization_id', org.id);
-      if (offerCount === 0) {
-          await supabase.from('offers').insert([
-              { organization_id: org.id, title: 'Café Offert', description: 'Pour tout repas > 15€', code_prefix: 'CAFE', active: true }
-          ]);
-      }
-  },
-  locations: {
-      create: async (data: any) => {
-          if (isDemoMode()) return;
-          const org = await api.organization.get();
-          await supabase!.from('locations').insert({ ...data, organization_id: org?.id });
-      },
-      update: async (id: string, data: any) => {
-          if (isDemoMode()) return;
-          await supabase!.from('locations').update(data).eq('id', id);
-      },
-      delete: async (id: string) => {
-          if (isDemoMode()) return;
-          await supabase!.from('locations').delete().eq('id', id);
-      },
-      importFromGoogle: async () => {
-          if (isDemoMode()) {
-              // Simulate import
-              await new Promise(r => setTimeout(r, 1500));
-              return 3;
-          }
-          
-          // 1. Get Google Locations from API
-          const gLocations = await api.google.fetchAllGoogleLocations();
-          if (gLocations.length === 0) return 0;
-
-          const org = await api.organization.get();
-          if (!org) throw new Error("Organisation introuvable");
-
-          let count = 0;
-          for (const gLoc of gLocations) {
-               // Check duplication (prevent creating duplicates)
-               const { data: existing } = await supabase!
-                  .from('locations')
-                  .select('id')
-                  .eq('external_reference', gLoc.name) // gLoc.name is the resource ID (accounts/../locations/..)
-                  .eq('organization_id', org.id)
-                  .maybeSingle();
-
-               if (!existing) {
-                   // Parse address for City/Country (simple heuristic or default)
-                   const parts = gLoc.address.split(',');
-                   const city = parts.length > 1 ? parts[parts.length - 2].trim().split(' ')[1] || parts[parts.length - 2].trim() : 'Inconnue'; // Very rough parsing
-                   
-                   await supabase!.from('locations').insert({
-                       organization_id: org.id,
-                       name: gLoc.title,
-                       address: gLoc.address,
-                       city: city || 'À définir',
-                       country: 'France',
-                       external_reference: gLoc.name, // Store the Google Resource Name as ID
-                       connection_status: 'connected',
-                       google_review_url: `https://search.google.com/local/writereview?placeid=${gLoc.place_id || ''}` // Place ID might need a specific fetch but we link generic for now
-                   });
-                   count++;
-               }
-          }
-          return count;
       }
   },
   google: {
       fetchAllGoogleLocations: async () => {
-          if (isDemoMode()) return [];
-          const { data: { session } } = await supabase!.auth.getSession();
-          if (!session?.provider_token) throw new Error("Google Token missing. Reconnect Google.");
-          
-          const locations = await invoke('fetch_google_locations', { accessToken: session.provider_token });
-          return locations;
+          if (isDemoMode()) return [{ name: 'locations/123', title: 'Demo Google Loc', storeCode: 'STORE-1', address: '123 Demo St' }];
+          if (!supabase) return [];
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.provider_token || data.session?.access_token; 
+          const result = await invoke('fetch_google_locations', { accessToken: token }); 
+          return result || [];
       },
-      syncReviewsForLocation: async (id: string, ref: string) => {
-          if (isDemoMode()) return 10;
+      syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
+          if (isDemoMode()) return 5;
           const org = await api.organization.get();
-          const { count } = await invoke('fetch_google_reviews', {
-              locationId: id,
-              googleLocationName: ref,
-              organizationId: org?.id
+          const res = await invoke('fetch_google_reviews', { 
+              locationId, 
+              googleLocationName,
+              organizationId: org?.id 
           });
-          return count;
+          return res.count || 0;
+      }
+  },
+  locations: {
+      create: async (data: Partial<Location>) => {
+          if (isDemoMode()) {
+              DEMO_ORG.locations.push({ ...data, id: 'loc-new-' + Date.now() } as any);
+              return;
+          }
+          const org = await api.organization.get();
+          if (!org) return;
+          await supabase!.from('locations').insert({ ...data, organization_id: org.id });
+      },
+      update: async (id: string, data: Partial<Location>) => {
+          if (isDemoMode()) {
+              const idx = DEMO_ORG.locations.findIndex(l => l.id === id);
+              if (idx >= 0) DEMO_ORG.locations[idx] = { ...DEMO_ORG.locations[idx], ...data };
+              return;
+          }
+          await supabase!.from('locations').update(data).eq('id', id);
+      },
+      delete: async (id: string) => {
+          if (isDemoMode()) {
+              DEMO_ORG.locations = DEMO_ORG.locations.filter(l => l.id !== id);
+              return;
+          }
+          await supabase!.from('locations').delete().eq('id', id);
+      },
+      importFromGoogle: async () => {
+          if (isDemoMode()) return 2;
+          return 0;
+      }
+  },
+  onboarding: {
+      checkStatus: async (): Promise<SetupStatus> => {
+          if (isDemoMode()) return { googleConnected: true, brandVoiceConfigured: true, firstReviewReplied: true, completionPercentage: 100 };
+          const org = await api.organization.get();
+          if (!org) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
+          
+          const googleConnected = org.integrations?.google || false;
+          const brandVoiceConfigured = !!(org.brand?.tone);
+          
+          const { count } = await supabase!.from('reviews').select('*', { count: 'exact', head: true }).eq('status', 'sent');
+          const firstReviewReplied = (count || 0) > 0;
+          
+          const steps = [googleConnected, brandVoiceConfigured, firstReviewReplied];
+          const completionPercentage = Math.round((steps.filter(Boolean).length / steps.length) * 100);
+          
+          return { googleConnected, brandVoiceConfigured, firstReviewReplied, completionPercentage };
+      }
+  },
+  seedCloudDatabase: async () => {
+      await new Promise(r => setTimeout(r, 2000));
+  },
+  campaigns: {
+      send: async (type: 'sms'|'email', recipient: string, subject: string, content: string) => {
+          if (isDemoMode()) return;
+          await invoke('send_campaign_emails', {
+              emails: [recipient],
+              subject,
+              html: content
+          });
       }
   },
   public: {
       getLocationInfo: async (id: string) => {
-          if (isDemoMode()) return DEMO_ORG.locations?.[0];
-          const { data } = await supabase!.from('locations').select('*').eq('id', id).single();
+          if (isDemoMode()) return DEMO_ORG.locations.find(l => l.id === id);
+          if (!supabase) return null;
+          const { data } = await supabase.from('locations').select('*').eq('id', id).single();
           return data;
       },
-      getActiveOffer: async (id: string, rating: number) => {
-          if (isDemoMode()) return DEMO_ORG.offers?.[0];
-          const { data } = await supabase!
-            .from('offers')
-            .select('*')
-            .eq('active', true)
-            .lte('trigger_rating', rating)
-            .limit(1)
-            .maybeSingle(); 
-          
-          return data;
+      getActiveOffer: async (locationId: string, score: number) => {
+          if (isDemoMode()) return null;
+          return null;
       },
-      submitFeedback: async (id: string, rating: number, text: string, contact: string, tags: string[], staff?: string) => {
+      submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[], staffName?: string) => {
           if (isDemoMode()) return;
-          await invoke('submit_review', { locationId: id, rating, feedback: text, contact, tags, staffName: staff });
+          await invoke('submit_review', { locationId, rating, feedback, contact, tags, staffName });
       },
-      getWidgetReviews: async (id: string) => {
-          if (isDemoMode()) return DEMO_REVIEWS.filter(r => r.rating >= 4);
-          const { data } = await supabase!
-            .from('reviews')
-            .select('*')
-            .eq('location_id', id)
-            .gte('rating', 4) 
-            .order('received_at', { ascending: false })
-            .limit(20);
-          return data || [];
-      }
-  },
-  campaigns: {
-      send: async (type: string, recipient: string, subject: string, content: string) => {
-          if (isDemoMode()) return;
-          if (type === 'email') {
-              await invoke('send_campaign_emails', {
-                  emails: [recipient],
-                  subject,
-                  html: content
-              });
-          }
-      }
-  },
-  customers: {
-      list: async (): Promise<Customer[]> => {
-          if (isDemoMode()) {
-              // Rich demo data for pipeline view
-              return [
-                  { 
-                      id: 'c1', name: 'Sophie Martin', email: 'sophie.m@gmail.com', source: 'google', 
-                      last_interaction: new Date().toISOString(), total_reviews: 3, average_rating: 5, 
-                      status: 'promoter', ltv_estimate: 450, 
-                      stage: 'loyal', tags: ['VIP', 'Famille']
-                  },
-                  { 
-                      id: 'c2', name: 'Jean Dupont', email: 'j.dupont@orange.fr', source: 'tripadvisor', 
-                      last_interaction: new Date(Date.now() - 86400000 * 5).toISOString(), total_reviews: 1, average_rating: 2, 
-                      status: 'detractor', ltv_estimate: 80, 
-                      stage: 'risk', tags: ['Plainte Prix']
-                  },
-                  { 
-                      id: 'c3', name: 'Marc Lavoine', email: 'marco@test.com', source: 'facebook', 
-                      last_interaction: new Date(Date.now() - 86400000 * 2).toISOString(), total_reviews: 1, average_rating: 4, 
-                      status: 'passive', ltv_estimate: 120, 
-                      stage: 'new', tags: []
-                  },
-                  { 
-                      id: 'c4', name: 'Julie Ferrier', email: 'julie@cinema.fr', source: 'google', 
-                      last_interaction: new Date(Date.now() - 86400000 * 20).toISOString(), total_reviews: 5, average_rating: 4.8, 
-                      status: 'promoter', ltv_estimate: 800, 
-                      stage: 'loyal', tags: ['Ambassadeur']
-                  },
-                  { 
-                      id: 'c5', name: 'Paul Bismuth', source: 'direct', 
-                      last_interaction: new Date(Date.now() - 86400000 * 60).toISOString(), total_reviews: 1, average_rating: 1, 
-                      status: 'detractor', ltv_estimate: 0, 
-                      stage: 'churned', tags: []
-                  }
-              ];
-          }
+      getWidgetReviews: async (locationId: string) => {
+          if (isDemoMode()) return DEMO_REVIEWS;
           if (!supabase) return [];
-          const { data } = await supabase.from('customers').select('*');
+          const { data } = await supabase.from('reviews').select('*').eq('location_id', locationId).eq('status', 'sent').order('received_at', { ascending: false }).limit(10);
           return data || [];
-      },
-      update: async (id: string, updates: Partial<Customer>) => {
-          if (isDemoMode()) return; // Local state handled in component
-          await supabase!.from('customers').update(updates).eq('id', id);
-      },
-      enrichProfile: async (customerId: string) => {
-          if (isDemoMode()) {
-              await new Promise(r => setTimeout(r, 2000)); // Simulate AI delay
-              return {
-                  profile: "Sophie est une cliente régulière très sensible à la qualité du service. Elle mentionne souvent l'équipe par son prénom. Type: 'Ambassadeur Relationnel'.",
-                  suggestion: "Lui proposer une offre de parrainage pour qu'elle invite ses amis.",
-                  last_updated: new Date().toISOString()
-              };
-          }
-          // Real Implementation: Call Edge Function
-          return await invoke('ai_enrich_customer', { customerId });
       }
   },
   offers: {
-      create: async (data: Partial<Offer>) => {
-          if (isDemoMode()) {
-              DEMO_ORG.offers?.push({ id: Date.now().toString(), active: true, stats: { distributed: 0, redeemed: 0 }, ...data } as Offer);
-              return;
-          }
-          if (supabase) {
-              const org = await api.organization.get();
-              await supabase.from('offers').insert({ ...data, organization_id: org?.id, stats: { distributed: 0, redeemed: 0 } });
-          }
+      create: async (data: any) => {
+          if (isDemoMode()) return;
+          const org = await api.organization.get();
+          await supabase!.from('offers').insert({ ...data, organization_id: org?.id });
       },
-      generateCoupon: async (offerId: string, email: string): Promise<any> => {
-          if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Demo Offer' };
+      generateCoupon: async (offerId: string, email: string) => {
+          if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Offre Démo', discount_detail: '-10%', expires_at: new Date().toISOString(), status: 'active' };
           return await invoke('manage_coupons', { action: 'create', offerId, email });
+      },
+      distributeCampaign: async (offerId: string, segment: string, channel: string) => {
+          if (isDemoMode()) return { sent_count: 150 };
+          return { sent_count: 0 };
       },
       validate: async (code: string) => {
           if (isDemoMode()) return { valid: true, discount: 'Café Offert' };
           return await invoke('manage_coupons', { action: 'validate', code });
       },
       redeem: async (code: string) => {
-          if (isDemoMode()) return { success: true };
+          if (isDemoMode()) return;
           return await invoke('manage_coupons', { action: 'redeem', code });
+      }
+  },
+  customers: {
+      list: async () => {
+          if (isDemoMode()) return [
+              { id: 'c1', name: 'Sophie Martin', email: 'sophie@mail.com', source: 'Google', last_interaction: new Date().toISOString(), total_reviews: 3, average_rating: 4.8, status: 'promoter', ltv_estimate: 450, stage: 'loyal', tags: ['VIP', 'Habitué'] }
+          ] as Customer[];
+          if (!supabase) return [];
+          const { data } = await supabase.from('customers').select('*');
+          return data || [];
       },
-      distributeCampaign: async (offerId: string, segment: string, channel: string) => {
-          if (isDemoMode()) {
-              await new Promise(r => setTimeout(r, 1000));
-              // Find offer and update stats locally
-              const offer = DEMO_ORG.offers?.find(o => o.id === offerId);
-              if (offer) {
-                  offer.stats.distributed += 12; // Simulate sending to 12 people
-              }
-              return { sent_count: 12 };
-          }
-          // Real backend call would be here
-          // return await invoke('distribute_campaign', { offerId, segment, channel });
-          return { sent_count: 0 };
+      update: async (id: string, data: Partial<Customer>) => {
+          if (isDemoMode()) return;
+          await supabase!.from('customers').update(data).eq('id', id);
+      },
+      enrichProfile: async (id: string) => {
+          if (isDemoMode()) return { profile: "Client exigent mais fidèle", suggestion: "Proposer une table calme", last_updated: new Date().toISOString() };
+          return { profile: "Analyse IA...", suggestion: "...", last_updated: new Date().toISOString() };
       }
   },
   admin: {
       getStats: async () => {
-          return { 
-              mrr: '12 500€', 
-              active_tenants: 142,
-              total_reviews_processed: 45200,
-              tenants: [
-                  { id: '1', name: 'Restaurant Le Gourmet', admin_email: 'contact@legourmet.fr', plan: 'pro', usage: 450, mrr: '89€' },
-                  { id: '2', name: 'Garage Auto Fix', admin_email: 'service@autofix.com', plan: 'starter', usage: 28, mrr: '49€' },
-                  { id: '3', name: 'Salon Beauty', admin_email: 'hello@beauty.com', plan: 'pro', usage: 120, mrr: '89€' }
-              ]
-          };
+          if (isDemoMode()) return { mrr: '12 450€', active_tenants: 142, total_reviews_processed: 45890, tenants: [] };
+          return { mrr: '0€', active_tenants: 0, total_reviews_processed: 0, tenants: [] };
+      }
+  },
+  social: {
+      getPosts: async () => {
+          if (isDemoMode()) return [];
+          if (!supabase) return [];
+          const { data } = await supabase.from('social_posts').select('*');
+          return data || [];
+      },
+      schedulePost: async (post: Partial<SocialPost>) => {
+          if (isDemoMode()) return;
+          const org = await api.organization.get();
+          await supabase!.from('social_posts').insert({ ...post, organization_id: org?.id, status: 'scheduled' });
+      },
+      deletePost: async (id: string) => {
+          if (isDemoMode()) return;
+          await supabase!.from('social_posts').delete().eq('id', id);
+      },
+      connectAccount: async (platform: SocialPlatform, status: boolean) => {
+          if (isDemoMode()) return;
+      }
+  },
+  global: {
+      search: async (query: string) => {
+          const lowerQuery = query.toLowerCase();
+          
+          if (isDemoMode()) {
+              // Mock search
+              const results = [];
+              if ('sophie'.includes(lowerQuery)) results.push({ type: 'customer', title: 'Sophie Martin', subtitle: 'Client VIP', link: '/customers' });
+              if ('avis'.includes(lowerQuery)) results.push({ type: 'review', title: 'Avis de Jean', subtitle: '5 étoiles - "Super..."', link: '/inbox' });
+              if ('facture'.includes(lowerQuery)) results.push({ type: 'page', title: 'Facturation', subtitle: 'Paramètres', link: '/billing' });
+              return results;
+          }
+
+          if (!supabase) return [];
+          
+          // Parallel search in DB
+          const [customers, reviews] = await Promise.all([
+              supabase.from('customers').select('id, name, email').ilike('name', `%${query}%`).limit(3),
+              supabase.from('reviews').select('id, author_name, text').ilike('text', `%${query}%`).limit(3)
+          ]);
+
+          const results: any[] = [];
+          
+          customers.data?.forEach((c: any) => results.push({ 
+              type: 'customer', 
+              title: c.name, 
+              subtitle: c.email, 
+              link: `/customers` // ideally link to specific customer ID if page supported it
+          }));
+
+          reviews.data?.forEach((r: any) => results.push({ 
+              type: 'review', 
+              title: `Avis de ${r.author_name}`, 
+              subtitle: r.text.substring(0, 30) + '...', 
+              link: `/inbox?reviewId=${r.id}` 
+          }));
+
+          // Static Pages Search
+          const pages = [
+              { name: 'Tableau de bord', path: '/dashboard' },
+              { name: 'Boîte de réception', path: '/inbox' },
+              { name: 'Clients', path: '/customers' },
+              { name: 'Paramètres', path: '/settings' },
+              { name: 'Facturation', path: '/billing' }
+          ];
+          
+          pages.filter(p => p.name.toLowerCase().includes(lowerQuery)).forEach(p => {
+              results.push({ type: 'page', title: p.name, subtitle: 'Navigation', link: p.path });
+          });
+
+          return results;
+      }
+  },
+  // --- SYSTEM HEALTH ---
+  system: {
+      checkHealth: async () => {
+          if (isDemoMode()) return { db: false, latency: 0 };
+          const start = Date.now();
+          const { error } = await supabase!.from('organizations').select('id').limit(1);
+          const end = Date.now();
+          return { db: !error, latency: end - start };
       }
   }
 };

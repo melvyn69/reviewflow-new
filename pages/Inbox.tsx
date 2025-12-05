@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Review, ReviewStatus, InternalNote, SavedReply, Location } from '../types';
+import { Review, ReviewStatus, InternalNote, SavedReply, Location, ReviewTimelineEvent } from '../types';
 import { Card, CardContent, Skeleton, useToast, Button, Badge } from '../components/ui';
 import { SocialShareModal } from '../components/SocialShareModal';
 import { InboxFocusMode } from '../components/InboxFocusMode';
@@ -28,7 +27,11 @@ import {
   Store,
   ShieldCheck,
   Zap,
-  ArrowDown
+  ArrowDown,
+  Tag,
+  Activity,
+  Plus,
+  X
 } from 'lucide-react';
 import { useNavigate, useLocation as useRouterLocation } from '../components/ui';
 
@@ -113,37 +116,98 @@ const InboxSkeleton = () => (
     </div>
 );
 
-const NotesList = ({ notes }: { notes: InternalNote[] }) => {
-    if (!notes || notes.length === 0) return (
-        <div className="text-center py-8 text-slate-400">
-            <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Aucune note interne.</p>
-            <p className="text-xs">Ajoutez un commentaire pour votre équipe.</p>
-        </div>
-    );
+const TimelineView = ({ review, onAddNote }: { review: Review; onAddNote: (text: string) => void }) => {
+    const [noteText, setNoteText] = useState('');
+    const timeline = api.reviews.getTimeline(review);
+
+    const getIcon = (type: ReviewTimelineEvent['type']) => {
+        switch(type) {
+            case 'review_created': return <Star className="h-3 w-3 text-white" />;
+            case 'ai_analysis': return <Zap className="h-3 w-3 text-white" />;
+            case 'draft_generated': return <Wand2 className="h-3 w-3 text-white" />;
+            case 'note': return <MessageSquare className="h-3 w-3 text-white" />;
+            case 'reply_published': return <Send className="h-3 w-3 text-white" />;
+            default: return <Activity className="h-3 w-3 text-white" />;
+        }
+    };
+
+    const getColor = (type: ReviewTimelineEvent['type']) => {
+        switch(type) {
+            case 'review_created': return 'bg-amber-400';
+            case 'ai_analysis': return 'bg-purple-500';
+            case 'draft_generated': return 'bg-indigo-500';
+            case 'note': return 'bg-yellow-500';
+            case 'reply_published': return 'bg-green-500';
+            default: return 'bg-slate-400';
+        }
+    };
 
     return (
-        <div className="space-y-4 mb-4">
-            {notes.map(note => (
-                <div key={note.id} className="flex gap-3 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
-                        {note.author_name.charAt(0)}
-                    </div>
-                    <div className="flex-1 bg-white border border-slate-100 rounded-lg rounded-tl-none p-3 shadow-sm">
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs font-bold text-slate-900">{note.author_name}</span>
-                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {new Date(note.created_at).toLocaleDateString()}
-                            </span>
+        <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto pr-2 relative pl-4 pb-4">
+                <div className="absolute left-[19px] top-4 bottom-0 w-0.5 bg-slate-100"></div>
+                <div className="space-y-6 pt-4 relative">
+                    {timeline.map((evt) => (
+                        <div key={evt.id} className="flex gap-4 group">
+                            <div className={`z-10 h-8 w-8 rounded-full flex items-center justify-center shrink-0 border-4 border-white shadow-sm ${getColor(evt.type)}`}>
+                                {getIcon(evt.type)}
+                            </div>
+                            <div className="flex-1 pt-1">
+                                <div className="flex justify-between items-start">
+                                    <span className="text-xs font-bold text-slate-700">{evt.actor_name}</span>
+                                    <span className="text-[10px] text-slate-400">{new Date(evt.date).toLocaleString()}</span>
+                                </div>
+                                <div className={`text-sm mt-1 p-2 rounded-lg ${evt.type === 'note' ? 'bg-yellow-50 text-yellow-800 border border-yellow-100' : 'text-slate-600'}`}>
+                                    {evt.content}
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-sm text-slate-700">{note.text}</p>
-                    </div>
+                    ))}
                 </div>
-            ))}
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-slate-100 bg-white">
+                <div className="relative">
+                    <textarea 
+                    className="w-full p-3 pr-12 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[60px] resize-none"
+                    placeholder="Ajouter une note interne..."
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (noteText.trim()) {
+                                onAddNote(noteText);
+                                setNoteText('');
+                            }
+                        }
+                    }}
+                    />
+                    <button 
+                        onClick={() => {
+                            if (noteText.trim()) {
+                                onAddNote(noteText);
+                                setNoteText('');
+                            }
+                        }}
+                        disabled={!noteText.trim()}
+                        className="absolute right-2 bottom-2 p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <ArrowUpIcon className="h-4 w-4" />
+                    </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 text-right">Appuyez sur Entrée pour envoyer</p>
+            </div>
         </div>
     );
 };
+
+// Simple ArrowUp icon for the input
+const ArrowUpIcon = ({ className }: { className?: string }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+    </svg>
+);
 
 export const InboxPage = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -167,13 +231,11 @@ export const InboxPage = () => {
   const [ratingFilter, setRatingFilter] = useState('Tout');
   const [locationFilter, setLocationFilter] = useState('Tout');
 
-  const [activeTab, setActiveTab] = useState<'reply' | 'notes'>('reply');
+  const [activeTab, setActiveTab] = useState<'reply' | 'activity'>('reply');
   const [replyText, setReplyText] = useState('');
-  const [noteText, setNoteText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSavingNote, setIsSavingNote] = useState(false);
   
   const [savedReplies, setSavedReplies] = useState<SavedReply[]>([]);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -186,6 +248,10 @@ export const InboxPage = () => {
 
   const [aiTone, setAiTone] = useState<'professional' | 'friendly' | 'empathic'>('professional');
   const [aiLength, setAiLength] = useState<'short' | 'medium' | 'long'>('medium');
+  
+  // Tags State
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [newTag, setNewTag] = useState('');
 
   const toneLabels = {
       professional: 'Professionnel',
@@ -265,12 +331,6 @@ export const InboxPage = () => {
     if (statusFilter !== 'Tout') filters.status = statusFilter;
     if (sourceFilter !== 'Tout') filters.source = sourceFilter;
     if (ratingFilter !== 'Tout') filters.rating = ratingFilter;
-    
-    // Client-side filtering for location (or server-side if API supports it)
-    // NOTE: Ideally API should support location_id filter. Assuming list returns filtered by org, we filter here if API doesn't support specific location arg.
-    // For scalability, location filtering should move to API args. For now, let's fetch & filter or assume API handles it.
-    // Let's modify the service call to include location if possible, or filter locally after fetch (less scalable).
-    // Given the previous updates, let's assume filtering happens mostly on DB.
     
     const data = await api.reviews.list(filters);
     
@@ -392,11 +452,10 @@ export const InboxPage = () => {
       toast.success("Brouillon sauvegardé");
   };
 
-  const handleAddNote = async () => {
-      if (!selectedReview || !noteText.trim()) return;
-      setIsSavingNote(true);
+  const handleAddNote = async (text: string) => {
+      if (!selectedReview) return;
       try {
-          const newNote = await api.reviews.addNote(selectedReview.id, noteText);
+          const newNote = await api.reviews.addNote(selectedReview.id, text);
           if (newNote) {
               const updatedReview = {
                   ...selectedReview,
@@ -404,14 +463,39 @@ export const InboxPage = () => {
               };
               setReviews(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
               setSelectedReview(updatedReview);
-              setNoteText('');
               toast.success("Note ajoutée");
           }
       } catch (e) {
           toast.error("Erreur lors de l'ajout de la note");
-      } finally {
-          setIsSavingNote(false);
       }
+  };
+
+  const handleAddTag = async () => {
+      if (!selectedReview || !newTag.trim()) return;
+      await api.reviews.addTag(selectedReview.id, newTag.trim());
+      
+      const updatedReview = {
+          ...selectedReview,
+          tags: [...(selectedReview.tags || []), newTag.trim()]
+      };
+      
+      setReviews(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
+      setSelectedReview(updatedReview);
+      setNewTag('');
+      setShowTagInput(false);
+  };
+
+  const handleRemoveTag = async (tag: string) => {
+      if (!selectedReview) return;
+      await api.reviews.removeTag(selectedReview.id, tag);
+      
+      const updatedReview = {
+          ...selectedReview,
+          tags: selectedReview.tags?.filter(t => t !== tag) || []
+      };
+      
+      setReviews(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
+      setSelectedReview(updatedReview);
   };
 
   const onSelectReview = (review: Review) => {
@@ -571,13 +655,10 @@ export const InboxPage = () => {
                             {review.analysis && review.analysis.themes && review.analysis.themes.slice(0, 2).map(t => (
                             <span key={t} className="capitalize text-[10px] font-semibold text-slate-500 px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200">{t}</span>
                             ))}
+                            {review.tags?.slice(0, 2).map(tag => (
+                                <span key={tag} className="text-[10px] font-bold text-white px-1.5 py-0.5 bg-indigo-400 rounded">{tag}</span>
+                            ))}
                         </div>
-                        {review.internal_notes && review.internal_notes.length > 0 && (
-                            <div className="flex items-center text-[10px] text-slate-400 bg-yellow-50 px-1.5 py-0.5 rounded border border-yellow-100">
-                                <MessageSquare className="h-3 w-3 mr-1 text-yellow-600" />
-                                {review.internal_notes.length} note(s)
-                            </div>
-                        )}
                     </div>
                     </div>
                 ))}
@@ -649,6 +730,35 @@ export const InboxPage = () => {
                   </div>
                 </div>
                 
+                {/* TAGS BAR */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                    {selectedReview.tags?.map(tag => (
+                        <span key={tag} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-100 text-indigo-700 text-xs font-bold">
+                            {tag}
+                            <button onClick={() => handleRemoveTag(tag)} className="hover:text-indigo-900"><X className="h-3 w-3" /></button>
+                        </span>
+                    ))}
+                    
+                    {showTagInput ? (
+                        <div className="flex items-center gap-1">
+                            <input 
+                                className="w-24 px-2 py-1 text-xs border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                placeholder="Nouveau tag..."
+                                value={newTag}
+                                onChange={e => setNewTag(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleAddTag()}
+                                autoFocus
+                            />
+                            <button onClick={handleAddTag} className="text-green-600 hover:text-green-800"><CheckCircle2 className="h-4 w-4" /></button>
+                            <button onClick={() => setShowTagInput(false)} className="text-red-500 hover:text-red-700"><X className="h-4 w-4" /></button>
+                        </div>
+                    ) : (
+                        <button onClick={() => setShowTagInput(true)} className="inline-flex items-center gap-1 px-2 py-1 rounded border border-dashed border-slate-300 text-slate-500 text-xs hover:border-indigo-300 hover:text-indigo-600 transition-colors">
+                            <Plus className="h-3 w-3" /> Ajouter un tag
+                        </button>
+                    )}
+                </div>
+
                 <p className="text-slate-800 text-sm leading-relaxed mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100">
                   "{selectedReview.body}"
                 </p>
@@ -687,8 +797,8 @@ export const InboxPage = () => {
               </CardContent>
             </Card>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col relative pb-20 lg:pb-0">
-              <div className="flex border-b border-slate-100 bg-slate-50/50">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col relative pb-20 lg:pb-0 h-[600px]">
+              <div className="flex border-b border-slate-100 bg-slate-50/50 shrink-0">
                   <button 
                     onClick={() => setActiveTab('reply')}
                     className={`flex-1 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'reply' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}
@@ -696,17 +806,14 @@ export const InboxPage = () => {
                       <Sparkles className="h-4 w-4" /> Réponse
                   </button>
                   <button 
-                    onClick={() => setActiveTab('notes')}
-                    className={`flex-1 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'notes' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveTab('activity')}
+                    className={`flex-1 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'activity' ? 'text-indigo-600 border-b-2 border-indigo-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}
                   >
-                      <MessageSquare className="h-4 w-4" /> Notes Internes
-                      {selectedReview.internal_notes && selectedReview.internal_notes.length > 0 && (
-                          <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 rounded-full">{selectedReview.internal_notes.length}</span>
-                      )}
+                      <Activity className="h-4 w-4" /> Activité & Notes
                   </button>
               </div>
               
-              <div className="p-4 md:p-6 flex-1">
+              <div className="p-4 md:p-6 flex-1 overflow-hidden h-full flex flex-col">
                  {activeTab === 'reply' && (
                      selectedReview.status === 'sent' ? (
                         <div className="flex flex-col items-center justify-center py-8 text-center animate-in zoom-in-95 duration-300">
@@ -729,7 +836,7 @@ export const InboxPage = () => {
                         </div>
                      ) : (
                         <>
-                            <div className="flex flex-col sm:flex-row gap-2 mb-4 justify-between">
+                            <div className="flex flex-col sm:flex-row gap-2 mb-4 justify-between shrink-0">
                                 <div className="flex gap-2">
                                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit overflow-x-auto">
                                         {['short', 'medium', 'long'].map((l) => (
@@ -785,9 +892,9 @@ export const InboxPage = () => {
                                 </div>
                             </div>
 
-                            <div className="relative mb-4 group">
+                            <div className="relative mb-4 group flex-1">
                                 <textarea 
-                                className="w-full h-48 p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm resize-none leading-relaxed shadow-sm bg-white transition-all font-medium text-slate-700"
+                                className="w-full h-full p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm resize-none leading-relaxed shadow-sm bg-white transition-all font-medium text-slate-700"
                                 placeholder="Cliquez sur 'Générer' pour laisser l'IA rédiger une réponse..."
                                 value={replyText}
                                 onChange={(e) => setReplyText(e.target.value)}
@@ -803,7 +910,7 @@ export const InboxPage = () => {
                                 )}
                             </div>
                             
-                            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+                            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
                             <Button 
                                 variant="secondary" 
                                 size="sm"
@@ -830,23 +937,8 @@ export const InboxPage = () => {
                      )
                  )}
 
-                 {activeTab === 'notes' && (
-                     <div className="h-full flex flex-col">
-                         <div className="flex-1 overflow-y-auto pr-2">
-                             <NotesList notes={selectedReview.internal_notes || []} />
-                         </div>
-                         <div className="mt-4 pt-4 border-t border-slate-100">
-                             <textarea 
-                                className="w-full p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[80px]"
-                                placeholder="Ajoutez une note pour votre équipe..."
-                                value={noteText}
-                                onChange={(e) => setNoteText(e.target.value)}
-                             />
-                             <div className="flex justify-end mt-2">
-                                 <Button size="sm" onClick={handleAddNote} isLoading={isSavingNote} disabled={!noteText.trim()}>Ajouter la note</Button>
-                             </div>
-                         </div>
-                     </div>
+                 {activeTab === 'activity' && (
+                     <TimelineView review={selectedReview} onAddNote={handleAddNote} />
                  )}
               </div>
             </div>

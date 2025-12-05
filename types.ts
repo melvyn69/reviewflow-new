@@ -103,6 +103,22 @@ export interface WebhookConfig {
     status?: 'success' | 'failure';
 }
 
+export interface PublicProfileConfig {
+    template: 'modern' | 'classic' | 'dark';
+    primaryColor: string;
+    showReviews: boolean;
+    showMap: boolean;
+    customCta?: {
+        enabled: boolean;
+        label: string;
+        url: string;
+    };
+    stats?: {
+        views: number;
+        clicks: number;
+    };
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -156,6 +172,7 @@ export interface Location {
   cover_image?: string;
   booking_url?: string;
   organization_id?: string;
+  public_config?: PublicProfileConfig;
 }
 
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';
@@ -195,6 +212,17 @@ export interface InternalNote {
   created_at: string;
 }
 
+export type TimelineEventType = 'review_created' | 'ai_analysis' | 'note' | 'draft_generated' | 'reply_published' | 'status_change';
+
+export interface ReviewTimelineEvent {
+    id: string;
+    type: TimelineEventType;
+    date: string;
+    actor_name: string; // 'System', 'AI', 'User Name'
+    content?: string;
+    metadata?: any;
+}
+
 export interface Review {
   id: string;
   source: ReviewSource;
@@ -216,6 +244,8 @@ export interface Review {
   staff_name_detected?: string;
   external_id?: string;
   customer_email?: string;
+  tags?: string[];
+  timeline?: ReviewTimelineEvent[];
 }
 
 export interface ThemeWeight {

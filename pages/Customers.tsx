@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Customer, PipelineStage } from '../types';
@@ -12,7 +11,7 @@ const STAGES: { id: PipelineStage; label: string; color: string }[] = [
     { id: 'churned', label: 'Perdus / Archivés', color: 'bg-slate-50 border-slate-200 text-slate-600' }
 ];
 
-const KanbanColumn = ({ stage, customers, onSelect }: { stage: typeof STAGES[0], customers: Customer[], onSelect: (c: Customer) => void }) => (
+const KanbanColumn: React.FC<{ stage: typeof STAGES[0], customers: Customer[], onSelect: (c: Customer) => void }> = ({ stage, customers, onSelect }) => (
     <div className="flex-1 min-w-[280px] bg-slate-50/50 rounded-xl p-3 border border-slate-200 flex flex-col h-full">
         <div className={`mb-3 px-3 py-2 rounded-lg font-bold text-sm uppercase tracking-wide border ${stage.color} flex justify-between items-center`}>
             {stage.label}

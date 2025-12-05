@@ -23,13 +23,15 @@ import {
   PlusCircle, 
   Target, 
   Gift,
-  Share2
+  Share2,
+  ChevronRight
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
 
+// ... (SidebarItem and BottomNav components remain the same)
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => {
   const location = useLocation();
   const isActive = exact ? location.pathname === to : location.pathname.startsWith(to);
@@ -91,6 +93,7 @@ const BottomNav = () => {
     );
 };
 
+// ... (Sidebar component remains the same)
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -157,6 +160,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
           <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} />
           <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
           <SidebarItem to="/collect" icon={QrCode} label={t('sidebar.collect')} onClick={onClose} />
+          <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={onClose} />
           <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
           <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} />
           <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} />
@@ -193,7 +197,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
           )}
         </nav>
 
-        {/* System Status Indicator */}
         {!isSupabaseConfigured() && (
             <div className="bg-amber-50 border-t border-amber-100 p-2 text-center">
                 <div className="text-[10px] font-bold text-amber-700 flex items-center justify-center gap-1">
@@ -223,9 +226,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user }) => {
 const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const [user, setUser] = React.useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -236,10 +241,26 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setSearchResults([]);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+      const search = async () => {
+          if (searchTerm.length > 2) {
+              const res = await api.global.search(searchTerm);
+              setSearchResults(res);
+          } else {
+              setSearchResults([]);
+          }
+      };
+      const timeout = setTimeout(search, 300);
+      return () => clearTimeout(timeout);
+  }, [searchTerm]);
 
   const loadNotifications = async () => {
       const list = await api.notifications.list();
@@ -251,11 +272,11 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
       setNotifications(notifications.map(n => ({...n, read: true})));
   };
 
-  const handleSearch = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-          navigate(`/inbox?search=${encodeURIComponent(searchTerm)}`);
-      }
-  }
+  const handleResultClick = (link: string) => {
+      navigate(link);
+      setSearchTerm('');
+      setSearchResults([]);
+  };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -266,16 +287,34 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
           <Menu className="h-6 w-6" />
         </button>
         
-        <div className="relative w-full max-w-sm hidden sm:block">
+        {/* GLOBAL SEARCH */}
+        <div className="relative w-full max-w-sm hidden sm:block" ref={searchRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Rechercher (ex: 'Pizza')..." 
+            placeholder="Rechercher (Client, Avis, Page)..." 
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={handleSearch}
           />
+          {searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                  {searchResults.map((res, i) => (
+                      <div 
+                        key={i}
+                        className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
+                        onClick={() => handleResultClick(res.link)}
+                      >
+                          <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{res.type}</span>
+                              <ChevronRight className="h-3 w-3 text-slate-300" />
+                          </div>
+                          <div className="font-medium text-slate-900">{res.title}</div>
+                          <div className="text-xs text-slate-500 truncate">{res.subtitle}</div>
+                      </div>
+                  ))}
+              </div>
+          )}
         </div>
       </div>
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
@@ -46,7 +45,8 @@ import {
     Image as ImageIcon, 
     CreditCard, 
     AlertTriangle,
-    ArrowRight
+    ArrowRight,
+    Server
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -475,6 +475,9 @@ export const SettingsPage = () => {
   // Test email state
   const [testingEmail, setTestingEmail] = useState(false);
 
+  // System Health state
+  const [systemHealth, setSystemHealth] = useState<{db: boolean, latency: number} | null>(null);
+
   useEffect(() => {
     // Tentative de capture du token au chargement si retour de login
     api.organization.saveGoogleTokens().then((success) => {
@@ -486,6 +489,12 @@ export const SettingsPage = () => {
         }
     });
   }, []);
+
+  useEffect(() => {
+      if (activeTab === 'system') {
+          api.system.checkHealth().then(setSystemHealth);
+      }
+  }, [activeTab]);
 
   const loadData = async () => {
       setLoading(true);
@@ -826,13 +835,13 @@ export const SettingsPage = () => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex border-b border-slate-200 overflow-x-auto">
-            {['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team', 'developer'].map((tab) => (
+            {['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team', 'developer', 'system'].map((tab) => (
                 <button 
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap capitalize ${activeTab === tab ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
                 >
-                    {tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'Identité & IA' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'organization' ? 'Entreprise' : tab === 'developer' ? 'Dév & API' : tab}
+                    {tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'Identité & IA' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'organization' ? 'Entreprise' : tab === 'developer' ? 'Dév & API' : tab === 'system' ? 'Système & Santé' : tab}
                 </button>
             ))}
         </div>
@@ -1223,6 +1232,54 @@ export const SettingsPage = () => {
                             Simuler Webhook Stripe (Upgrade Pro)
                         </Button>
                     </section>
+                </div>
+            )}
+
+            {/* --- SYSTEM HEALTH TAB --- */}
+            {activeTab === 'system' && (
+                <div className="max-w-2xl space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Server className="h-5 w-5 text-indigo-600" />
+                                État du Système
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="flex items-center gap-3">
+                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${systemHealth?.db ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                        <Server className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-slate-900">Base de Données</h4>
+                                        <p className="text-xs text-slate-500">{systemHealth?.db ? 'Connexion établie' : 'Déconnecté'}</p>
+                                    </div>
+                                </div>
+                                <Badge variant={systemHealth?.db ? 'success' : 'error'}>
+                                    {systemHealth?.db ? 'En ligne' : 'Hors ligne'}
+                                </Badge>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 border border-slate-200 rounded-lg">
+                                    <div className="text-xs font-bold text-slate-500 uppercase mb-1">Latence API</div>
+                                    <div className="text-2xl font-mono font-bold text-slate-900">{systemHealth?.latency || 0} ms</div>
+                                </div>
+                                <div className="p-4 border border-slate-200 rounded-lg">
+                                    <div className="text-xs font-bold text-slate-500 uppercase mb-1">Mode</div>
+                                    <div className="text-2xl font-bold text-indigo-600">
+                                        {localStorage.getItem('is_demo_mode') === 'true' ? 'DÉMO' : 'PRODUCTION'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-indigo-50 p-4 rounded-lg text-sm text-indigo-900">
+                                <p className="font-bold mb-1">Information</p>
+                                <p>Si la base de données est connectée, vos données sont sécurisées et synchronisées. En cas d'erreur, vérifiez vos variables d'environnement Vercel.</p>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
         </div>
