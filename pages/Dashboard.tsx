@@ -22,10 +22,24 @@ import {
   QrCode,
   Sparkles,
   Search,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 import { useTranslation } from '../lib/i18n';
+
+// --- CONFETTI COMPONENT ---
+const Confetti = () => (
+    <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
+        {[...Array(50)].map((_, i) => (
+            <div key={i} className="confetti" style={{ 
+                left: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                backgroundColor: ['#f2d74e', '#ef2964', '#00c09d', '#2d87b0'][Math.floor(Math.random() * 4)]
+            }}></div>
+        ))}
+    </div>
+);
 
 const KPI = ({ title, value, change, icon: Icon, trend, loading }: any) => (
   <Card className="hover:shadow-md transition-shadow">
@@ -86,7 +100,11 @@ const ActivityFeed = () => {
 
 const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
     const navigate = useNavigate();
-    if (!status || status.completionPercentage === 100) return null;
+    const [hidden, setHidden] = useState(false);
+    
+    if (!status || hidden) return null;
+
+    const isComplete = status.completionPercentage === 100;
 
     const steps = [
         {
@@ -116,42 +134,56 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
     ];
 
     return (
-        <Card className="mb-8 border-indigo-100 overflow-hidden relative shadow-md">
-            <div className="absolute top-0 left-0 w-full h-1 bg-slate-100">
-                <div className="h-full bg-indigo-600 transition-all duration-1000" style={{ width: `${status.completionPercentage}%` }}></div>
+        <Card className={`mb-8 border-indigo-100 overflow-hidden relative shadow-md transition-all duration-500 ${isComplete ? 'border-green-200 bg-green-50/30' : ''}`}>
+            {isComplete && <Confetti />}
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-100">
+                <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-1000 ease-out" style={{ width: `${status.completionPercentage}%` }}></div>
             </div>
+            
             <CardContent className="p-0">
-                <div className="p-6 bg-gradient-to-r from-indigo-50 to-white border-b border-indigo-50 flex justify-between items-center">
+                <div className="p-6 flex justify-between items-center bg-white/50 backdrop-blur-sm">
                     <div>
                         <h3 className="font-bold text-lg text-indigo-900 flex items-center gap-2">
-                            <Rocket className="h-5 w-5 text-indigo-600" />
-                            Démarrage Rapide
+                            {isComplete ? <Sparkles className="h-5 w-5 text-green-500 animate-pulse" /> : <Rocket className="h-5 w-5 text-indigo-600" />}
+                            {isComplete ? 'Félicitations ! Setup Terminé' : 'Démarrage Rapide'}
                         </h3>
-                        <p className="text-slate-500 text-sm mt-1">Complétez ces étapes pour profiter à 100% de l'IA.</p>
+                        <p className="text-slate-500 text-sm mt-1">
+                            {isComplete ? "Vous êtes prêt à piloter votre e-réputation comme un pro." : "Complétez ces étapes pour profiter à 100% de l'IA."}
+                        </p>
                     </div>
-                    <div className="text-right hidden sm:block">
-                        <span className="text-3xl font-extrabold text-indigo-600">{status.completionPercentage}%</span>
-                        <span className="text-xs text-slate-400 block uppercase tracking-wide font-bold">Complété</span>
-                    </div>
-                </div>
-                <div className="divide-y divide-slate-50">
-                    {steps.map((step, i) => (
-                        <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-white opacity-60' : 'bg-white hover:bg-slate-50'}`}>
-                            <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
-                                {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
-                            </div>
-                            <div className="flex-1">
-                                <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
-                                <p className="text-xs text-slate-500">{step.desc}</p>
-                            </div>
-                            {!step.done && (
-                                <Button size="xs" variant="outline" onClick={step.action} className="whitespace-nowrap bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200">
-                                    {step.btn} <ArrowRight className="ml-1 h-3 w-3" />
-                                </Button>
-                            )}
+                    <div className="flex items-center gap-4">
+                        <div className="text-right hidden sm:block">
+                            <span className={`text-3xl font-extrabold ${isComplete ? 'text-green-600' : 'text-indigo-600'}`}>{status.completionPercentage}%</span>
+                            <span className="text-xs text-slate-400 block uppercase tracking-wide font-bold">Complété</span>
                         </div>
-                    ))}
+                        {isComplete && (
+                            <button onClick={() => setHidden(true)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full">
+                                <X className="h-5 w-5" />
+                            </button>
+                        )}
+                    </div>
                 </div>
+
+                {!isComplete && (
+                    <div className="divide-y divide-slate-50 border-t border-slate-100">
+                        {steps.map((step, i) => (
+                            <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-slate-50/50 opacity-60' : 'bg-white hover:bg-slate-50'}`}>
+                                <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                    {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
+                                    <p className="text-xs text-slate-500">{step.desc}</p>
+                                </div>
+                                {!step.done && (
+                                    <Button size="xs" variant="outline" onClick={step.action} className="whitespace-nowrap bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-sm">
+                                        {step.btn} <ArrowRight className="ml-1 h-3 w-3" />
+                                    </Button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -165,6 +197,7 @@ export const DashboardPage = () => {
   const [seeding, setSeeding] = useState(false);
   const [realLocationId, setRealLocationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [skipOnboarding, setSkipOnboarding] = useState(false);
   
@@ -179,8 +212,10 @@ export const DashboardPage = () => {
     if (skipped) setSkipOnboarding(true);
   }, [period]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    
     try {
       // Execute independently to avoid one failure blocking everything
       const org = await api.organization.get().catch(() => null);
@@ -205,10 +240,14 @@ export const DashboardPage = () => {
         .filter(r => r.rating <= 3 && (r.status === 'pending' || r.status === 'draft'))
         .slice(0, 5);
       setUrgentReviews(urgent);
+      
+      if (isRefresh) toast.success("Données actualisées !");
     } catch (e) {
       console.error("Dashboard Load Error", e);
+      if (isRefresh) toast.error("Erreur lors de l'actualisation");
     } finally {
         setLoading(false);
+        setRefreshing(false);
     }
   };
 
@@ -293,6 +332,16 @@ export const DashboardPage = () => {
           <p className="text-slate-500">{t('dashboard.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
+            <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => loadData(true)} 
+                isLoading={refreshing}
+                className="text-slate-400 hover:text-indigo-600"
+                title="Actualiser les données"
+            >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
             <div className="flex bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
                 {['7j', '30j', 'Trimestre'].map((p) => (
                     <button 

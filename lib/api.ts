@@ -868,14 +868,45 @@ export const api = {
   onboarding: {
       checkStatus: async (): Promise<SetupStatus> => {
           if (isDemoMode()) return { googleConnected: true, brandVoiceConfigured: true, firstReviewReplied: true, completionPercentage: 100 };
-          const org = await api.organization.get();
+          
+          if (!supabase) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
+
+          // Fetch fresh org data directly to ensure no caching issues
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
+
+          const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+          if (!userProfile?.organization_id) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
+
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('integrations, brand')
+            .eq('id', userProfile.organization_id)
+            .single();
+
           if (!org) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
           
-          const googleConnected = org.integrations?.google || false;
-          const brandVoiceConfigured = !!(org.brand?.tone);
+          // Check Google
+          const googleConnected = !!(org.integrations && (org.integrations as any).google === true);
           
-          const { count } = await supabase!.from('reviews').select('*', { count: 'exact', head: true }).eq('status', 'sent');
-          const firstReviewReplied = (count || 0) > 0;
+          // Check Brand
+          const brandVoiceConfigured = !!(org.brand && (org.brand as any).tone);
+          
+          // Check Reviews (Sent)
+          // We check if ANY review has 'sent' status in reviews table linked to this org's locations
+          // First get location IDs
+          const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', userProfile.organization_id);
+          const locationIds = locations?.map(l => l.id) || [];
+          
+          let firstReviewReplied = false;
+          if (locationIds.length > 0) {
+              const { count } = await supabase
+                .from('reviews')
+                .select('*', { count: 'exact', head: true })
+                .in('location_id', locationIds)
+                .eq('status', 'sent');
+              firstReviewReplied = (count || 0) > 0;
+          }
           
           const steps = [googleConnected, brandVoiceConfigured, firstReviewReplied];
           const completionPercentage = Math.round((steps.filter(Boolean).length / steps.length) * 100);
