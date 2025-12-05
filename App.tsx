@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// On importe tout depuis ./components/ui pour être sûr d'utiliser la version unifiée
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from './components/ui';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
