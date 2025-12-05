@@ -1016,7 +1016,11 @@ export const api = {
           const user = await api.auth.getUser();
           if (!user || !user.organization_id) throw new Error("Organisation introuvable.");
 
-          const { error } = await supabase.from('locations').insert({ ...data, organization_id: user.organization_id });
+          // CORRECTION: On retire 'description' et 'public_config' qui peuvent manquer dans la DB
+          // pour éviter l'erreur "Could not find the description column"
+          const { description, public_config, ...safeData } = data;
+
+          const { error } = await supabase.from('locations').insert({ ...safeData, organization_id: user.organization_id });
           
           if (error) {
               console.error("Location Create Error", error);
@@ -1029,7 +1033,11 @@ export const api = {
               if (idx >= 0) DEMO_ORG.locations[idx] = { ...DEMO_ORG.locations[idx], ...data };
               return;
           }
-          const { error } = await supabase!.from('locations').update(data).eq('id', id);
+          
+          // CORRECTION: On retire 'description' et 'public_config'
+          const { description, public_config, ...safeData } = data;
+
+          const { error } = await supabase!.from('locations').update(safeData).eq('id', id);
           if (error) throw new Error(error.message);
       },
       delete: async (id: string) => {
