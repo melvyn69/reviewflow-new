@@ -4,12 +4,32 @@ import { api } from '../lib/api';
 import { AnalyticsSummary, Review, SetupStatus, User } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
 import { 
-  TrendingUp, TrendingDown, MessageSquare, Star, Clock, AlertCircle, UploadCloud, Rocket, ExternalLink, Activity, 
-  Zap, CheckCircle2, ArrowRight, QrCode, Sparkles, RefreshCw, Settings, X
+  TrendingUp, 
+  TrendingDown, 
+  MessageSquare, 
+  Star, 
+  Clock, 
+  AlertCircle, 
+  UploadCloud, 
+  Rocket, 
+  ExternalLink,
+  Activity, 
+  Zap, 
+  CheckCircle2, 
+  ShieldAlert,
+  ArrowRight,
+  Plus,
+  QrCode,
+  Sparkles,
+  Search,
+  X,
+  RefreshCw,
+  Settings
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 import { useTranslation } from '../lib/i18n';
 
+// --- CONFETTI COMPONENT ---
 const Confetti = () => (
     <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
         {[...Array(50)].map((_, i) => (
@@ -93,7 +113,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
             label: 'Connecter Google Business Profile',
             desc: 'Pour récupérer vos avis existants.',
             done: status.googleConnected,
-            action: () => navigate('/settings?tab=locations'),
+            action: () => navigate('/settings?tab=integrations'),
             btn: 'Connecter'
         },
         {
@@ -145,30 +165,31 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
                     </div>
                 </div>
 
-                <div className="divide-y divide-slate-50 border-t border-slate-100">
-                    {steps.map((step, i) => (
-                        <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-slate-50/50' : 'bg-white hover:bg-slate-50'}`}>
-                            <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
-                                {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
+                {!isComplete && (
+                    <div className="divide-y divide-slate-50 border-t border-slate-100">
+                        {steps.map((step, i) => (
+                            <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-slate-50/50' : 'bg-white hover:bg-slate-50'}`}>
+                                <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                    {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
+                                    <p className="text-xs text-slate-500">{step.desc}</p>
+                                </div>
+                                <Button 
+                                    size="xs" 
+                                    variant={step.done ? "ghost" : "outline"} 
+                                    onClick={step.action} 
+                                    className={`whitespace-nowrap ${!step.done ? 'bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-sm' : ''}`}
+                                >
+                                    {step.done ? 'Modifier' : step.btn} 
+                                    {!step.done && <ArrowRight className="ml-1 h-3 w-3" />}
+                                    {step.done && <Settings className="ml-1 h-3 w-3" />}
+                                </Button>
                             </div>
-                            <div className="flex-1">
-                                <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
-                                <p className="text-xs text-slate-500">{step.desc}</p>
-                            </div>
-                            {/* Modification : Bouton 'Modifier' toujours visible pour accéder à la config */}
-                            <Button 
-                                size="xs" 
-                                variant={step.done ? "ghost" : "outline"} 
-                                onClick={step.action} 
-                                className={`whitespace-nowrap ${!step.done ? 'bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-sm' : ''}`}
-                            >
-                                {step.done ? 'Modifier' : step.btn} 
-                                {!step.done && <ArrowRight className="ml-1 h-3 w-3" />}
-                                {step.done && <Settings className="ml-1 h-3 w-3" />}
-                            </Button>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
@@ -202,6 +223,7 @@ export const DashboardPage = () => {
     else setLoading(true);
     
     try {
+      // Execute independently to avoid one failure blocking everything
       const org = await api.organization.get().catch(() => null);
       
       let analyticsData, reviewsData, status;
@@ -219,6 +241,7 @@ export const DashboardPage = () => {
       setStats(analyticsData);
       setSetupStatus(status);
       
+      // Filter for "Urgent": Low rating + Pending/Draft
       const urgent = (reviewsData || [])
         .filter(r => r.rating <= 3 && (r.status === 'pending' || r.status === 'draft'))
         .slice(0, 5);
@@ -268,6 +291,7 @@ export const DashboardPage = () => {
       return t('dashboard.greeting_evening');
   };
 
+  // Logic for empty state or new account
   const isGoogleConnected = setupStatus?.googleConnected;
   
   if (!loading && !isGoogleConnected && !skipOnboarding) {
@@ -285,7 +309,7 @@ export const DashboardPage = () => {
                       L'IA est prête à booster votre e-réputation. <br/> Connectez votre fiche Google pour commencer la magie.
                   </p>
                   <div className="flex flex-col sm:flex-row justify-center gap-6">
-                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-7 text-lg shadow-xl hover:scale-105 transition-transform font-bold" onClick={() => navigate('/settings?tab=locations')}>
+                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-7 text-lg shadow-xl hover:scale-105 transition-transform font-bold" onClick={() => navigate('/settings?tab=integrations')}>
                           <UploadCloud className="mr-3 h-6 w-6" /> Connecter Google Business
                       </Button>
                       <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 py-7 text-lg backdrop-blur-sm" onClick={handleSeedData} isLoading={seeding}>
@@ -305,6 +329,7 @@ export const DashboardPage = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
       
+      {/* Header with Greeting and Actions */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
@@ -337,6 +362,7 @@ export const DashboardPage = () => {
         </div>
       </div>
 
+      {/* Quick Actions Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <button onClick={() => navigate('/collect')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all text-left group">
               <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -379,6 +405,7 @@ export const DashboardPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+            {/* Urgent Tasks */}
             <Card className="border-l-4 border-l-amber-400">
                 <CardHeader className="border-b border-slate-100 pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -424,6 +451,7 @@ export const DashboardPage = () => {
                 </CardContent>
             </Card>
 
+            {/* AI Insights Summary */}
             {stats && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Card className="bg-green-50/50 border-green-100">
@@ -449,6 +477,7 @@ export const DashboardPage = () => {
         </div>
 
         <div className="space-y-6">
+            {/* Live Feed */}
             <Card className="h-full flex flex-col border-slate-200 shadow-sm">
                 <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
                     <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
