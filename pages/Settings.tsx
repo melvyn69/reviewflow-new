@@ -480,7 +480,14 @@ export const SettingsPage = () => {
   const [systemHealth, setSystemHealth] = useState<{db: boolean, latency: number} | null>(null);
 
   useEffect(() => {
-    // Tentative de capture du token au chargement si retour de login
+    // 1. Check URL for tab
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam) {
+        setActiveTab(tabParam);
+    }
+
+    // 2. Tentative de capture du token au chargement si retour de login
     api.organization.saveGoogleTokens().then((success) => {
         if (success) {
             toast.success("Compte connecté avec succès !");
@@ -489,7 +496,7 @@ export const SettingsPage = () => {
             loadData();
         }
     });
-  }, []);
+  }, [location.search]);
 
   useEffect(() => {
       if (activeTab === 'system') {
@@ -839,7 +846,10 @@ export const SettingsPage = () => {
             {['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team', 'developer', 'system'].map((tab) => (
                 <button 
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => {
+                        setActiveTab(tab);
+                        navigate(`/settings?tab=${tab}`);
+                    }}
                     className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap capitalize ${activeTab === tab ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
                 >
                     {tab === 'profile' ? 'Mon Profil' : tab === 'brand' ? 'Identité & IA' : tab === 'locations' ? 'Établissements' : tab === 'team' ? 'Équipe' : tab === 'integrations' ? 'Intégrations' : tab === 'organization' ? 'Entreprise' : tab === 'developer' ? 'Dév & API' : tab === 'system' ? 'Système & Santé' : tab}

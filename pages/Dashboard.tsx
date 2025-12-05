@@ -94,7 +94,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
             label: 'Connecter Google Business Profile',
             desc: 'Pour récupérer vos avis existants.',
             done: status.googleConnected,
-            action: () => navigate('/settings'),
+            action: () => navigate('/settings?tab=integrations'),
             btn: 'Connecter'
         },
         {
@@ -102,7 +102,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
             label: 'Définir votre Identité IA',
             desc: 'Configurez le ton et le style de vos réponses.',
             done: status.brandVoiceConfigured,
-            action: () => navigate('/settings'),
+            action: () => navigate('/settings?tab=brand'),
             btn: 'Configurer'
         },
         {
@@ -235,7 +235,7 @@ export const DashboardPage = () => {
           window.open(`#/feedback/${realLocationId}`, '_blank');
       } else {
           toast.error("Aucun établissement configuré.");
-          navigate('/settings');
+          navigate('/settings?tab=locations');
       }
   };
 
@@ -264,7 +264,7 @@ export const DashboardPage = () => {
                       L'IA est prête à booster votre e-réputation. <br/> Connectez votre fiche Google pour commencer la magie.
                   </p>
                   <div className="flex flex-col sm:flex-row justify-center gap-6">
-                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-7 text-lg shadow-xl hover:scale-105 transition-transform font-bold" onClick={() => navigate('/settings')}>
+                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-7 text-lg shadow-xl hover:scale-105 transition-transform font-bold" onClick={() => navigate('/settings?tab=integrations')}>
                           <UploadCloud className="mr-3 h-6 w-6" /> Connecter Google Business
                       </Button>
                       <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 py-7 text-lg backdrop-blur-sm" onClick={handleSeedData} isLoading={seeding}>

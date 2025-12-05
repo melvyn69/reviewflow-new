@@ -26,7 +26,6 @@ const invoke = async (functionName: string, body: any) => {
 };
 
 export const api = {
-  // ... (Previous Auth, Organization, etc. methods remain identical, I will append global search here)
   auth: {
     getUser: async (): Promise<User | null> => {
       if (isDemoMode()) return DEMO_USER;
@@ -89,10 +88,11 @@ export const api = {
     connectGoogleBusiness: async () => {
         if (isDemoMode()) return true;
         if (!supabase) return;
+        // On redirige vers les settings avec l'onglet integrations ouvert
         const { data } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin + '/settings',
+                redirectTo: window.location.origin + '/settings?tab=integrations',
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -210,19 +210,37 @@ export const api = {
       saveGoogleTokens: async () => {
           if (isDemoMode()) return true;
           if (!supabase) return false;
+          
+          // 1. Get Session
           const { data: { session } } = await supabase.auth.getSession();
           
           if (session?.provider_token) {
               const user = session.user;
-              const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+              // 2. Get User's Organization ID
+              const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle();
               
               if (profile?.organization_id) {
+                  // 3. Get Current Integrations State
+                  const { data: org } = await supabase.from('organizations').select('integrations').eq('id', profile.organization_id).single();
+                  const currentIntegrations = org?.integrations || {};
+
+                  // 4. Update Organization with Tokens AND Status
+                  const updates: any = {
+                      integrations: { ...currentIntegrations, google: true }
+                  };
+
+                  // Only update refresh token if a new one is provided (it's not always sent on re-login)
                   if (session.provider_refresh_token) {
-                      await supabase.from('organizations').update({
-                          google_refresh_token: session.provider_refresh_token,
-                          integrations: { google: true }
-                      }).eq('id', profile.organization_id);
+                      updates.google_refresh_token = session.provider_refresh_token;
+                  }
+
+                  const { error } = await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
+                  
+                  if (!error) {
+                      console.log("✅ Google Tokens & Status Saved to DB");
                       return true;
+                  } else {
+                      console.error("❌ Failed to save Google Tokens", error);
                   }
               }
           }

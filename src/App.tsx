@@ -71,7 +71,14 @@ function AppRoutes() {
     // Listener for OAuth redirects (Google Login)
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        
+        // 🚀 CRITICAL: Capture Tokens immediately on sign-in
+        if (session.provider_token) {
+            await api.organization.saveGoogleTokens();
+        }
+
         await checkUser();
+        
         // If we are on login/register/landing, go to dashboard
         if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
             navigate('/dashboard');
