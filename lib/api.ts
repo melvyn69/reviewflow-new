@@ -925,8 +925,60 @@ export const api = {
   },
   customers: {
       list: async (): Promise<Customer[]> => {
-          if (isDemoMode()) return [];
-          return [];
+          if (isDemoMode()) {
+              // Rich demo data for pipeline view
+              return [
+                  { 
+                      id: 'c1', name: 'Sophie Martin', email: 'sophie.m@gmail.com', source: 'google', 
+                      last_interaction: new Date().toISOString(), total_reviews: 3, average_rating: 5, 
+                      status: 'promoter', ltv_estimate: 450, 
+                      stage: 'loyal', tags: ['VIP', 'Famille']
+                  },
+                  { 
+                      id: 'c2', name: 'Jean Dupont', email: 'j.dupont@orange.fr', source: 'tripadvisor', 
+                      last_interaction: new Date(Date.now() - 86400000 * 5).toISOString(), total_reviews: 1, average_rating: 2, 
+                      status: 'detractor', ltv_estimate: 80, 
+                      stage: 'risk', tags: ['Plainte Prix']
+                  },
+                  { 
+                      id: 'c3', name: 'Marc Lavoine', email: 'marco@test.com', source: 'facebook', 
+                      last_interaction: new Date(Date.now() - 86400000 * 2).toISOString(), total_reviews: 1, average_rating: 4, 
+                      status: 'passive', ltv_estimate: 120, 
+                      stage: 'new', tags: []
+                  },
+                  { 
+                      id: 'c4', name: 'Julie Ferrier', email: 'julie@cinema.fr', source: 'google', 
+                      last_interaction: new Date(Date.now() - 86400000 * 20).toISOString(), total_reviews: 5, average_rating: 4.8, 
+                      status: 'promoter', ltv_estimate: 800, 
+                      stage: 'loyal', tags: ['Ambassadeur']
+                  },
+                  { 
+                      id: 'c5', name: 'Paul Bismuth', source: 'direct', 
+                      last_interaction: new Date(Date.now() - 86400000 * 60).toISOString(), total_reviews: 1, average_rating: 1, 
+                      status: 'detractor', ltv_estimate: 0, 
+                      stage: 'churned', tags: []
+                  }
+              ];
+          }
+          if (!supabase) return [];
+          const { data } = await supabase.from('customers').select('*');
+          return data || [];
+      },
+      update: async (id: string, updates: Partial<Customer>) => {
+          if (isDemoMode()) return; // Local state handled in component
+          await supabase!.from('customers').update(updates).eq('id', id);
+      },
+      enrichProfile: async (customerId: string) => {
+          if (isDemoMode()) {
+              await new Promise(r => setTimeout(r, 2000)); // Simulate AI delay
+              return {
+                  profile: "Sophie est une cliente régulière très sensible à la qualité du service. Elle mentionne souvent l'équipe par son prénom. Type: 'Ambassadeur Relationnel'.",
+                  suggestion: "Lui proposer une offre de parrainage pour qu'elle invite ses amis.",
+                  last_updated: new Date().toISOString()
+              };
+          }
+          // Real Implementation: Call Edge Function
+          return await invoke('ai_enrich_customer', { customerId });
       }
   },
   offers: {

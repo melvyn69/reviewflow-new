@@ -338,6 +338,8 @@ export interface CustomerInteraction {
     sentiment?: 'positive' | 'negative' | 'neutral';
 }
 
+export type PipelineStage = 'new' | 'contacted' | 'loyal' | 'risk' | 'churned';
+
 export interface Customer {
   id: string;
   name: string;
@@ -350,4 +352,12 @@ export interface Customer {
   status: 'promoter' | 'passive' | 'detractor';
   ltv_estimate?: number; 
   history?: CustomerInteraction[];
+  // New CRM Fields
+  stage: PipelineStage;
+  tags: string[];
+  ai_insight?: {
+      profile: string;
+      suggestion: string;
+      last_updated: string;
+  };
 }
