@@ -18,7 +18,8 @@ import {
     Download,
     Lightbulb,
     Shield,
-    Lock
+    Lock,
+    RefreshCw
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
@@ -27,6 +28,7 @@ export const CompetitorsPage = () => {
     const [scannedResults, setScannedResults] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'tracked' | 'scan' | 'insights'>('tracked');
     const [loading, setLoading] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
     const [marketData, setMarketData] = useState<any>(null);
     const [loadingInsights, setLoadingInsights] = useState(false);
     const [org, setOrg] = useState<Organization | null>(null);
@@ -40,15 +42,23 @@ export const CompetitorsPage = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const init = async () => {
-            const organization = await api.organization.get().catch(() => null);
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        setInitialLoading(true);
+        try {
+            const organization = await api.organization.get();
             setOrg(organization);
             if (organization?.subscription_plan === 'pro') {
-                loadTracked();
+                await loadTracked();
             }
-        };
-        init();
-    }, []);
+        } catch (e) {
+            console.error("Failed to load org", e);
+        } finally {
+            setInitialLoading(false);
+        }
+    };
 
     const loadTracked = async () => {
         setLoading(true);
@@ -144,7 +154,20 @@ export const CompetitorsPage = () => {
         }
     }, [activeTab]);
 
-    if (!org) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
+    if (initialLoading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
+
+    if (!org) {
+        return (
+            <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
+                <div className="bg-amber-50 p-4 rounded-full mb-4">
+                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Erreur de chargement</h3>
+                <p className="text-slate-500 mb-6 max-w-sm">Impossible de récupérer les informations de votre compte.</p>
+                <Button onClick={loadData} icon={RefreshCw}>Réessayer</Button>
+            </div>
+        );
+    }
 
     // PAYWALL - PRO (GROWTH) PLAN ONLY
     if (org.subscription_plan === 'free' || org.subscription_plan === 'starter') {

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone, Building2, Loader2 } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone, Building2, Loader2, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import jsPDF from 'jspdf';
@@ -108,7 +108,7 @@ const InvoiceTable = () => {
                 const data = await api.billing.getInvoices();
                 setInvoices(data || []);
             } catch (e) {
-                console.warn("Failed to fetch invoices, possibly not configured.", e);
+                // Silent fail for new accounts
                 setInvoices([]);
             } finally {
                 setLoading(false);
@@ -162,12 +162,11 @@ const InvoiceTable = () => {
 export const BillingPage = () => {
     const [org, setOrg] = useState<Organization | null>(null);
     const [upgrading, setUpgrading] = useState<string | null>(null);
-    const [error, setError] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [showSuccess, setShowSuccess] = useState(false);
     const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
     
     const toast = useToast();
-    const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -193,13 +192,12 @@ export const BillingPage = () => {
         const check = async () => {
             try {
                 const data = await api.organization.get();
-                // Check if plan has changed from free (assuming we upgraded from free)
-                // In a real scenario, we might want to know the *target* plan to compare
                 if (data && data.subscription_plan !== 'free') {
                     setOrg(data);
                     setIsVerifyingPayment(false);
                     setShowSuccess(true);
                     toast.success("Paiement validé ! Votre abonnement est actif.");
+                    setLoading(false);
                     return;
                 }
             } catch (e) {
@@ -221,12 +219,14 @@ export const BillingPage = () => {
     };
 
     const loadOrg = async () => {
-        setError(false);
+        setLoading(true);
         try {
             const data = await api.organization.get();
             setOrg(data);
         } catch (e) {
-            setError(true);
+            console.error("Failed to load org", e);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -250,19 +250,46 @@ export const BillingPage = () => {
         window.location.href = "mailto:sales@reviewflow.com?subject=Demande%20Enterprise";
     };
 
-    // If API error, show simple error but allow navigation
-    if (error) return <div className="p-8 text-center text-slate-500">Erreur de chargement. Veuillez rafraîchir.</div>;
-    
-    // If org is loading
-    if (!org && !isVerifyingPayment) return <div className="p-8 text-center"><Skeleton className="h-96 w-full" /></div>;
+    // If still loading or verifying
+    if (loading || isVerifyingPayment) {
+        return (
+            <div className="relative">
+                {isVerifyingPayment && <PaymentProcessingOverlay />}
+                <div className="p-8 text-center space-y-4">
+                    <Skeleton className="h-24 w-full rounded-xl" />
+                    <div className="grid grid-cols-3 gap-4">
+                        <Skeleton className="h-96 w-full rounded-xl" />
+                        <Skeleton className="h-96 w-full rounded-xl" />
+                        <Skeleton className="h-96 w-full rounded-xl" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
-    const usage = org?.ai_usage_count || 0;
-    const limit = org?.subscription_plan === 'free' ? 0 : org?.subscription_plan === 'starter' ? 150 : 500;
+    // If org failed to load completely
+    if (!org) {
+        return (
+            <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
+                <div className="bg-red-50 p-4 rounded-full mb-4">
+                    <AlertCircle className="h-8 w-8 text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Impossible de charger les infos de facturation</h3>
+                <p className="text-slate-500 mb-6 max-w-sm">
+                    Une erreur est survenue lors de la récupération de votre compte. 
+                    Veuillez vérifier votre connexion ou réessayer.
+                </p>
+                <Button onClick={loadOrg} icon={RefreshCw}>Réessayer</Button>
+            </div>
+        );
+    }
+
+    const usage = org.ai_usage_count || 0;
+    const limit = org.subscription_plan === 'free' ? 0 : org.subscription_plan === 'starter' ? 150 : 500;
     const percentage = limit > 0 ? Math.min(100, (usage / limit) * 100) : 100;
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 relative">
-            {isVerifyingPayment && <PaymentProcessingOverlay />}
             {showSuccess && <Confetti />}
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -270,7 +297,7 @@ export const BillingPage = () => {
                     <h1 className="text-2xl font-bold text-slate-900">Abonnement & Facturation</h1>
                     <p className="text-slate-500">Choisissez la puissance dont votre enseigne a besoin.</p>
                 </div>
-                {org?.subscription_plan !== 'free' && (
+                {org.subscription_plan !== 'free' && (
                     <Button variant="outline" icon={CreditCard} onClick={() => api.billing.createPortalSession().then((url: string) => window.location.href = url)}>
                         Gérer carte & Factures
                     </Button>
@@ -278,7 +305,7 @@ export const BillingPage = () => {
             </div>
 
             {/* Usage Section */}
-            {org?.subscription_plan !== 'free' && (
+            {org.subscription_plan !== 'free' && (
                 <Card className="bg-gradient-to-r from-slate-900 to-indigo-900 text-white border-none shadow-xl">
                     <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-8">
                         <div className="flex-1">
@@ -297,7 +324,7 @@ export const BillingPage = () => {
                         <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[200px]">
                             <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold mb-1">Plan Actuel</div>
                             <div className="text-2xl font-bold mb-1 capitalize">
-                                {org?.subscription_plan === 'starter' ? 'Essential' : org?.subscription_plan === 'pro' ? 'Growth' : org?.subscription_plan}
+                                {org.subscription_plan === 'starter' ? 'Essential' : org.subscription_plan === 'pro' ? 'Growth' : org.subscription_plan}
                             </div>
                         </div>
                     </CardContent>
@@ -309,7 +336,7 @@ export const BillingPage = () => {
                 <PricingCard 
                     title="Essential" 
                     price="49€" 
-                    current={org?.subscription_plan === 'starter'}
+                    current={org.subscription_plan === 'starter'}
                     loading={upgrading === 'starter'}
                     onUpgrade={() => handleUpgrade('starter')}
                     subtext="Pour les indépendants"
@@ -325,7 +352,7 @@ export const BillingPage = () => {
                     title="Growth" 
                     price="89€" 
                     variant="featured"
-                    current={org?.subscription_plan === 'pro'}
+                    current={org.subscription_plan === 'pro'}
                     loading={upgrading === 'pro'}
                     onUpgrade={() => handleUpgrade('pro')}
                     subtext="Pour les gérants exigeants"
