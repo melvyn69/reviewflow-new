@@ -74,9 +74,11 @@ export const api = {
     loginWithGoogle: async () => {
         if (isDemoMode()) return;
         if (!supabase) return;
-        await supabase.auth.signInWithOAuth({ 
+        // On redirige vers les settings avec l'onglet integrations ouvert
+        const { data } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
+                redirectTo: window.location.origin + '/settings?tab=integrations',
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -84,6 +86,7 @@ export const api = {
                 scopes: 'https://www.googleapis.com/auth/business.manage'
             }
         });
+        return true;
     },
     connectGoogleBusiness: async () => {
         if (isDemoMode()) return true;
@@ -532,11 +535,18 @@ export const api = {
       },
       previewBrandVoice: async (config: any, review: any) => {
           if (isDemoMode()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
-          const { text } = await invoke('ai_generate', {
-              task: 'generate_reply',
-              context: { review, ...config }
-          });
-          return text;
+          try {
+              const { text } = await invoke('ai_generate', {
+                  task: 'generate_reply',
+                  context: { review, ...config }
+              });
+              return text;
+          } catch (e: any) {
+              console.warn("AI Generate failed, falling back to simulation", e);
+              // Fallback safe en cas d'erreur API (ex: pas de clé configurée)
+              const tone = config.tone || 'professionnel';
+              return `[Mode Simulation] Bonjour ${review.author_name || 'Client'}, merci pour votre retour. Nous prenons note de vos remarques sur le service. (Réponse générée localement car l'API Gemini n'est pas joignable).`;
+          }
       },
       runCustomTask: async (payload: any) => {
           if (isDemoMode()) return { result: "Demo Mode Custom Task Executed" };
@@ -895,8 +905,6 @@ export const api = {
           const brandVoiceConfigured = !!(org.brand && (org.brand as any).tone && ((org.brand as any).description || (org.brand as any).knowledge_base));
           
           // Check Reviews (Sent)
-          // We check if ANY review has 'sent' status in reviews table linked to this org's locations
-          // First get location IDs
           const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', userProfile.organization_id);
           const locationIds = locations?.map(l => l.id) || [];
           

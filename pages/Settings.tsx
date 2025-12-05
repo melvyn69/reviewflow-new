@@ -599,7 +599,8 @@ export const SettingsPage = () => {
       setSearchQuery('');
   };
 
-  const handleSaveOrg = async () => {
+  const handleSaveOrg = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       if (!org) return;
       await api.organization.update({ 
           name: orgCommercialName, 
@@ -611,7 +612,8 @@ export const SettingsPage = () => {
       toast.success("Informations entreprise mises à jour");
   };
 
-  const handleSaveBrand = async () => {
+  const handleSaveBrand = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       if (!org) return;
       const newBrand: BrandSettings = {
           ...org.brand,
@@ -626,13 +628,15 @@ export const SettingsPage = () => {
       toast.success("Identité de marque mise à jour");
   };
 
-  const handleSaveNotifications = async () => {
+  const handleSaveNotifications = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       if (!org) return;
       await api.organization.update({ notification_settings: notifSettings });
       toast.success("Préférences de notification enregistrées");
   };
 
-  const handleTestEmail = async () => {
+  const handleTestEmail = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       setTestingEmail(true);
       try {
           await api.notifications.sendTestEmail();
@@ -687,7 +691,8 @@ export const SettingsPage = () => {
       }
   };
 
-  const handleTestVoice = async () => {
+  const handleTestVoice = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       setTestingVoice(true);
       try {
           const mockReview = {
@@ -704,7 +709,8 @@ export const SettingsPage = () => {
           }, mockReview);
           setTestResponse(text);
       } catch (e) {
-          toast.error("Erreur test IA");
+          console.error(e);
+          toast.error("Erreur test IA (Vérifiez votre configuration)");
       } finally {
           setTestingVoice(false);
       }
@@ -744,7 +750,8 @@ export const SettingsPage = () => {
       }
   };
 
-  const handleImportGoogle = async () => {
+  const handleImportGoogle = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       setImporting(true);
       try {
           const count = await api.locations.importFromGoogle();
@@ -752,10 +759,6 @@ export const SettingsPage = () => {
               toast.success(`${count} établissements importés avec succès !`);
               // Force reload to get the new location IDs
               await loadData();
-              // After reloading data, org state is updated, so we can trigger sync if needed
-              // However, since loadData is async and state updates might lag, 
-              // it's safer to tell the user to wait or rely on background cron.
-              // For UX, we just say "Import successful".
           } else {
               toast.info("Aucun nouvel établissement trouvé ou erreur de token. (Reconnectez Google si nécessaire)");
           }
@@ -801,7 +804,8 @@ export const SettingsPage = () => {
       loadData();
   };
 
-  const handleSimulateStripe = async () => {
+  const handleSimulateStripe = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       try {
           // Effectively update the org plan via mock API or real endpoint if backend exists
           await api.organization.simulatePlanChange('pro');
@@ -959,7 +963,7 @@ export const SettingsPage = () => {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Adresse Siège</label>
                             <Input value={orgAddress} onChange={e => setOrgAddress(e.target.value)} />
                         </div>
-                        <Button onClick={handleSaveOrg}>Mettre à jour l'entreprise</Button>
+                        <Button onClick={(e) => handleSaveOrg(e)}>Mettre à jour l'entreprise</Button>
                     </div>
                 </div>
             )}
@@ -971,7 +975,7 @@ export const SettingsPage = () => {
                         <div className="flex gap-2">
                             <Button 
                                 variant="primary" 
-                                onClick={handleImportGoogle} 
+                                onClick={(e) => handleImportGoogle(e)} 
                                 isLoading={importing} 
                                 icon={UploadCloud}
                                 className="shadow-lg shadow-indigo-200"
@@ -1097,8 +1101,8 @@ export const SettingsPage = () => {
                             </div>
 
                             <div className="flex justify-between items-center pt-2">
-                                <Button variant="secondary" size="sm" onClick={handleTestVoice} isLoading={testingVoice}>Tester la voix</Button>
-                                <Button onClick={handleSaveBrand}>Sauvegarder</Button>
+                                <Button variant="secondary" size="sm" onClick={(e) => handleTestVoice(e)} isLoading={testingVoice}>Tester la voix</Button>
+                                <Button onClick={(e) => handleSaveBrand(e)}>Sauvegarder</Button>
                             </div>
 
                             {testResponse && (
@@ -1146,8 +1150,8 @@ export const SettingsPage = () => {
                         </div>
 
                         <div className="flex gap-3 justify-end">
-                            <Button variant="outline" onClick={handleTestEmail} isLoading={testingEmail}>Envoyer un email de test</Button>
-                            <Button onClick={handleSaveNotifications}>Enregistrer</Button>
+                            <Button variant="outline" onClick={(e) => handleTestEmail(e)} isLoading={testingEmail}>Envoyer un email de test</Button>
+                            <Button onClick={(e) => handleSaveNotifications(e)}>Enregistrer</Button>
                         </div>
                     </div>
                 </div>
@@ -1259,7 +1263,7 @@ export const SettingsPage = () => {
                     {process.env.NODE_ENV === 'development' && (
                         <section className="pt-8 border-t border-slate-200">
                             <h3 className="font-bold text-sm text-slate-400 uppercase mb-4">Zone de Test (Simulation)</h3>
-                            <Button variant="outline" onClick={handleSimulateStripe} icon={CreditCard}>
+                            <Button variant="outline" onClick={(e) => handleSimulateStripe(e)} icon={CreditCard}>
                                 Simuler Webhook Stripe (Upgrade Pro)
                             </Button>
                         </section>
