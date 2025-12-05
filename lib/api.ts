@@ -151,15 +151,14 @@ export const api = {
           const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle();
           if (!userProfile?.organization_id) return null;
 
+          // Note: api_keys and webhooks are JSONB columns, so '*' covers them. No need to select as relations.
           const { data } = await supabase
             .from('organizations')
             .select(`
                 *, 
                 locations(*), 
                 staff_members(*), 
-                offers(*), 
-                api_keys(*), 
-                webhooks(*)
+                offers(*)
             `)
             .eq('id', userProfile.organization_id)
             .single();
@@ -989,7 +988,7 @@ export const api = {
               type: 'customer', 
               title: c.name, 
               subtitle: c.email, 
-              link: `/customers` // ideally link to specific customer ID if page supported it
+              link: `/customers` 
           }));
 
           reviews.data?.forEach((r: any) => results.push({ 

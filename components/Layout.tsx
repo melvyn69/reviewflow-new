@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation, useNavigate } from './ui';
+import { Link, useLocation, useNavigate, ProBadge, Badge } from './ui';
 import { 
   LayoutDashboard, 
   Inbox, 
@@ -31,10 +31,9 @@ import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
-import { Badge } from './ui';
 
 // ... (SidebarItem and BottomNav components remain the same)
-const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void }) => {
+const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isPro?: boolean }) => {
   const location = useLocation();
   const isActive = exact ? location.pathname === to : location.pathname.startsWith(to);
 
@@ -42,14 +41,15 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick }: { to: st
     <Link
       to={to}
       onClick={onClick}
-      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors group ${
         isActive 
           ? 'bg-indigo-50 text-indigo-700' 
           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
       }`}
     >
       <Icon className="h-5 w-5 shrink-0" />
-      {label}
+      <span className="flex-1">{label}</span>
+      {isPro && <ProBadge className="opacity-0 group-hover:opacity-100 transition-opacity" />}
     </Link>
   );
 };
@@ -128,6 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   };
 
   const plan = org?.subscription_plan || 'free';
+  const isStarter = plan === 'free' || plan === 'starter';
 
   return (
     <>
@@ -171,15 +172,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.platform')}</div>
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
-          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} />
+          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isStarter} />
           <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
-          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} />
+          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isPro={isStarter} />
           <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
           <SidebarItem to="/collect" icon={QrCode} label={t('sidebar.collect')} onClick={onClose} />
           <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={onClose} />
           <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
-          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} />
-          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} />
+          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isPro={isStarter} />
+          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isPro={isStarter} />
 
           <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.org')}</div>
           <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />

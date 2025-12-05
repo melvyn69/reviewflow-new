@@ -177,6 +177,13 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, cla
   );
 };
 
+// --- PRO BADGE (Simple indicator) ---
+export const ProBadge = ({ className }: { className?: string }) => (
+    <span className={`inline-flex items-center gap-1 bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider shadow-sm ${className}`}>
+        PRO
+    </span>
+);
+
 // --- PRO LOCK (Upsell Component) ---
 export const ProLock: React.FC<{ 
     title: string, 
@@ -187,7 +194,7 @@ export const ProLock: React.FC<{
     return (
         <div className="relative group rounded-xl overflow-hidden border border-indigo-100 bg-slate-50/50">
             {/* Blurred Content */}
-            <div className="filter blur-[3px] select-none opacity-50 pointer-events-none p-4" aria-hidden="true">
+            <div className="filter blur-[4px] select-none opacity-40 pointer-events-none p-4" aria-hidden="true">
                 {children || (
                     <div className="space-y-4">
                         <div className="h-32 bg-slate-200 rounded-lg animate-pulse"></div>

@@ -81,10 +81,10 @@ export const SocialPage = () => {
                 const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
                 const isMobile = window.innerWidth < 768;
                 
-                const containerWidth = isMobile ? window.innerWidth : containerRef.current.offsetWidth;
-                const containerHeight = isMobile ? window.innerHeight * 0.5 : containerRef.current.offsetHeight;
+                const containerWidth = containerRef.current.offsetWidth;
+                const containerHeight = isMobile ? window.innerHeight * 0.4 : containerRef.current.offsetHeight;
                 
-                const padding = isMobile ? 32 : 40;
+                const padding = isMobile ? 16 : 40;
                 const availableWidth = containerWidth - padding;
                 const availableHeight = containerHeight - padding;
                 
@@ -93,7 +93,9 @@ export const SocialPage = () => {
                 
                 let newScale = Math.min(scaleX, scaleY);
                 if (newScale > 0.6) newScale = 0.6;
-                if (newScale < 0.2) newScale = 0.2;
+                // Minimum scale for mobile legibility
+                if (isMobile && newScale < 0.25) newScale = 0.25;
+                if (!isMobile && newScale < 0.2) newScale = 0.2;
                 
                 setScale(newScale);
             }
@@ -248,10 +250,10 @@ export const SocialPage = () => {
 
             {/* --- TAB: CREATION STUDIO --- */}
             {activeTab === 'create' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-auto lg:h-[calc(100vh-12rem)] lg:min-h-[600px]">
+                <div className="flex flex-col lg:flex-row gap-8 lg:h-[calc(100vh-12rem)] lg:min-h-[600px]">
                     
-                    {/* 1. SELECTION (Left) */}
-                    <div className="flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-96 lg:h-auto order-2 lg:order-1">
+                    {/* 1. SELECTION (Left - Moves to bottom on mobile) */}
+                    <div className="order-2 lg:order-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-64 lg:h-auto lg:w-1/4">
                         <div className="p-4 border-b border-slate-100 bg-slate-50 font-bold text-slate-700 flex items-center gap-2">
                             <Star className="h-4 w-4 text-amber-400 fill-current" />
                             Vos Pépites (5★)
@@ -275,10 +277,10 @@ export const SocialPage = () => {
                     </div>
 
                     {/* 2. PREVIEW & CANVAS (Center) */}
-                    <div className="lg:col-span-2 flex flex-col gap-6 order-1 lg:order-2">
+                    <div className="order-1 lg:order-2 flex-1 flex flex-col gap-6">
                         <div 
                             ref={containerRef} 
-                            className="bg-slate-200/50 rounded-xl border border-slate-200 flex-1 flex items-center justify-center p-4 overflow-hidden relative min-h-[400px] lg:min-h-0"
+                            className="bg-slate-200/50 rounded-xl border border-slate-200 flex items-center justify-center p-4 overflow-hidden relative min-h-[300px] lg:h-3/5"
                         >
                             {/* THE CANVAS TO CAPTURE */}
                             <div 
@@ -323,15 +325,15 @@ export const SocialPage = () => {
                         </div>
 
                         {/* CONTROLS */}
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-6">
+                        <Card className="lg:h-2/5 flex flex-col">
+                            <CardContent className="p-4 lg:p-6 flex-1 overflow-y-auto">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+                                    <div className="space-y-4">
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-2">
                                                 <Palette className="h-4 w-4" /> Style
                                             </label>
-                                            <div className="flex gap-2 overflow-x-auto pb-2">
+                                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                                 {TEMPLATES.map(t => (
                                                     <button
                                                         key={t.id}
@@ -348,12 +350,12 @@ export const SocialPage = () => {
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-2">
                                                 <Layout className="h-4 w-4" /> Format
                                             </label>
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                                 {FORMATS.map(f => (
                                                     <button
                                                         key={f.id}
                                                         onClick={() => setFormat(f.id)}
-                                                        className={`px-3 py-2 rounded text-xs font-medium border ${format === f.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
+                                                        className={`px-3 py-2 rounded text-xs font-medium border whitespace-nowrap ${format === f.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200'}`}
                                                     >
                                                         {f.name}
                                                     </button>
@@ -375,7 +377,7 @@ export const SocialPage = () => {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div className="space-y-4 flex flex-col justify-between">
                                         <div>
                                             <div className="flex justify-between items-center mb-2">
                                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
