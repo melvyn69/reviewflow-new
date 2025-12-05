@@ -39,6 +39,7 @@ export const ReviewFunnel = () => {
     const [contact, setContact] = useState('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
+    const [isSubmitted, setIsSubmitted] = useState(false);
     
     // Reward Logic
     const [activeOffer, setActiveOffer] = useState<Offer | null>(null);
@@ -111,10 +112,17 @@ export const ReviewFunnel = () => {
             }).catch(() => {});
         }
         
-        // Enregistrement stat avec attribution staff si présent
-        if (locationId) {
-            api.public.submitFeedback(locationId, rating, "Avis positif (Click)", contact, [], staffName || undefined)
-                .catch(err => console.error(err));
+        // Enregistrement stat avec attribution staff si présent (Seulement si pas déjà soumis via le formulaire capture)
+        if (locationId && !isSubmitted) {
+            api.public.submitFeedback(
+                locationId, 
+                rating, 
+                feedback || "Avis positif (Redirection directe)", 
+                contact, 
+                [], 
+                staffName || undefined
+            ).catch(err => console.error(err));
+            setIsSubmitted(true);
         }
 
         setTimeout(() => {
@@ -129,10 +137,45 @@ export const ReviewFunnel = () => {
     };
 
     const handleCaptureSubmit = async () => {
+        // Sauvegarde de l'avis POSITIF avec le message et l'email
+        if (locationId) {
+            setLoading(true);
+            try {
+                await api.public.submitFeedback(
+                    locationId, 
+                    rating, 
+                    feedback || "Avis positif (Sans texte)", 
+                    contact, 
+                    POSITIVE_TAGS, // Tag automatique
+                    staffName || undefined
+                );
+                setIsSubmitted(true);
+            } catch (e) {
+                console.error("Erreur sauvegarde avis positif", e);
+            } finally {
+                setLoading(false);
+            }
+        }
         setStep('redirecting');
     };
 
-    const handleSkipCapture = () => {
+    const handleSkipCapture = async () => {
+        // Sauvegarde même si on saute, pour les stats
+        if (locationId) {
+            try {
+                await api.public.submitFeedback(
+                    locationId, 
+                    rating, 
+                    "Avis positif (Formulaire passé)", 
+                    "", 
+                    [], 
+                    staffName || undefined
+                );
+                setIsSubmitted(true);
+            } catch (e) {
+                console.error("Erreur sauvegarde skip", e);
+            }
+        }
         setStep('redirecting');
     };
 
@@ -149,6 +192,7 @@ export const ReviewFunnel = () => {
         setLoading(true);
         try {
             await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags, staffName || undefined);
+            setIsSubmitted(true);
             setStep('success');
         } catch (error: any) {
             toast.error(`Erreur: ${error.message || "Problème technique"}`);
@@ -259,6 +303,7 @@ export const ReviewFunnel = () => {
                                 <Button 
                                     className="w-full h-12 rounded-xl shadow-lg shadow-indigo-200" 
                                     onClick={handleCaptureSubmit}
+                                    isLoading={loading}
                                     disabled={!contact.includes('@')}
                                 >
                                     Rejoindre & Publier mon avis
