@@ -999,3 +999,35 @@ export const api = {
 
           reviews.data?.forEach((r: any) => results.push({ 
               type: 'review', 
+              title: `Avis de ${r.author_name}`, 
+              subtitle: r.text.substring(0, 30) + '...', 
+              link: `/inbox?reviewId=${r.id}` 
+          }));
+
+          // Static Pages Search
+          const pages = [
+              { name: 'Tableau de bord', path: '/dashboard' },
+              { name: 'Boîte de réception', path: '/inbox' },
+              { name: 'Clients', path: '/customers' },
+              { name: 'Paramètres', path: '/settings' },
+              { name: 'Facturation', path: '/billing' }
+          ];
+          
+          pages.filter(p => p.name.toLowerCase().includes(lowerQuery)).forEach(p => {
+              results.push({ type: 'page', title: p.name, subtitle: 'Navigation', link: p.path });
+          });
+
+          return results;
+      }
+  },
+  // --- SYSTEM HEALTH ---
+  system: {
+      checkHealth: async () => {
+          if (isDemoMode()) return { db: false, latency: 0 };
+          const start = Date.now();
+          const { error } = await supabase!.from('organizations').select('id').limit(1);
+          const end = Date.now();
+          return { db: !error, latency: end - start };
+      }
+  }
+};
