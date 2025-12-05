@@ -267,19 +267,18 @@ export const BillingPage = () => {
         );
     }
 
-    // If org failed to load completely
+    // If org failed to load completely or doesn't exist
     if (!org) {
         return (
             <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
-                <div className="bg-red-50 p-4 rounded-full mb-4">
-                    <AlertCircle className="h-8 w-8 text-red-500" />
+                <div className="bg-slate-50 p-4 rounded-full mb-4">
+                    <CreditCard className="h-8 w-8 text-slate-500" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Impossible de charger les infos de facturation</h3>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Aucun abonnement actif</h3>
                 <p className="text-slate-500 mb-6 max-w-sm">
-                    Une erreur est survenue lors de la récupération de votre compte. 
-                    Veuillez vérifier votre connexion ou réessayer.
+                    Veuillez terminer la configuration de votre compte pour accéder aux offres.
                 </p>
-                <Button onClick={loadOrg} icon={RefreshCw}>Réessayer</Button>
+                <Button onClick={() => navigate('/onboarding')}>Terminer l'installation</Button>
             </div>
         );
     }

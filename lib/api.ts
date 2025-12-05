@@ -34,8 +34,20 @@ export const api = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
       
-      const { data } = await supabase.from('users').select('*').eq('id', user.id).single();
-      return data as User;
+      // Try to get profile from DB
+      const { data } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
+      
+      // Fallback if profile doesn't exist yet or is incomplete (Race condition or new signup)
+      // We default role to 'admin' so they can access onboarding/settings to complete setup
+      return {
+          id: user.id,
+          email: user.email!,
+          name: (data?.name) || (user.user_metadata?.name) || 'Utilisateur',
+          avatar: data?.avatar || '',
+          role: (data?.role) || 'admin', 
+          organizations: data?.organizations || [],
+          organization_id: data?.organization_id
+      };
     },
     login: async (email: string, password: string) => {
       if (email === 'demo@reviewflow.com') {
@@ -128,7 +140,7 @@ export const api = {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) return null;
 
-          const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+          const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle();
           if (!userProfile?.organization_id) return null;
 
           const { data } = await supabase
@@ -145,6 +157,37 @@ export const api = {
             .single();
             
           return data as any;
+      },
+      create: async (name: string, industry: string) => {
+          if (isDemoMode()) return;
+          if (!supabase) return;
+          
+          const user = await api.auth.getUser();
+          if (!user) throw new Error("Not logged in");
+
+          // 1. Create Org
+          const { data: org, error: orgError } = await supabase
+            .from('organizations')
+            .insert({ name, industry, subscription_plan: 'free' })
+            .select()
+            .single();
+            
+          if (orgError) throw orgError;
+
+          // 2. Link User to Org and Ensure Admin Role
+          const { error: userError } = await supabase
+            .from('users')
+            .upsert({ 
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                organization_id: org.id, 
+                role: 'admin' 
+            });
+
+          if (userError) throw userError;
+          
+          return org;
       },
       update: async (data: Partial<Organization>) => {
           if (isDemoMode()) return;
@@ -682,142 +725,139 @@ export const api = {
           await supabase.from('competitors').insert([
               { organization_id: org.id, name: 'Concurrent A', rating: 4.5, review_count: 120, address: 'Paris' },
               { organization_id: org.id, name: 'Concurrent B', rating: 3.8, review_count: 50, address: 'Lyon' }
-      ]);
-  }
+          ]);
+      }
 
-  // 4. Staff
-  const { count: staffCount } = await supabase.from('staff_members').select('*', { count: 'exact', head: true }).eq('organization_id', org.id);
-  if (staffCount === 0) {
-      await supabase.from('staff_members').insert([
-          { organization_id: org.id, name: 'Thomas', role: 'Manager' },
-          { organization_id: org.id, name: 'Julie', role: 'Serveuse' }
-      ]);
-  }
-  
-  // 5. Offers
-  const { count: offerCount } = await supabase.from('offers').select('*', { count: 'exact', head: true }).eq('organization_id', org.id);
-  if (offerCount === 0) {
-      await supabase.from('offers').insert([
-          { organization_id: org.id, title: 'Café Offert', description: 'Pour tout repas > 15€', code_prefix: 'CAFE', active: true }
-      ]);
-  }
-},
-locations: {
-  create: async (data: any) => {
-      if (isDemoMode()) return;
-      const org = await api.organization.get();
-      await supabase!.from('locations').insert({ ...data, organization_id: org?.id });
-  },
-  update: async (id: string, data: any) => {
-      if (isDemoMode()) return;
-      await supabase!.from('locations').update(data).eq('id', id);
-  },
-  delete: async (id: string) => {
-      if (isDemoMode()) return;
-      await supabase!.from('locations').delete().eq('id', id);
-  }
-},
-google: {
-  fetchAllGoogleLocations: async () => {
-      if (isDemoMode()) return [];
-      const { data: { session } } = await supabase!.auth.getSession();
-      if (!session?.provider_token) throw new Error("Google Token missing. Reconnect Google.");
+      // 4. Staff
+      const { count: staffCount } = await supabase.from('staff_members').select('*', { count: 'exact', head: true }).eq('organization_id', org.id);
+      if (staffCount === 0) {
+          await supabase.from('staff_members').insert([
+              { organization_id: org.id, name: 'Thomas', role: 'Manager' },
+              { organization_id: org.id, name: 'Julie', role: 'Serveuse' }
+          ]);
+      }
       
-      const locations = await invoke('fetch_google_locations', { accessToken: session.provider_token });
-      return locations;
+      // 5. Offers
+      const { count: offerCount } = await supabase.from('offers').select('*', { count: 'exact', head: true }).eq('organization_id', org.id);
+      if (offerCount === 0) {
+          await supabase.from('offers').insert([
+              { organization_id: org.id, title: 'Café Offert', description: 'Pour tout repas > 15€', code_prefix: 'CAFE', active: true }
+          ]);
+      }
   },
-  syncReviewsForLocation: async (id: string, ref: string) => {
-      if (isDemoMode()) return 10;
-      const org = await api.organization.get();
-      const { count } = await invoke('fetch_google_reviews', {
-          locationId: id,
-          googleLocationName: ref,
-          organizationId: org?.id
-      });
-      return count;
-  }
-},
-public: {
-  getLocationInfo: async (id: string) => {
-      if (isDemoMode()) return DEMO_ORG.locations?.[0];
-      const { data } = await supabase!.from('locations').select('*').eq('id', id).single();
-      return data;
+  locations: {
+      create: async (data: any) => {
+          if (isDemoMode()) return;
+          const org = await api.organization.get();
+          await supabase!.from('locations').insert({ ...data, organization_id: org?.id });
+      },
+      update: async (id: string, data: any) => {
+          if (isDemoMode()) return;
+          await supabase!.from('locations').update(data).eq('id', id);
+      },
+      delete: async (id: string) => {
+          if (isDemoMode()) return;
+          await supabase!.from('locations').delete().eq('id', id);
+      }
   },
-  getActiveOffer: async (id: string, rating: number) => {
-      if (isDemoMode()) return DEMO_ORG.offers?.[0];
-      const { data } = await supabase!
-        .from('offers')
-        .select('*')
-        .eq('active', true)
-        .lte('trigger_rating', rating)
-        .limit(1)
-        .maybeSingle(); // Use maybeSingle to avoid error if null
-      
-      // Check association via organization if needed, for simplicity assume offers are org-wide
-      return data;
-  },
-  submitFeedback: async (id: string, rating: number, text: string, contact: string, tags: string[], staff?: string) => {
-      if (isDemoMode()) return;
-      await invoke('submit_review', { locationId: id, rating, feedback: text, contact, tags, staffName: staff });
-  },
-  getWidgetReviews: async (id: string) => {
-      if (isDemoMode()) return DEMO_REVIEWS.filter(r => r.rating >= 4);
-      const { data } = await supabase!
-        .from('reviews')
-        .select('*')
-        .eq('location_id', id)
-        .gte('rating', 4) // Only show good reviews on widget
-        .order('received_at', { ascending: false })
-        .limit(20);
-      return data || [];
-  }
-},
-campaigns: {
-  send: async (type: string, recipient: string, subject: string, content: string) => {
-      if (isDemoMode()) return;
-      // If SMS, would use Twilio/other. For now assuming Email via Resend
-      if (type === 'email') {
-          await invoke('send_campaign_emails', {
-              emails: [recipient],
-              subject,
-              html: content
+  google: {
+      fetchAllGoogleLocations: async () => {
+          if (isDemoMode()) return [];
+          const { data: { session } } = await supabase!.auth.getSession();
+          if (!session?.provider_token) throw new Error("Google Token missing. Reconnect Google.");
+          
+          const locations = await invoke('fetch_google_locations', { accessToken: session.provider_token });
+          return locations;
+      },
+      syncReviewsForLocation: async (id: string, ref: string) => {
+          if (isDemoMode()) return 10;
+          const org = await api.organization.get();
+          const { count } = await invoke('fetch_google_reviews', {
+              locationId: id,
+              googleLocationName: ref,
+              organizationId: org?.id
           });
+          return count;
+      }
+  },
+  public: {
+      getLocationInfo: async (id: string) => {
+          if (isDemoMode()) return DEMO_ORG.locations?.[0];
+          const { data } = await supabase!.from('locations').select('*').eq('id', id).single();
+          return data;
+      },
+      getActiveOffer: async (id: string, rating: number) => {
+          if (isDemoMode()) return DEMO_ORG.offers?.[0];
+          const { data } = await supabase!
+            .from('offers')
+            .select('*')
+            .eq('active', true)
+            .lte('trigger_rating', rating)
+            .limit(1)
+            .maybeSingle(); 
+          
+          return data;
+      },
+      submitFeedback: async (id: string, rating: number, text: string, contact: string, tags: string[], staff?: string) => {
+          if (isDemoMode()) return;
+          await invoke('submit_review', { locationId: id, rating, feedback: text, contact, tags, staffName: staff });
+      },
+      getWidgetReviews: async (id: string) => {
+          if (isDemoMode()) return DEMO_REVIEWS.filter(r => r.rating >= 4);
+          const { data } = await supabase!
+            .from('reviews')
+            .select('*')
+            .eq('location_id', id)
+            .gte('rating', 4) 
+            .order('received_at', { ascending: false })
+            .limit(20);
+          return data || [];
+      }
+  },
+  campaigns: {
+      send: async (type: string, recipient: string, subject: string, content: string) => {
+          if (isDemoMode()) return;
+          if (type === 'email') {
+              await invoke('send_campaign_emails', {
+                  emails: [recipient],
+                  subject,
+                  html: content
+              });
+          }
+      }
+  },
+  customers: {
+      list: async (): Promise<Customer[]> => {
+          if (isDemoMode()) return [];
+          return [];
+      }
+  },
+  offers: {
+      generateCoupon: async (offerId: string, email: string): Promise<any> => {
+          if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Demo Offer' };
+          return await invoke('manage_coupons', { action: 'create', offerId, email });
+      },
+      validate: async (code: string) => {
+          if (isDemoMode()) return { valid: true, discount: 'Café Offert' };
+          return await invoke('manage_coupons', { action: 'validate', code });
+      },
+      redeem: async (code: string) => {
+          if (isDemoMode()) return { success: true };
+          return await invoke('manage_coupons', { action: 'redeem', code });
+      }
+  },
+  admin: {
+      getStats: async () => {
+          return { 
+              mrr: '12 500€', 
+              active_tenants: 142,
+              total_reviews_processed: 45200,
+              tenants: [
+                  { id: '1', name: 'Restaurant Le Gourmet', admin_email: 'contact@legourmet.fr', plan: 'pro', usage: 450, mrr: '89€' },
+                  { id: '2', name: 'Garage Auto Fix', admin_email: 'service@autofix.com', plan: 'starter', usage: 28, mrr: '49€' },
+                  { id: '3', name: 'Salon Beauty', admin_email: 'hello@beauty.com', plan: 'pro', usage: 120, mrr: '89€' }
+              ]
+          };
       }
   }
-},
-customers: {
-  list: async (): Promise<Customer[]> => {
-      if (isDemoMode()) return [];
-      // Mock or real table if implemented
-      return [];
-  }
-},
-offers: {
-  generateCoupon: async (offerId: string, email: string): Promise<any> => {
-      if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Demo Offer' };
-      return await invoke('manage_coupons', { action: 'create', offerId, email });
-  },
-  validate: async (code: string) => {
-      if (isDemoMode()) return { valid: true, discount: 'Café Offert' };
-      return await invoke('manage_coupons', { action: 'validate', code });
-  },
-  redeem: async (code: string) => {
-      if (isDemoMode()) return { success: true };
-      return await invoke('manage_coupons', { action: 'redeem', code });
-  }
-},
-admin: {
-  getStats: async () => {
-      return { 
-          mrr: '12 500€', 
-          active_tenants: 142,
-          total_reviews_processed: 45200,
-          tenants: [
-              { id: '1', name: 'Restaurant Le Gourmet', admin_email: 'contact@legourmet.fr', plan: 'pro', usage: 450, mrr: '89€' },
-              { id: '2', name: 'Garage Auto Fix', admin_email: 'service@autofix.com', plan: 'starter', usage: 28, mrr: '49€' },
-              { id: '3', name: 'Salon Beauty', admin_email: 'hello@beauty.com', plan: 'pro', usage: 120, mrr: '89€' }
-          ]
-      };
-  }
-}
 };

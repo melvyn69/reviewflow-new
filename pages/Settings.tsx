@@ -45,7 +45,8 @@ import {
     Zap, 
     Image as ImageIcon, 
     CreditCard, 
-    AlertTriangle 
+    AlertTriangle,
+    ArrowRight
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -59,8 +60,7 @@ const GoogleIcon = () => (
 );
 const TripAdvisorIcon = () => <div className="font-serif font-bold text-green-600 text-lg tracking-tighter">TA</div>;
 
-// --- COMPONENTS ---
-
+// ... [Keep IntegrationCard, LocationModal, GoogleMappingModal, InviteModal as is] ...
 const IntegrationCard = ({ icon: Icon, title, description, connected, onConnect, comingSoon = false, type = "source" }: any) => (
     <div className={`p-5 rounded-xl border transition-all duration-300 ${connected ? 'border-green-200 bg-green-50/30' : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm'}`}>
         <div className="flex justify-between items-start mb-3">
@@ -773,6 +773,24 @@ export const SettingsPage = () => {
   };
 
   if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
+
+  // Empty state for new users
+  if (!org && !loading) {
+      return (
+        <div className="max-w-5xl mx-auto space-y-8 p-12 text-center animate-in fade-in">
+            <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Building2 className="h-8 w-8 text-slate-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">Bienvenue {user?.name} !</h1>
+            <p className="text-slate-500 mb-8 max-w-md mx-auto">
+                Pour accéder aux paramètres, vous devez d'abord créer ou rejoindre une organisation.
+            </p>
+            <Button onClick={() => navigate('/onboarding')} size="lg" icon={ArrowRight}>
+                Créer mon organisation
+            </Button>
+        </div>
+      );
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">

@@ -34,7 +34,14 @@ export const OnboardingPage = () => {
         try {
             // Save current step data
             if (step === 1) {
-                await api.organization.update({ name: companyName, industry: industry as any });
+                // Check if user already has an org
+                const currentOrg = await api.organization.get();
+                if (currentOrg) {
+                    await api.organization.update({ name: companyName, industry: industry as any });
+                } else {
+                    // Create new org if none exists
+                    await api.organization.create(companyName, industry);
+                }
             } else if (step === 3) {
                 await api.organization.update({ 
                     brand: { 
@@ -50,8 +57,8 @@ export const OnboardingPage = () => {
                 return;
             }
             setStep(step + 1);
-        } catch (e) {
-            toast.error("Une erreur est survenue.");
+        } catch (e: any) {
+            toast.error("Une erreur est survenue: " + e.message);
         } finally {
             setLoading(false);
         }

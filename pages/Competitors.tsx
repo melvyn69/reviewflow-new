@@ -19,7 +19,8 @@ import {
     Lightbulb,
     Shield,
     Lock,
-    RefreshCw
+    RefreshCw,
+    ArrowRight
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
@@ -159,12 +160,12 @@ export const CompetitorsPage = () => {
     if (!org) {
         return (
             <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
-                <div className="bg-amber-50 p-4 rounded-full mb-4">
-                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                <div className="bg-indigo-50 p-4 rounded-full mb-4">
+                    <Target className="h-8 w-8 text-indigo-500" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Erreur de chargement</h3>
-                <p className="text-slate-500 mb-6 max-w-sm">Impossible de récupérer les informations de votre compte.</p>
-                <Button onClick={loadData} icon={RefreshCw}>Réessayer</Button>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Configuration requise</h3>
+                <p className="text-slate-500 mb-6 max-w-sm">Vous devez configurer votre établissement pour accéder à la veille concurrentielle.</p>
+                <Button onClick={() => navigate('/onboarding')} icon={ArrowRight}>Configurer maintenant</Button>
             </div>
         );
     }
