@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      target: 'esnext',
       // Ignorer l'API serverless lors du build frontend
       rollupOptions: {
         external: [/\/api\/.*/, /\/supabase\/.*/],
