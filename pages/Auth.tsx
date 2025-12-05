@@ -93,7 +93,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
       
       try {
           // Login with magic demo credentials handled in api.auth.login
-          await api.auth.login('demo@reviewflow.com', 'demo');
+          await api.auth.login('melvynbenichou@gmail.com', 'demo');
           onLoginSuccess();
       } catch (e: any) {
           setError("Erreur démo: " + e.message);

@@ -7,7 +7,7 @@ export const INITIAL_USERS = [
   {
     id: 'u1',
     name: 'Alex Martin',
-    email: 'alex@reviewflow.com',
+    email: 'melvynbenichou@gmail.com',
     password: 'password',
     avatar: 'https://ui-avatars.com/api/?name=Alex+Martin&background=4f46e5&color=fff',
     role: 'admin' as User['role'],

@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
@@ -47,7 +48,7 @@ export const api = {
       };
     },
     login: async (email: string, password: string) => {
-      if (email === 'demo@reviewflow.com') {
+      if (email === 'demo@reviewflow.com' || email === 'melvynbenichou@gmail.com') {
           setDemoMode(true);
           return;
       }
