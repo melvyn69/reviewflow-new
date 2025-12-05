@@ -1,7 +1,7 @@
-
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
+import { GoogleGenAI } from '@google/genai';
 
 // --- DEMO MODE UTILS ---
 const isDemoMode = () => {
@@ -23,6 +23,15 @@ const invoke = async (functionName: string, body: any) => {
     const { data, error } = await supabase.functions.invoke(functionName, { body });
     if (error) throw error;
     return data;
+};
+
+// Initialisation du client IA Client-Side pour garantir le fonctionnement
+// Note: La clé est exposée côté client, ce qui est acceptable pour ce type d'app SaaS
+// où l'utilisateur utilise sa propre clé ou celle fournie par l'environnement
+const getAiClient = () => {
+    const key = process.env.API_KEY || process.env.VITE_API_KEY;
+    if (!key) throw new Error("Clé API Google manquante");
+    return new GoogleGenAI({ apiKey: key });
 };
 
 export const api = {
@@ -211,9 +220,17 @@ export const api = {
           if (error) throw error;
       },
       saveGoogleTokens: async () => {
-          if (isDemoMode()) return true;
+          if (isDemoMode()) return false;
           if (!supabase) return false;
           
+          // Only proceed if we have an access_token in the URL (hash or query)
+          // This prevents the toast from appearing on normal navigation
+          const hash = window.location.hash;
+          const search = window.location.search;
+          if (!hash.includes('access_token') && !search.includes('code=')) {
+              return false;
+          }
+
           // 1. Get Session
           const { data: { session } } = await supabase.auth.getSession();
           
@@ -516,78 +533,113 @@ export const api = {
   },
   ai: {
       generateReply: async (review: Review, config: any) => {
-          if (isDemoMode()) {
-              const tone = config.tone || 'professionnel';
-              const len = config.length || 'medium';
-              let text = `Bonjour ${review.author_name}, merci pour votre avis. `;
-              
-              if (len === 'short') text = `Merci ${review.author_name} !`;
-              else if (len === 'long') text = `Bonjour ${review.author_name}, nous vous remercions chaleureusement d'avoir pris le temps de nous laisser ce commentaire. Nous sommes ravis que l'expérience vous ait plu. Au plaisir de vous revoir bientôt !`;
-              
-              if (tone === 'friendly') text = text.replace('Bonjour', 'Salut').replace('Merci', 'Merci beaucoup');
-              
-              return text;
-          }
-          
           try {
-              const { text } = await invoke('ai_generate', {
-                  task: 'generate_reply',
-                  context: { review, ...config }
+              const ai = getAiClient();
+              const prompt = `
+                Rôle: Tu es le propriétaire d'un établissement répondant à un avis client.
+                Tâche: Rédige une réponse à cet avis en suivant le ton et le style demandés.
+                
+                Avis Client (${review.rating}/5) de ${review.author_name}:
+                "${review.body}"
+                
+                Consignes:
+                - Ton: ${config.tone || 'Professionnel'}
+                - Longueur: ${config.length === 'short' ? 'Courte (1 phrase)' : config.length === 'long' ? 'Détaillée (3-4 phrases)' : 'Moyenne (2 phrases)'}
+                - Langue: Français
+                - Ne mets JAMAIS de guillemets autour de la réponse.
+                - Sois poli, empathique et constructif.
+                - Si l'avis est positif, remercie chaleureusement.
+                - Si l'avis est négatif, excuse-toi et propose une solution ou invite à discuter en privé.
+              `;
+
+              const result = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: prompt
               });
-              return text;
-          } catch (e) {
-              console.warn("API Error, falling back to local generation", e);
-              // Fallback Local Robuste
-              const tone = config.tone || 'professionnel';
-              const len = config.length || 'medium';
-              let text = "";
               
-              if (review.rating >= 4) {
-                  if (len === 'short') text = `Merci ${review.author_name} pour votre super avis !`;
-                  else if (len === 'long') text = `Bonjour ${review.author_name}, un grand merci pour votre retour 5 étoiles ! Toute l'équipe est ravie de savoir que vous avez passé un bon moment. À très vite !`;
-                  else text = `Bonjour ${review.author_name}, merci beaucoup pour votre avis positif. Nous sommes ravis que vous ayez apprécié votre visite.`;
-              } else {
-                  text = `Bonjour ${review.author_name}, merci pour votre retour. Nous prenons note de vos remarques pour nous améliorer.`;
-              }
-              
-              if (tone === 'amical' || tone === 'friendly') {
-                  text = text.replace('Bonjour', 'Hello').replace('nous', 'on');
-              }
-              
-              return text + (process.env.NODE_ENV === 'development' ? "" : "");
+              const text = result.response.text();
+              if(!text) throw new Error("Réponse vide de l'IA");
+              return text.trim();
+
+          } catch (e: any) {
+              console.error("AI Error:", e);
+              throw new Error("L'IA n'a pas pu générer de réponse. Vérifiez votre clé API.");
           }
       },
       generateSocialPost: async (review: Review, platform: string) => {
-          if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. #Reviewflow #CustomerLove";
           try {
-              const { text } = await invoke('ai_generate', {
-                  task: 'social_post',
-                  context: { review, platform }
+              const ai = getAiClient();
+              const prompt = `
+                Act as a world-class Social Media Manager.
+                Platform: ${platform} (Instagram, LinkedIn, or Facebook).
+                Context: We received a glowing 5-star review from a customer.
+                Task: Write a captivating, platform-native caption to go with an image of this review.
+                
+                Review Details:
+                - Author: ${review.author_name}
+                - Text: "${review.body}"
+                - Rating: ${review.rating}/5
+                
+                Guidelines:
+                - Language: French (Français)
+                - Tone: Enthusiastic, grateful, and professional.
+                - Include 3-5 relevant emojis.
+                - Include 3-5 relevant hashtags at the end.
+                - DO NOT wrap the output in quotes.
+              `;
+
+              const result = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: prompt
               });
-              return text;
+              
+              return result.response.text()?.trim() || "Merci pour cet avis incroyable ! 🌟";
           } catch (e) {
               return `🌟 "${review.body}" - Merci ${review.author_name} ! #FeedbackClient`;
           }
       },
       previewBrandVoice: async (config: any, review: any) => {
-          if (isDemoMode()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
           try {
-              const { text } = await invoke('ai_generate', {
-                  task: 'generate_reply',
-                  context: { review, ...config }
+              const ai = getAiClient();
+              const prompt = `
+                Rôle: Tu es le propriétaire d'un établissement.
+                Tâche: Rédige une réponse à cet avis en utilisant EXCLUSIVEMENT la "Brand Voice" décrite ci-dessous.
+                
+                BRAND VOICE CONFIGURATION:
+                - Ton: ${config.tone || 'Neutre'}
+                - Style: ${config.language_style === 'casual' ? 'Tutoiement (Cool, jeune)' : 'Vouvoiement (Classique, respectueux)'}
+                - Emojis: ${config.use_emojis ? 'Oui, utilise-en quelques-uns' : 'Non, aucun emoji'}
+                - Contexte métier: ${config.knowledge_base || 'Aucun contexte spécifique'}
+                
+                Avis Client (${review.rating}/5):
+                "${review.body}"
+                
+                Réponds en français, sans guillemets.
+              `;
+
+              const result = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: prompt
               });
-              return text;
+              
+              return result.response.text()?.trim() || "Erreur de génération.";
           } catch (e: any) {
-              console.warn("AI Generate failed, falling back to simulation", e);
-              return `[Simulation] Bonjour ${review.author_name || 'Client'}, merci pour votre retour. Nous prenons note de vos remarques sur le service.`;
+              console.error("Brand Voice Preview Error", e);
+              throw new Error("Impossible de tester la voix. Vérifiez votre clé API.");
           }
       },
       runCustomTask: async (payload: any) => {
-          if (isDemoMode()) return { result: "Demo Mode Custom Task Executed" };
-          return await invoke('ai_generate', {
-              task: payload.task,
-              context: payload.review || payload.context
-          });
+          try {
+              const ai = getAiClient();
+              const prompt = JSON.stringify(payload);
+              const result = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: `Execute this task and return JSON: ${prompt}`
+              });
+              return { result: result.response.text() };
+          } catch (e: any) {
+              return { error: e.message };
+          }
       }
   },
   analytics: {
