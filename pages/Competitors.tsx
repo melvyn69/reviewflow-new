@@ -222,7 +222,7 @@ export const CompetitorsPage = () => {
                     title="Débloquez le Radar Concurrentiel"
                     description="Suivez jusqu'à 10 concurrents, analysez leurs faiblesses et recevez des alertes quand ils changent de stratégie."
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-8 filter blur-[2px] opacity-30">
                         {[1, 2, 3].map(i => (
                             <Card key={i} className="opacity-50">
                                 <CardContent className="p-6">

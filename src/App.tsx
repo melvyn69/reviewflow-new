@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
@@ -24,8 +25,9 @@ import { OnboardingPage } from './pages/Onboarding';
 import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
-import { PublicProfilePage } from './pages/PublicProfile'; // Import
+import { PublicProfilePage } from './pages/PublicProfile';
 import { api } from './lib/api';
+import { supabase } from './lib/supabase';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
 import { I18nProvider } from './lib/i18n';
@@ -51,7 +53,6 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // If user is restricted, redirect to dashboard
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -62,9 +63,28 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
 function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     checkUser();
+
+    // Listener for OAuth redirects (Google Login)
+    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        await checkUser();
+        // If we are on login/register/landing, go to dashboard
+        if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
+            navigate('/dashboard');
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        navigate('/');
+      }
+    }) || { data: { subscription: { unsubscribe: () => {} } } };
+
+    return () => {
+      authListener.data.subscription.unsubscribe();
+    };
   }, []);
 
   const checkUser = async () => {

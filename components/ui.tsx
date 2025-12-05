@@ -1,8 +1,8 @@
 
 import React, { InputHTMLAttributes, SelectHTMLAttributes, useContext, useState, useEffect, useMemo } from 'react';
 import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle, Lock, Sparkles, ChevronRight } from 'lucide-react';
-// On utilise la vraie librairie pour éviter les conflits de contexte
-export { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
+export { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams };
 
 // --- TOAST SYSTEM ---
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -191,6 +191,7 @@ export const ProLock: React.FC<{
     onUpgrade?: () => void,
     children?: React.ReactNode
 }> = ({ title, description, onUpgrade, children }) => {
+    const navigate = useNavigate();
     return (
         <div className="relative group rounded-xl overflow-hidden border border-indigo-100 bg-slate-50/50">
             {/* Blurred Content */}
@@ -218,7 +219,7 @@ export const ProLock: React.FC<{
                 <Button 
                     size="lg" 
                     className="shadow-xl shadow-indigo-200 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 border-none animate-pulse hover:animate-none" 
-                    onClick={onUpgrade || (() => window.location.hash = '#/billing')}
+                    onClick={onUpgrade || (() => navigate('/billing'))}
                 >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Débloquer avec le plan Growth

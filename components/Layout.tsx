@@ -33,7 +33,7 @@ import { AppNotification, User, Organization } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
 
-// ... (SidebarItem and BottomNav components remain the same)
+// Sidebar Item Component
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isPro?: boolean }) => {
   const location = useLocation();
   const isActive = exact ? location.pathname === to : location.pathname.startsWith(to);
@@ -50,7 +50,7 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = fa
     >
       <Icon className="h-5 w-5 shrink-0" />
       <span className="flex-1">{label}</span>
-      {isPro && <ProBadge className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+      {isPro && <ProBadge className="opacity-70 group-hover:opacity-100 transition-opacity" />}
     </Link>
   );
 };
@@ -129,7 +129,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   };
 
   const plan = org?.subscription_plan || 'free';
-  const isStarter = plan === 'free' || plan === 'starter';
+  // Features that are locked on Starter/Free plans
+  const isLocked = plan === 'free' || plan === 'starter';
 
   return (
     <>
@@ -161,7 +162,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
         {org && (
             <div className="px-6 pt-4">
                 <div className={`flex items-center justify-between p-2 rounded-lg border text-xs font-bold uppercase tracking-wide ${plan === 'pro' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : plan === 'starter' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                    <span>Plan {plan}</span>
+                    <span>Plan {plan === 'starter' ? 'Essential' : plan === 'pro' ? 'Growth' : 'Gratuit'}</span>
                     {plan !== 'pro' && (
                         <Link to="/billing" onClick={onClose} className="text-[10px] underline hover:text-indigo-600">Upgrade</Link>
                     )}
@@ -173,15 +174,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.platform')}</div>
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
-          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isStarter} />
+          
+          {/* Pro Features */}
+          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isLocked} />
           <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
-          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isPro={isStarter} />
+          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isPro={isLocked} />
+          
           <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
           <SidebarItem to="/collect" icon={QrCode} label={t('sidebar.collect')} onClick={onClose} />
           <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={onClose} />
           <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
-          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isPro={isStarter} />
-          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isPro={isStarter} />
+          
+          {/* Pro Features */}
+          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isPro={isLocked} />
+          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isPro={isLocked} />
 
           <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.org')}</div>
           <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />

@@ -151,7 +151,7 @@ export const api = {
           const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle();
           if (!userProfile?.organization_id) return null;
 
-          // Note: api_keys and webhooks are JSONB columns, so '*' covers them. No need to select as relations.
+          // Note: jsonb columns must be handled carefully. Using * is safe.
           const { data } = await supabase
             .from('organizations')
             .select(`
