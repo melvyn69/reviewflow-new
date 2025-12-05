@@ -548,7 +548,8 @@ export const SettingsPage = () => {
       }
   };
 
-  const handleUpdateProfile = async () => {
+  const handleUpdateProfile = async (e?: React.MouseEvent) => {
+      e?.currentTarget.blur();
       try {
           await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined, role: userRole as User['role'] });
           toast.success("Profil mis à jour !");
@@ -710,7 +711,10 @@ export const SettingsPage = () => {
           setTestResponse(text);
       } catch (e) {
           console.error(e);
-          toast.error("Erreur test IA (Vérifiez votre configuration)");
+          // Fallback simulation in UI if API fails
+          const simResponse = `[Simulation] Bonjour, merci pour votre retour. Nous sommes navrés pour l'attente. Vos remarques nous aident à nous améliorer. (Mode dégradé activé)`;
+          setTestResponse(simResponse);
+          toast.warning("IA indisponible, affichage simulation.");
       } finally {
           setTestingVoice(false);
       }
@@ -887,7 +891,7 @@ export const SettingsPage = () => {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe (Laisser vide si inchangé)</label>
                             <Input type="password" value={userPassword} onChange={e => setUserPassword(e.target.value)} placeholder="••••••••" />
                         </div>
-                        <Button onClick={handleUpdateProfile}>Enregistrer le profil</Button>
+                        <Button onClick={(e) => handleUpdateProfile(e)}>Enregistrer le profil</Button>
                     </div>
 
                     {/* Danger Zone */}
@@ -1157,6 +1161,7 @@ export const SettingsPage = () => {
                 </div>
             )}
 
+            {/* Other tabs remain unchanged */}
             {activeTab === 'team' && (
                 <div className="space-y-6">
                     <div className="flex justify-between items-center">

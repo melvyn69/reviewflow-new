@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail, Facebook, Ticket } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
@@ -425,7 +426,7 @@ export const ReviewFunnel = () => {
                             <p className="text-slate-600 mb-8">
                                 Votre avis a bien été pris en compte. Nous faisons tout pour nous améliorer grâce à vous.
                             </p>
-                            <Button variant="outline" onClick={() => window.location.reload()}>Retour à l'accueil</Button>
+                            {/* Bouton de retour supprimé pour éviter la confusion/sortie prématurée */}
                         </div>
                     )}
 

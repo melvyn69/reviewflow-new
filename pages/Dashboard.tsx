@@ -165,31 +165,29 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
                     </div>
                 </div>
 
-                {!isComplete && (
-                    <div className="divide-y divide-slate-50 border-t border-slate-100">
-                        {steps.map((step, i) => (
-                            <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-slate-50/50' : 'bg-white hover:bg-slate-50'}`}>
-                                <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
-                                    {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
-                                    <p className="text-xs text-slate-500">{step.desc}</p>
-                                </div>
-                                <Button 
-                                    size="xs" 
-                                    variant={step.done ? "ghost" : "outline"} 
-                                    onClick={step.action} 
-                                    className={`whitespace-nowrap ${!step.done ? 'bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-sm' : ''}`}
-                                >
-                                    {step.done ? 'Modifier' : step.btn} 
-                                    {!step.done && <ArrowRight className="ml-1 h-3 w-3" />}
-                                    {step.done && <Settings className="ml-1 h-3 w-3" />}
-                                </Button>
+                <div className="divide-y divide-slate-50 border-t border-slate-100">
+                    {steps.map((step, i) => (
+                        <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-slate-50/50' : 'bg-white hover:bg-slate-50'}`}>
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
                             </div>
-                        ))}
-                    </div>
-                )}
+                            <div className="flex-1">
+                                <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
+                                <p className="text-xs text-slate-500">{step.desc}</p>
+                            </div>
+                            <Button 
+                                size="xs" 
+                                variant={step.done ? "ghost" : "outline"} 
+                                onClick={step.action} 
+                                className={`whitespace-nowrap ${!step.done ? 'bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-sm' : ''}`}
+                            >
+                                {step.done ? 'Modifier' : step.btn} 
+                                {!step.done && <ArrowRight className="ml-1 h-3 w-3" />}
+                                {step.done && <Settings className="ml-1 h-3 w-3" />}
+                            </Button>
+                        </div>
+                    ))}
+                </div>
             </CardContent>
         </Card>
     );

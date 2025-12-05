@@ -585,7 +585,7 @@ export const api = {
           
           const { data: recentReviews } = await supabase!
             .from('reviews')
-            .select('rating, received_at, status, analysis')
+            .select('rating, text, received_at, status, analysis')
             .in('location_id', org.locations.map(l => l.id))
             .gte('received_at', startDate.toISOString())
             .order('received_at', { ascending: true });
@@ -612,6 +612,24 @@ export const api = {
           const neu = reviews.length - pos - neg;
           const totalRecent = reviews.length || 1;
 
+          // Génération dynamique des thèmes/résumés si non fournis par la DB
+          // Simple déduction basée sur des mots-clés communs si l'analyse IA n'a pas encore tourné
+          let strengths = "Analyse en cours...";
+          let weaknesses = "Analyse en cours...";
+          
+          if (pos > 0) {
+              strengths = "Les clients apprécient principalement la qualité du service et l'accueil.";
+              const mentionsFood = reviews.filter(r => r.text && r.text.toLowerCase().includes('cuisine')).length;
+              if (mentionsFood > pos / 3) strengths += " La cuisine est souvent complimentée.";
+          }
+          if (neg > 0) {
+              weaknesses = "Quelques retours négatifs signalés.";
+              const mentionsPrice = reviews.filter(r => r.text && r.text.toLowerCase().includes('prix')).length;
+              const mentionsWait = reviews.filter(r => r.text && r.text.toLowerCase().includes('attente')).length;
+              if (mentionsPrice > 0) weaknesses = "Le prix est parfois jugé élevé.";
+              if (mentionsWait > 0) weaknesses = "Le temps d'attente revient dans les critiques.";
+          }
+
           return {
               period,
               total_reviews: total,
@@ -627,7 +645,9 @@ export const api = {
               volume_by_date: volumeByDate,
               top_themes_positive: [{ name: 'Service', weight: 0.8 }, { name: 'Qualité', weight: 0.7 }],
               top_themes_negative: [{ name: 'Prix', weight: 0.4 }],
-              top_keywords: [{ keyword: 'Top', count: 5 }]
+              top_keywords: [{ keyword: 'Top', count: 5 }],
+              strengths_summary: kpi?.strengths_summary || strengths,
+              problems_summary: kpi?.problems_summary || weaknesses
           };
       }
   },
@@ -758,7 +778,38 @@ export const api = {
                   { id: '2', type: 'success', title: 'Rapport Hebdo', message: 'Votre rapport de performance est prêt.', created_at: new Date().toISOString(), read: true }
               ];
           }
-          // Real Implementation could fetch from a notifications table or edge function
+          
+          // Récupération dynamique des notifications (Avis négatifs récents non traités)
+          if (!supabase) return [];
+          
+          try {
+              const org = await api.organization.get();
+              if (!org || org.locations.length === 0) return [];
+              
+              const { data: alerts } = await supabase
+                .from('reviews')
+                .select('id, rating, author_name, received_at')
+                .in('location_id', org.locations.map(l => l.id))
+                .lte('rating', 3)
+                .eq('status', 'pending')
+                .order('received_at', { ascending: false })
+                .limit(5);
+                
+              if (alerts && alerts.length > 0) {
+                  return alerts.map((r: any) => ({
+                      id: `alert-${r.id}`,
+                      type: 'warning',
+                      title: `Avis critique (${r.rating}/5)`,
+                      message: `Avis de ${r.author_name} en attente de réponse.`,
+                      created_at: r.received_at,
+                      read: false,
+                      link: `/inbox?reviewId=${r.id}`
+                  }));
+              }
+          } catch (e) {
+              console.error("Notifications error", e);
+          }
+          
           return [];
       },
       markAllRead: async () => {},
@@ -900,9 +951,12 @@ export const api = {
           // Check Google
           const googleConnected = !!(org.integrations && (org.integrations as any).google === true);
           
-          // Check Brand - STRICTER CHECK
-          // Il ne suffit pas d'avoir un ton par défaut, il faut avoir configuré une description ou une base de connaissances
-          const brandVoiceConfigured = !!(org.brand && (org.brand as any).tone && ((org.brand as any).description || (org.brand as any).knowledge_base));
+          // Check Brand - STRICTER CHECK: Description or KB must be set, not just defaults
+          const brand = org.brand as any;
+          const brandVoiceConfigured = !!(brand && brand.tone && (
+              (brand.description && brand.description.length > 5) || 
+              (brand.knowledge_base && brand.knowledge_base.length > 5)
+          ));
           
           // Check Reviews (Sent)
           const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', userProfile.organization_id);
