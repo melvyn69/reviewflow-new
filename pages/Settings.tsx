@@ -733,7 +733,12 @@ export const SettingsPage = () => {
           const count = await api.locations.importFromGoogle();
           if (count > 0) {
               toast.success(`${count} établissements importés avec succès !`);
-              loadData();
+              // Force reload to get the new location IDs
+              await loadData();
+              // After reloading data, org state is updated, so we can trigger sync if needed
+              // However, since loadData is async and state updates might lag, 
+              // it's safer to tell the user to wait or rely on background cron.
+              // For UX, we just say "Import successful".
           } else {
               toast.info("Aucun nouvel établissement trouvé ou erreur de token. (Reconnectez Google si nécessaire)");
           }
@@ -944,7 +949,15 @@ export const SettingsPage = () => {
                     <div className="flex justify-between items-center">
                         <h3 className="font-bold text-lg">Vos Établissements</h3>
                         <div className="flex gap-2">
-                            <Button variant="outline" onClick={handleImportGoogle} isLoading={importing} icon={UploadCloud}>Importer depuis Google</Button>
+                            <Button 
+                                variant="primary" 
+                                onClick={handleImportGoogle} 
+                                isLoading={importing} 
+                                icon={UploadCloud}
+                                className="shadow-lg shadow-indigo-200"
+                            >
+                                Importer depuis Google
+                            </Button>
                             <Button variant="outline" onClick={() => setShowMappingModal(true)}>Mapper Google</Button>
                             <Button icon={Plus} onClick={() => { setEditingLocation(null); setShowLocationModal(true); }}>Ajouter</Button>
                         </div>
@@ -952,7 +965,7 @@ export const SettingsPage = () => {
 
                     {org?.locations?.length === 0 ? (
                         <div className="p-8 text-center text-slate-500 border border-dashed border-slate-300 rounded-xl">
-                            Aucun établissement. Ajoutez-en un pour commencer.
+                            Aucun établissement. Cliquez sur "Importer depuis Google" pour démarrer.
                         </div>
                     ) : (
                         <div className="grid gap-4">
