@@ -105,13 +105,39 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [tab, setTab] = useState<'info' | 'profile'>('info');
+    const toast = useToast();
+
+    // Reset form when location prop changes (useful if reused)
+    useEffect(() => {
+        setFormData({
+            name: location?.name || '',
+            address: location?.address || '',
+            city: location?.city || '',
+            country: location?.country || 'France',
+            phone: location?.phone || '',
+            website: location?.website || '',
+            google_review_url: location?.google_review_url || '',
+            facebook_review_url: location?.facebook_review_url || '',
+            tripadvisor_review_url: location?.tripadvisor_review_url || '',
+            description: location?.description || '',
+            public_profile_enabled: location?.public_profile_enabled || false,
+            booking_url: location?.booking_url || '',
+            cover_image: location?.cover_image || ''
+        });
+    }, [location]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
-        await onSave(formData);
-        setSaving(false);
-        onClose();
+        try {
+            await onSave(formData);
+            onClose(); // Only close on success
+        } catch (error: any) {
+            console.error("Save Error", error);
+            // Error is handled by toast in parent, but we keep modal open
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,12 +166,12 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                         {tab === 'info' && (
                             <>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement <span className="text-red-500">*</span></label>
                                     <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Restaurant Le Gourmet" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Ville</label>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Ville <span className="text-red-500">*</span></label>
                                         <Input required value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} placeholder="Paris" />
                                     </div>
                                     <div>
@@ -258,7 +284,7 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                     </form>
                 </div>
                 <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-white">
-                    <Button variant="ghost" onClick={onClose}>Annuler</Button>
+                    <Button variant="ghost" onClick={onClose} type="button">Annuler</Button>
                     <Button form="loc-form" type="submit" isLoading={saving}>Enregistrer</Button>
                 </div>
             </Card>
@@ -645,18 +671,15 @@ export const SettingsPage = () => {
   };
 
   const handleSaveLocation = async (data: any) => {
-      try {
-          if (editingLocation) {
-              await api.locations.update(editingLocation.id, data);
-              toast.success("Établissement modifié");
-          } else {
-              await api.locations.create(data);
-              toast.success("Établissement ajouté");
-          }
-          loadData();
-      } catch (e: any) {
-          toast.error("Erreur: " + e.message);
+      // Allow error to propagate so the modal stays open on error
+      if (editingLocation) {
+          await api.locations.update(editingLocation.id, data);
+          toast.success("Établissement modifié");
+      } else {
+          await api.locations.create(data);
+          toast.success("Établissement ajouté");
       }
+      await loadData();
   };
 
   const handleImportCsv = async (file: File, locationId: string) => {
@@ -671,9 +694,13 @@ export const SettingsPage = () => {
 
   const handleDeleteLocation = async (id: string) => {
       if(confirm("Supprimer cet établissement ? Les avis associés seront conservés mais détachés.")) {
-          await api.locations.delete(id);
-          toast.success("Supprimé");
-          loadData();
+          try {
+              await api.locations.delete(id);
+              toast.success("Supprimé");
+              loadData();
+          } catch (e: any) {
+              toast.error("Erreur de suppression: " + e.message);
+          }
       }
   };
 

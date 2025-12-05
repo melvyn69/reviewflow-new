@@ -98,15 +98,32 @@ export const ReviewFunnel = () => {
         }
 
         if (score >= 4) {
-            // FLUX POSITIF
-            if (customerId) {
-                // Client déjà connu, on zappe la capture
-                setStep('redirecting');
+            // FLUX POSITIF : Redirection immédiate si URL Google présente
+            if (locationInfo?.googleUrl) {
+                // On enregistre quand même l'interaction positive pour les stats (fire and forget)
+                if (locationId) {
+                    api.public.submitFeedback(
+                        locationId,
+                        score,
+                        "Click Redirection Google (Direct)",
+                        { firstName: '', lastName: '', email: '', phone: '' }, // Pas de données perso
+                        ['Positif'],
+                        staffName || undefined
+                    ).catch(e => console.error("Tracking error", e));
+                }
+
+                // Redirection directe
+                window.location.href = locationInfo.googleUrl;
             } else {
-                setStep('capture');
+                // Fallback si pas d'URL Google configurée : on passe par le formulaire standard ou le sélecteur
+                if (customerId) {
+                    setStep('redirecting');
+                } else {
+                    setStep('capture');
+                }
             }
         } else {
-            // FLUX NÉGATIF
+            // FLUX NÉGATIF (1, 2, 3 étoiles)
             setTimeout(() => {
                 setStep('details');
             }, 300);
@@ -326,7 +343,7 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
-                    {/* STEP 1.5: CAPTURE (Smart Gate) */}
+                    {/* STEP 1.5: CAPTURE (VIP) - Only reached if NO Google URL or < 4 stars or specific config */}
                     {step === 'capture' && (
                         <div className="animate-in slide-in-from-right-8 duration-300">
                             <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-6">

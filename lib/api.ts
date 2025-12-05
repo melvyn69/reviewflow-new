@@ -380,7 +380,50 @@ export const api = {
               }
               return;
           }
-          await invoke('post_google_reply', { reviewId, replyText: text });
+
+          // 1. Récupérer l'avis complet pour vérifier la source et l'email
+          const { data: review } = await supabase!
+              .from('reviews')
+              .select('source, customer_email, author_name, location:locations(name)')
+              .eq('id', reviewId)
+              .single();
+
+          // 2. Gestion des avis "Direct" (Formulaire)
+          if (review && review.source === 'direct') {
+              if (!review.customer_email) {
+                  throw new Error("Impossible de répondre : aucun email associé à cet avis.");
+              }
+
+              const locationName = (review.location as any)?.name || "Notre Établissement";
+
+              // Envoi de l'email via Resend
+              await invoke('send_campaign_emails', {
+                  emails: [review.customer_email],
+                  subject: `Réponse à votre avis chez ${locationName}`,
+                  html: `
+                    <div style="font-family: sans-serif; color: #333;">
+                        <h2>Bonjour ${review.author_name},</h2>
+                        <p>Merci d'avoir pris le temps de nous laisser un avis concernant votre visite chez <strong>${locationName}</strong>.</p>
+                        <p>Voici notre réponse :</p>
+                        <blockquote style="background: #f3f4f6; padding: 15px; border-left: 4px solid #4f46e5; margin: 20px 0; font-style: italic;">
+                            "${text}"
+                        </blockquote>
+                        <p>Au plaisir de vous revoir,<br/>L'équipe ${locationName}</p>
+                    </div>
+                  `
+              });
+
+              // Mise à jour en base
+              await supabase!.from('reviews').update({
+                  status: 'sent',
+                  posted_reply: text,
+                  replied_at: new Date().toISOString()
+              }).eq('id', reviewId);
+
+          } else {
+              // 3. Gestion des avis Google (Via Edge Function)
+              await invoke('post_google_reply', { reviewId, replyText: text });
+          }
       },
       saveDraft: async (reviewId: string, text: string) => {
           if (isDemoMode()) return;
@@ -967,9 +1010,18 @@ export const api = {
               DEMO_ORG.locations.push({ ...data, id: 'loc-new-' + Date.now() } as any);
               return;
           }
-          const org = await api.organization.get();
-          if (!org) return;
-          await supabase!.from('locations').insert({ ...data, organization_id: org.id });
+          if (!supabase) return;
+          
+          // Récupération plus efficace de l'ID organisation
+          const user = await api.auth.getUser();
+          if (!user || !user.organization_id) throw new Error("Organisation introuvable.");
+
+          const { error } = await supabase.from('locations').insert({ ...data, organization_id: user.organization_id });
+          
+          if (error) {
+              console.error("Location Create Error", error);
+              throw new Error(error.message);
+          }
       },
       update: async (id: string, data: Partial<Location>) => {
           if (isDemoMode()) {
@@ -977,14 +1029,16 @@ export const api = {
               if (idx >= 0) DEMO_ORG.locations[idx] = { ...DEMO_ORG.locations[idx], ...data };
               return;
           }
-          await supabase!.from('locations').update(data).eq('id', id);
+          const { error } = await supabase!.from('locations').update(data).eq('id', id);
+          if (error) throw new Error(error.message);
       },
       delete: async (id: string) => {
           if (isDemoMode()) {
               DEMO_ORG.locations = DEMO_ORG.locations.filter(l => l.id !== id);
               return;
           }
-          await supabase!.from('locations').delete().eq('id', id);
+          const { error } = await supabase!.from('locations').delete().eq('id', id);
+          if (error) throw new Error(error.message);
       },
       importFromGoogle: async () => {
           if (isDemoMode()) return 2;
