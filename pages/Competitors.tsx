@@ -41,7 +41,7 @@ export const CompetitorsPage = () => {
 
     useEffect(() => {
         const init = async () => {
-            const organization = await api.organization.get();
+            const organization = await api.organization.get().catch(() => null);
             setOrg(organization);
             if (organization?.subscription_plan === 'pro') {
                 loadTracked();
@@ -52,9 +52,14 @@ export const CompetitorsPage = () => {
 
     const loadTracked = async () => {
         setLoading(true);
-        const data = await api.competitors.list();
-        setTrackedCompetitors(data);
-        setLoading(false);
+        try {
+            const data = await api.competitors.list();
+            setTrackedCompetitors(data || []);
+        } catch (e) {
+            console.warn(e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleScan = async () => {
@@ -75,13 +80,12 @@ export const CompetitorsPage = () => {
             setLocationStatus('found');
 
             // 2. Call the Real Edge Function via API
-            // This now hits 'fetch_places' on Supabase
             const results = await api.competitors.autoDiscover(scanRadius, scanSector, latitude, longitude);
             
-            setScannedResults(results);
+            setScannedResults(results || []);
             setActiveTab('scan');
             
-            if (results.length > 0) {
+            if (results && results.length > 0) {
                 toast.success(`${results.length} concurrents détectés dans la zone.`);
             } else {
                 toast.info("Aucun concurrent trouvé avec ces critères.");

@@ -21,7 +21,8 @@ import {
   Plus,
   QrCode,
   Sparkles,
-  Search
+  Search,
+  X
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 import { useTranslation } from '../lib/i18n';
@@ -165,6 +166,7 @@ export const DashboardPage = () => {
   const [realLocationId, setRealLocationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [skipOnboarding, setSkipOnboarding] = useState(false);
   
   const toast = useToast();
   const navigate = useNavigate();
@@ -173,24 +175,30 @@ export const DashboardPage = () => {
   useEffect(() => {
     loadData();
     api.auth.getUser().then(setUser);
+    const skipped = localStorage.getItem('skip_onboarding');
+    if (skipped) setSkipOnboarding(true);
   }, [period]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [analyticsData, reviewsData, status, org] = await Promise.all([
-        api.analytics.getOverview(period),
-        api.reviews.list({}),
-        api.onboarding.checkStatus(),
-        api.organization.get()
-      ]);
+      // Execute independently to avoid one failure blocking everything
+      const org = await api.organization.get().catch(() => null);
       
+      let analyticsData, reviewsData, status;
+      
+      if (org) {
+          analyticsData = await api.analytics.getOverview(period).catch(() => null);
+          reviewsData = await api.reviews.list({}).catch(() => []);
+          status = await api.onboarding.checkStatus().catch(() => null);
+          
+          if (org.locations?.length > 0) {
+              setRealLocationId(org.locations[0].id);
+          }
+      }
+
       setStats(analyticsData);
       setSetupStatus(status);
-      
-      if (org && org.locations?.length > 0) {
-          setRealLocationId(org.locations[0].id);
-      }
       
       // Filter for "Urgent": Low rating + Pending/Draft
       const urgent = (reviewsData || [])
@@ -217,6 +225,11 @@ export const DashboardPage = () => {
       }
   };
 
+  const handleSkip = () => {
+      setSkipOnboarding(true);
+      localStorage.setItem('skip_onboarding', 'true');
+  };
+
   const openFunnel = () => {
       if (realLocationId) {
           window.open(`#/feedback/${realLocationId}`, '_blank');
@@ -236,7 +249,7 @@ export const DashboardPage = () => {
   // Logic for empty state or new account
   const isGoogleConnected = setupStatus?.googleConnected;
   
-  if (!loading && !isGoogleConnected) {
+  if (!loading && !isGoogleConnected && !skipOnboarding) {
       return (
           <Card className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none shadow-2xl overflow-hidden relative min-h-[70vh] flex items-center justify-center">
               <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -257,6 +270,11 @@ export const DashboardPage = () => {
                       <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 py-7 text-lg backdrop-blur-sm" onClick={handleSeedData} isLoading={seeding}>
                           Mode Démo
                       </Button>
+                  </div>
+                  <div className="mt-8">
+                      <button onClick={handleSkip} className="text-sm text-indigo-200 hover:text-white underline">
+                          Accéder au dashboard sans connexion (Mode manuel)
+                      </button>
                   </div>
               </CardContent>
           </Card>

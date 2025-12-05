@@ -102,10 +102,19 @@ const InvoiceTable = () => {
     const toast = useToast();
 
     useEffect(() => {
-        api.billing.getInvoices().then((data: any) => {
-            setInvoices(data);
-            setLoading(false);
-        });
+        // Safe call wrapper
+        const fetchInvoices = async () => {
+            try {
+                const data = await api.billing.getInvoices();
+                setInvoices(data || []);
+            } catch (e) {
+                console.warn("Failed to fetch invoices, possibly not configured.", e);
+                setInvoices([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchInvoices();
     }, []);
 
     if (loading) return <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>;
@@ -213,7 +222,6 @@ export const BillingPage = () => {
 
     const loadOrg = async () => {
         setError(false);
-        setOrg(null);
         try {
             const data = await api.organization.get();
             setOrg(data);
@@ -242,7 +250,10 @@ export const BillingPage = () => {
         window.location.href = "mailto:sales@reviewflow.com?subject=Demande%20Enterprise";
     };
 
-    if (error) return <div>Erreur chargement.</div>;
+    // If API error, show simple error but allow navigation
+    if (error) return <div className="p-8 text-center text-slate-500">Erreur de chargement. Veuillez rafraîchir.</div>;
+    
+    // If org is loading
     if (!org && !isVerifyingPayment) return <div className="p-8 text-center"><Skeleton className="h-96 w-full" /></div>;
 
     const usage = org?.ai_usage_count || 0;
