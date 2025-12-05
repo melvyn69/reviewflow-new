@@ -867,7 +867,8 @@ export const api = {
   },
   onboarding: {
       checkStatus: async (): Promise<SetupStatus> => {
-          if (isDemoMode()) return { googleConnected: true, brandVoiceConfigured: true, firstReviewReplied: true, completionPercentage: 100 };
+          // Si mode demo, on renvoie "partiellement" complété pour que l'utilisateur puisse tester les boutons
+          if (isDemoMode()) return { googleConnected: true, brandVoiceConfigured: false, firstReviewReplied: true, completionPercentage: 66 };
           
           if (!supabase) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
 
@@ -889,8 +890,9 @@ export const api = {
           // Check Google
           const googleConnected = !!(org.integrations && (org.integrations as any).google === true);
           
-          // Check Brand
-          const brandVoiceConfigured = !!(org.brand && (org.brand as any).tone);
+          // Check Brand - STRICTER CHECK
+          // Il ne suffit pas d'avoir un ton par défaut, il faut avoir configuré une description ou une base de connaissances
+          const brandVoiceConfigured = !!(org.brand && (org.brand as any).tone && ((org.brand as any).description || (org.brand as any).knowledge_base));
           
           // Check Reviews (Sent)
           // We check if ANY review has 'sent' status in reviews table linked to this org's locations

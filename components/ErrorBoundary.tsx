@@ -12,6 +12,14 @@ interface State {
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
+  // Explicitly define props to avoid TS error
+  public props: Props;
+
+  constructor(props: Props) {
+    super(props);
+    this.props = props;
+  }
+
   public state: State = {
     hasError: false
   };
