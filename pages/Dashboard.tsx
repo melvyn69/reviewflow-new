@@ -101,11 +101,30 @@ const ActivityFeed = () => {
 
 const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
     const navigate = useNavigate();
-    const [hidden, setHidden] = useState(false);
+    // Initialiser l'état masqué depuis le localStorage pour qu'il persiste au rechargement
+    const [hidden, setHidden] = useState(() => {
+        return localStorage.getItem('setup_completed_hidden') === 'true';
+    });
+    
+    const isComplete = status?.completionPercentage === 100;
+
+    // Effet pour fermer automatiquement après 5 secondes si c'est complété
+    useEffect(() => {
+        if (isComplete && !hidden) {
+            const timer = setTimeout(() => {
+                setHidden(true);
+                localStorage.setItem('setup_completed_hidden', 'true');
+            }, 5000); // 5 secondes de délai
+            return () => clearTimeout(timer);
+        }
+    }, [isComplete, hidden]);
+
+    const handleManualClose = () => {
+        setHidden(true);
+        localStorage.setItem('setup_completed_hidden', 'true');
+    };
     
     if (!status || hidden) return null;
-
-    const isComplete = status.completionPercentage === 100;
 
     const steps = [
         {
@@ -135,7 +154,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
     ];
 
     return (
-        <Card className={`mb-8 border-indigo-100 overflow-hidden relative shadow-md transition-all duration-500 ${isComplete ? 'border-green-200 bg-green-50/30' : ''}`}>
+        <Card className={`mb-8 border-indigo-100 overflow-hidden relative shadow-md transition-all duration-1000 ${isComplete ? 'border-green-200 bg-green-50/30' : ''}`}>
             {isComplete && <Confetti />}
             <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-100">
                 <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-1000 ease-out" style={{ width: `${status.completionPercentage}%` }}></div>
@@ -149,7 +168,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
                             {isComplete ? 'Félicitations ! Setup Terminé' : 'Démarrage Rapide'}
                         </h3>
                         <p className="text-slate-500 text-sm mt-1">
-                            {isComplete ? "Vous êtes prêt à piloter votre e-réputation comme un pro." : "Complétez ces étapes pour profiter à 100% de l'IA."}
+                            {isComplete ? "Tout est prêt. Cette fenêtre se fermera automatiquement." : "Complétez ces étapes pour profiter à 100% de l'IA."}
                         </p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -158,7 +177,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
                             <span className="text-xs text-slate-400 block uppercase tracking-wide font-bold">Complété</span>
                         </div>
                         {isComplete && (
-                            <button onClick={() => setHidden(true)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full">
+                            <button onClick={handleManualClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full">
                                 <X className="h-5 w-5" />
                             </button>
                         )}
