@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Customer, PipelineStage } from '../types';
@@ -198,7 +199,7 @@ export const CustomersPage = () => {
           </Select>
           <Select value={filterLtv} onChange={e => setFilterLtv(e.target.value)} className="w-40 shrink-0">
               <option value="all">LTV: Tous</option>
-              <option value="high">VIP (> 200€)</option>
+              <option value="high">VIP (&gt; 200€)</option>
           </Select>
       </div>
 
