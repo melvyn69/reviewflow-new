@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Review, ReviewStatus, InternalNote, SavedReply, Location, ReviewTimelineEvent } from '../types';
@@ -836,8 +837,8 @@ export const InboxPage = () => {
                         </div>
                      ) : (
                         <>
-                            <div className="flex flex-col sm:flex-row gap-2 mb-4 justify-between shrink-0">
-                                <div className="flex gap-2">
+                            <div className="flex flex-col xl:flex-row gap-2 mb-4 justify-between shrink-0">
+                                <div className="flex flex-wrap gap-2">
                                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit overflow-x-auto">
                                         {['short', 'medium', 'long'].map((l) => (
                                             <button 
@@ -884,7 +885,7 @@ export const InboxPage = () => {
                                             ) : (
                                                 <div className="text-center py-4 text-xs text-slate-400">
                                                     Aucun modèle.<br/>
-                                                    <span className="text-indigo-500 cursor-pointer hover:underline" onClick={() => navigate('/settings')}>En créer un</span>
+                                                    <span className="text-indigo-500 cursor-pointer hover:underline" onClick={() => navigate('/settings?tab=organization')}>En créer un</span>
                                                 </div>
                                             )}
                                         </div>

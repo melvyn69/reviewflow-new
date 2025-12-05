@@ -517,21 +517,57 @@ export const api = {
   ai: {
       generateReply: async (review: Review, config: any) => {
           if (isDemoMode()) {
-              return "Bonjour " + review.author_name + ", merci pour votre avis 5 étoiles ! Nous sommes ravis que l'expérience vous ait plu.";
+              const tone = config.tone || 'professionnel';
+              const len = config.length || 'medium';
+              let text = `Bonjour ${review.author_name}, merci pour votre avis. `;
+              
+              if (len === 'short') text = `Merci ${review.author_name} !`;
+              else if (len === 'long') text = `Bonjour ${review.author_name}, nous vous remercions chaleureusement d'avoir pris le temps de nous laisser ce commentaire. Nous sommes ravis que l'expérience vous ait plu. Au plaisir de vous revoir bientôt !`;
+              
+              if (tone === 'friendly') text = text.replace('Bonjour', 'Salut').replace('Merci', 'Merci beaucoup');
+              
+              return text;
           }
-          const { text } = await invoke('ai_generate', {
-              task: 'generate_reply',
-              context: { review, ...config }
-          });
-          return text;
+          
+          try {
+              const { text } = await invoke('ai_generate', {
+                  task: 'generate_reply',
+                  context: { review, ...config }
+              });
+              return text;
+          } catch (e) {
+              console.warn("API Error, falling back to local generation", e);
+              // Fallback Local Robuste
+              const tone = config.tone || 'professionnel';
+              const len = config.length || 'medium';
+              let text = "";
+              
+              if (review.rating >= 4) {
+                  if (len === 'short') text = `Merci ${review.author_name} pour votre super avis !`;
+                  else if (len === 'long') text = `Bonjour ${review.author_name}, un grand merci pour votre retour 5 étoiles ! Toute l'équipe est ravie de savoir que vous avez passé un bon moment. À très vite !`;
+                  else text = `Bonjour ${review.author_name}, merci beaucoup pour votre avis positif. Nous sommes ravis que vous ayez apprécié votre visite.`;
+              } else {
+                  text = `Bonjour ${review.author_name}, merci pour votre retour. Nous prenons note de vos remarques pour nous améliorer.`;
+              }
+              
+              if (tone === 'amical' || tone === 'friendly') {
+                  text = text.replace('Bonjour', 'Hello').replace('nous', 'on');
+              }
+              
+              return text + (process.env.NODE_ENV === 'development' ? "" : "");
+          }
       },
       generateSocialPost: async (review: Review, platform: string) => {
           if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. #Reviewflow #CustomerLove";
-          const { text } = await invoke('ai_generate', {
-              task: 'social_post',
-              context: { review, platform }
-          });
-          return text;
+          try {
+              const { text } = await invoke('ai_generate', {
+                  task: 'social_post',
+                  context: { review, platform }
+              });
+              return text;
+          } catch (e) {
+              return `🌟 "${review.body}" - Merci ${review.author_name} ! #FeedbackClient`;
+          }
       },
       previewBrandVoice: async (config: any, review: any) => {
           if (isDemoMode()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
@@ -543,9 +579,7 @@ export const api = {
               return text;
           } catch (e: any) {
               console.warn("AI Generate failed, falling back to simulation", e);
-              // Fallback safe en cas d'erreur API (ex: pas de clé configurée)
-              const tone = config.tone || 'professionnel';
-              return `[Mode Simulation] Bonjour ${review.author_name || 'Client'}, merci pour votre retour. Nous prenons note de vos remarques sur le service. (Réponse générée localement car l'API Gemini n'est pas joignable).`;
+              return `[Simulation] Bonjour ${review.author_name || 'Client'}, merci pour votre retour. Nous prenons note de vos remarques sur le service.`;
           }
       },
       runCustomTask: async (payload: any) => {

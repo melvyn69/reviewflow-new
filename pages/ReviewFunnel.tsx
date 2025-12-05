@@ -89,15 +89,33 @@ export const ReviewFunnel = () => {
         }
 
         if (score >= 4) {
-            // FLUX POSITIF
-            if (customerId) {
-                // Client déjà connu, on zappe la capture
-                setStep('redirecting');
+            // FLUX POSITIF (4 ou 5 étoiles)
+            
+            // 1. Sauvegarder immédiatement l'intention positive dans l'Inbox
+            // (Note seule, sans commentaire pour l'instant)
+            if (locationId) {
+                api.public.submitFeedback(locationId, score, "Note positive (Redirection)", "", [], staffName || undefined).catch(console.error);
+            }
+
+            // 2. Vérifier si un lien Google est configuré
+            if (locationInfo?.googleUrl && locationInfo.googleUrl.length > 5) {
+                // Redirection Automatique
+                setStep('redirecting'); // Affiche l'écran "C'est génial" + Confettis
+                
+                // Délai pour l'effet visuel des confettis
+                setTimeout(() => {
+                    window.location.href = locationInfo.googleUrl!;
+                }, 2000); 
             } else {
-                setStep('capture');
+                // Pas de lien Google, on continue le flux normal
+                if (customerId) {
+                    setStep('redirecting'); // Fallback si lien existe pas mais client connu
+                } else {
+                    setStep('capture');
+                }
             }
         } else {
-            // FLUX NÉGATIF
+            // FLUX NÉGATIF (< 4)
             setTimeout(() => {
                 setStep('details');
             }, 300);
@@ -112,12 +130,6 @@ export const ReviewFunnel = () => {
             }).catch(() => {});
         }
         
-        // Enregistrement stat avec attribution staff si présent
-        if (locationId) {
-            api.public.submitFeedback(locationId, rating, "Avis positif (Click)", contact, [], staffName || undefined)
-                .catch(err => console.error(err));
-        }
-
         setTimeout(() => {
             window.open(url, '_blank');
             // Move to reward if available, else success
@@ -274,81 +286,68 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
-                    {/* STEP 2: REDIRECTING (Positive Multi-Platform) */}
+                    {/* STEP 2: REDIRECTING (Positive Multi-Platform or Auto-Redirect) */}
                     {step === 'redirecting' && (
                         <div className="animate-in zoom-in-95 duration-500 py-4">
                              <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-6 animate-bounce">
                                 <Heart className="h-12 w-12 fill-current" />
                             </div>
                             <h2 className="text-2xl font-bold text-slate-900 mb-2">C'est génial !</h2>
-                            <p className="text-slate-600 mb-8">
-                                Votre avis nous aide énormément. Sur quelle plateforme souhaitez-vous le partager ?
-                            </p>
                             
-                            <div className="space-y-3">
-                                {hasGoogle && (
-                                    <button 
-                                        onClick={() => handleRedirect(locationInfo.googleUrl!)}
-                                        className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all group text-left"
-                                    >
-                                        <div className="h-12 w-12 flex items-center justify-center bg-white rounded-full border border-slate-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
-                                            <GoogleIcon />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900">Google Avis</h4>
-                                            <p className="text-xs text-slate-500">Le plus utile pour nous</p>
-                                        </div>
-                                        <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-indigo-500" />
-                                    </button>
-                                )}
+                            {hasGoogle ? (
+                                <p className="text-slate-600 mb-8 font-medium">
+                                    Redirection vers Google en cours...<br/>
+                                    <span className="text-sm font-normal text-slate-400">Merci de confirmer votre note sur la fiche.</span>
+                                </p>
+                            ) : (
+                                <>
+                                    <p className="text-slate-600 mb-8">
+                                        Votre avis nous aide énormément. Sur quelle plateforme souhaitez-vous le partager ?
+                                    </p>
+                                    
+                                    <div className="space-y-3">
+                                        {hasFacebook && (
+                                            <button 
+                                                onClick={() => handleRedirect(locationInfo.facebookUrl!)}
+                                                className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all group text-left"
+                                            >
+                                                <div className="h-12 w-12 flex items-center justify-center bg-blue-50 rounded-full border border-blue-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
+                                                    <Facebook className="h-6 w-6 text-blue-600" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-slate-900">Facebook</h4>
+                                                    <p className="text-xs text-slate-500">Recommander à vos amis</p>
+                                                </div>
+                                                <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-blue-500" />
+                                            </button>
+                                        )}
 
-                                {hasFacebook && (
-                                    <button 
-                                        onClick={() => handleRedirect(locationInfo.facebookUrl!)}
-                                        className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all group text-left"
-                                    >
-                                        <div className="h-12 w-12 flex items-center justify-center bg-blue-50 rounded-full border border-blue-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
-                                            <Facebook className="h-6 w-6 text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900">Facebook</h4>
-                                            <p className="text-xs text-slate-500">Recommander à vos amis</p>
-                                        </div>
-                                        <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-blue-500" />
-                                    </button>
-                                )}
+                                        {hasTripAdvisor && (
+                                            <button 
+                                                onClick={() => handleRedirect(locationInfo.tripadvisorUrl!)}
+                                                className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-green-300 hover:shadow-md transition-all group text-left"
+                                            >
+                                                <div className="h-12 w-12 flex items-center justify-center bg-green-50 rounded-full border border-green-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
+                                                    <TripAdvisorIcon />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-slate-900">TripAdvisor</h4>
+                                                    <p className="text-xs text-slate-500">Pour les voyageurs</p>
+                                                </div>
+                                                <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-green-500" />
+                                            </button>
+                                        )}
 
-                                {hasTripAdvisor && (
-                                    <button 
-                                        onClick={() => handleRedirect(locationInfo.tripadvisorUrl!)}
-                                        className="w-full flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:border-green-300 hover:shadow-md transition-all group text-left"
-                                    >
-                                        <div className="h-12 w-12 flex items-center justify-center bg-green-50 rounded-full border border-green-100 shadow-sm mr-4 group-hover:scale-110 transition-transform">
-                                            <TripAdvisorIcon />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900">TripAdvisor</h4>
-                                            <p className="text-xs text-slate-500">Pour les voyageurs</p>
-                                        </div>
-                                        <ArrowRight className="ml-auto h-5 w-5 text-slate-300 group-hover:text-green-500" />
-                                    </button>
-                                )}
-
-                                {!hasGoogle && !hasFacebook && !hasTripAdvisor && (
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                        <p className="text-slate-600 mb-2">
-                                            Merci infiniment pour votre soutien.
-                                        </p>
-                                        <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retour</Button>
+                                        {!hasGoogle && !hasFacebook && !hasTripAdvisor && (
+                                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                                <p className="text-slate-600 mb-2">
+                                                    Merci infiniment pour votre soutien.
+                                                </p>
+                                                <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>Retour</Button>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                            
-                            {feedback && (hasGoogle || hasFacebook || hasTripAdvisor) && (
-                                <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400 bg-slate-50 py-2 px-4 rounded-full mx-auto w-fit">
-                                    <Copy className="h-3 w-3" />
-                                    Votre message sera copié automatiquement
-                                </div>
+                                </>
                             )}
                         </div>
                     )}
@@ -426,7 +425,6 @@ export const ReviewFunnel = () => {
                             <p className="text-slate-600 mb-8">
                                 Votre avis a bien été pris en compte. Nous faisons tout pour nous améliorer grâce à vous.
                             </p>
-                            {/* Bouton de retour supprimé pour éviter la confusion/sortie prématurée */}
                         </div>
                     )}
 
