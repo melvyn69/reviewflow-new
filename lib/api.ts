@@ -2,6 +2,7 @@
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
+import { GoogleGenAI } from "@google/genai";
 
 // --- DEMO MODE UTILS ---
 const isDemoMode = () => {
@@ -23,6 +24,11 @@ const invoke = async (functionName: string, body: any) => {
     const { data, error } = await supabase.functions.invoke(functionName, { body });
     if (error) throw error;
     return data;
+};
+
+// Initialize Gemini AI Client
+const getAIClient = () => {
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 export const api = {
@@ -516,34 +522,110 @@ export const api = {
           if (isDemoMode()) {
               return "Bonjour " + review.author_name + ", merci pour votre avis 5 étoiles ! Nous sommes ravis que l'expérience vous ait plu.";
           }
-          const { text } = await invoke('ai_generate', {
-              task: 'generate_reply',
-              context: { review, ...config }
-          });
-          return text;
+          
+          // Use Client-Side GenAI instead of Edge Function to avoid connection errors
+          const ai = getAIClient();
+          const prompt = `
+            Rôle: Tu es le propriétaire d'un établissement répondant à un avis client.
+            Tâche: Rédige une réponse à cet avis.
+            
+            Avis Client (${review.rating}/5) de ${review.author_name}:
+            "${review.body}"
+            
+            Consignes:
+            - Ton: ${config.tone || 'Professionnel'}
+            - Longueur: ${config.length === 'short' ? 'Courte (1-2 phrases)' : config.length === 'long' ? 'Détaillée (3-4 phrases)' : 'Moyenne'}
+            - Langue: Français
+            - Ne pas mettre de guillemets autour de la réponse.
+            - Sois poli, empathique et constructif.
+          `;
+
+          try {
+              const response = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: prompt
+              });
+              return response.text || "";
+          } catch (e: any) {
+              console.error("AI Gen Error", e);
+              throw new Error("Erreur de génération IA. Vérifiez votre clé API ou réessayez.");
+          }
       },
       generateSocialPost: async (review: Review, platform: string) => {
           if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. #Reviewflow #CustomerLove";
-          const { text } = await invoke('ai_generate', {
-              task: 'social_post',
-              context: { review, platform }
-          });
-          return text;
+          
+          const ai = getAIClient();
+          const prompt = `
+            Act as a world-class Social Media Manager.
+            Platform: ${platform} (Instagram, LinkedIn, or Facebook).
+            Context: We received a glowing 5-star review from a customer.
+            Task: Write a captivating, platform-native caption to go with an image of this review.
+            
+            Review Details:
+            - Author: ${review.author_name}
+            - Text: "${review.body}"
+            - Rating: ${review.rating}/5
+            
+            Guidelines:
+            - Language: French (Français)
+            - Tone: Enthusiastic, grateful, and professional.
+            - Include 3-5 relevant emojis.
+            - Include 3-5 relevant hashtags at the end.
+            - DO NOT wrap the output in quotes.
+          `;
+
+          try {
+              const response = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: prompt
+              });
+              return response.text || "";
+          } catch (e: any) {
+              throw new Error("Erreur de génération IA.");
+          }
       },
       previewBrandVoice: async (config: any, review: any) => {
           if (isDemoMode()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
-          const { text } = await invoke('ai_generate', {
-              task: 'generate_reply',
-              context: { review, ...config }
-          });
-          return text;
+          
+          const ai = getAIClient();
+          const prompt = `
+            Rôle: Tu es le propriétaire d'un établissement répondant à un avis client.
+            Tâche: Rédige une réponse test pour valider le style de marque.
+            
+            Avis Test: "${review.body}"
+            
+            Paramètres de Marque:
+            - Ton: ${config.tone}
+            - Style: ${config.language_style}
+            - Info contextuelle: ${config.knowledge_base}
+            - Emojis: ${config.use_emojis ? 'Oui' : 'Non'}
+            
+            Réponse attendue: Courte, percutante, reflétant ces paramètres.
+          `;
+
+          try {
+              const response = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: prompt
+              });
+              return response.text || "";
+          } catch (e) {
+              return "Erreur lors du test de voix.";
+          }
       },
       runCustomTask: async (payload: any) => {
           if (isDemoMode()) return { result: "Demo Mode Custom Task Executed" };
-          return await invoke('ai_generate', {
-              task: payload.task,
-              context: payload.review || payload.context
-          });
+          
+          const ai = getAIClient();
+          try {
+              const response = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: JSON.stringify(payload)
+              });
+              return { result: response.text };
+          } catch (e: any) {
+              throw new Error(e.message);
+          }
       }
   },
   analytics: {
