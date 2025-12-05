@@ -1,10 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Heart, Gift, Mail, Facebook } from 'lucide-react';
+import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Heart, Gift, Mail } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { useParams, useSearchParams } from '../components/ui';
-import { Offer, Coupon } from '../types';
 
 const NEGATIVE_TAGS = ['Attente', 'Service', 'Prix', 'Bruit', 'Hygiène', 'Qualité'];
 
@@ -16,32 +14,24 @@ const Confetti = () => (
     </div>
 );
 
-const TripAdvisorIcon = () => <div className="font-serif font-bold text-green-600 text-3xl tracking-tighter">TA</div>;
-
 export const ReviewFunnel = () => {
     const { locationId } = useParams();
     const [searchParams] = useSearchParams();
     const toast = useToast();
     
-    const [step, setStep] = useState<'rating' | 'capture' | 'details' | 'redirecting' | 'success' | 'reward'>('rating');
+    const [step, setStep] = useState<'rating' | 'capture' | 'details' | 'redirecting' | 'success'>('rating');
     const [rating, setRating] = useState(0);
     const [feedback, setFeedback] = useState('');
     const [contact, setContact] = useState('');
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     
-    const [activeOffer, setActiveOffer] = useState<Offer | null>(null);
-    const [coupon, setCoupon] = useState<Coupon | null>(null);
-    const [revealed, setRevealed] = useState(false);
-
     const staffName = searchParams.get('staff');
     
     const [locationInfo, setLocationInfo] = useState<{
         name: string, 
         city: string, 
         googleUrl?: string, 
-        facebookUrl?: string, 
-        tripadvisorUrl?: string
     } | null>(null);
 
     useEffect(() => {
@@ -52,9 +42,7 @@ export const ReviewFunnel = () => {
                         setLocationInfo({
                             name: info.name,
                             city: info.city,
-                            googleUrl: (info as any).google_review_url || (info as any).googleUrl,
-                            facebookUrl: (info as any).facebook_review_url,
-                            tripadvisorUrl: (info as any).tripadvisor_review_url
+                            googleUrl: (info as any).google_review_url || (info as any).googleUrl
                         });
                     }
                 });
@@ -64,34 +52,26 @@ export const ReviewFunnel = () => {
     const handleRatingSelect = async (score: number) => {
         setRating(score);
         
+        // Sauvegarde de l'intention (note seule) pour stats
         if (locationId) {
-            // Check for rewards (optional)
-            // const offer = await api.public.getActiveOffer(locationId, score);
-            // setActiveOffer(offer);
+            api.public.submitFeedback(locationId, score, "", "", [], staffName || undefined).catch(console.error);
         }
 
         if (score >= 4) {
-            // FLUX POSITIF (4 ou 5 étoiles)
-            
-            // 1. Sauvegarder immédiatement l'intention
-            if (locationId) {
-                api.public.submitFeedback(locationId, score, "Note positive (Redirection)", "", [], staffName || undefined).catch(console.error);
-            }
-
-            // 2. Vérifier si un lien Google est configuré
+            // FLUX POSITIF (4-5 étoiles)
             if (locationInfo?.googleUrl && locationInfo.googleUrl.length > 5) {
-                // REDIRECTION IMMEDIATE : Pas de question, pas de choix
+                // REDIRECTION GOOGLE DIRECTE
                 setStep('redirecting'); 
-                
+                // Délai pour les confettis
                 setTimeout(() => {
                     window.location.href = locationInfo.googleUrl!;
-                }, 2500); // 2.5s delay for confetti effect
+                }, 2000); 
             } else {
-                // Pas de lien Google, on demande juste l'email (ou fin)
-                setStep('capture');
+                // Pas de lien Google, on finit là
+                setStep('success'); 
             }
         } else {
-            // FLUX NÉGATIF (< 4)
+            // FLUX NÉGATIF (< 4) -> Demande détails
             setTimeout(() => {
                 setStep('details');
             }, 300);
@@ -121,14 +101,11 @@ export const ReviewFunnel = () => {
 
     if (!locationInfo) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="h-10 w-10 animate-spin text-indigo-600"/></div>;
 
-    const hasGoogle = locationInfo.googleUrl && locationInfo.googleUrl.length > 5;
-
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-            {(step === 'redirecting' || step === 'reward') && <Confetti />}
+            {(step === 'redirecting' || step === 'success' && rating >=4) && <Confetti />}
             
             <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden relative z-10 min-h-[500px] flex flex-col">
-                {/* Header Image */}
                 <div className="bg-indigo-600 h-32 relative flex items-center justify-center shrink-0">
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
                      <div className="absolute -bottom-8 bg-white p-1 rounded-full shadow-lg">
@@ -146,7 +123,6 @@ export const ReviewFunnel = () => {
                         </p>
                     )}
 
-                    {/* STEP 1: RATING */}
                     {step === 'rating' && (
                         <div className="animate-in fade-in zoom-in-95 duration-500">
                             <h2 className="text-lg font-medium text-slate-800 mb-6">Comment s'est passée votre visite ?</h2>
@@ -167,30 +143,18 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
-                    {/* STEP 2: REDIRECTING (Positive) */}
                     {step === 'redirecting' && (
                         <div className="animate-in zoom-in-95 duration-500 py-4">
                              <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-6 animate-bounce">
                                 <Heart className="h-12 w-12 fill-current" />
                             </div>
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">C'est génial !</h2>
-                            
-                            {hasGoogle ? (
-                                <p className="text-slate-600 mb-8 font-medium">
-                                    Redirection vers Google en cours...<br/>
-                                    <span className="text-sm font-normal text-slate-400">Merci de confirmer votre note sur la fiche.</span>
-                                </p>
-                            ) : (
-                                <p className="text-slate-600 mb-8">
-                                    Merci pour votre soutien !
-                                </p>
-                            )}
-                            
-                            {/* NO RETURN BUTTON HERE as requested */}
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">Merci !</h2>
+                            <p className="text-slate-600 mb-8 font-medium">
+                                Redirection vers Google pour confirmer votre note...
+                            </p>
                         </div>
                     )}
 
-                    {/* STEP 3: DETAILS (Negative Only) */}
                     {step === 'details' && (
                         <div className="animate-in slide-in-from-right-8 duration-300 text-left">
                             <div className="text-center mb-6">
@@ -252,7 +216,6 @@ export const ReviewFunnel = () => {
                         </div>
                     )}
 
-                    {/* STEP 4: SUCCESS (End of Negative Flow) */}
                     {step === 'success' && (
                         <div className="animate-in zoom-in-95 duration-500 py-8">
                             <div className="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-6">
@@ -262,7 +225,6 @@ export const ReviewFunnel = () => {
                             <p className="text-slate-600 mb-8">
                                 Votre avis a bien été pris en compte.
                             </p>
-                            {/* NO RETURN BUTTON HERE as requested */}
                         </div>
                     )}
                 </div>
