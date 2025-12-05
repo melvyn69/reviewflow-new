@@ -1,8 +1,24 @@
+
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember } from '../types';
+import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
+
+// --- DEMO MODE UTILS ---
+const isDemoMode = () => {
+    return localStorage.getItem('is_demo_mode') === 'true';
+};
+
+const setDemoMode = (active: boolean) => {
+    if (active) localStorage.setItem('is_demo_mode', 'true');
+    else localStorage.removeItem('is_demo_mode');
+};
 
 // Helper for Edge Functions
 const invoke = async (functionName: string, body: any) => {
+    if (isDemoMode()) {
+        console.log(`[DEMO] Skipping Edge Function ${functionName}`, body);
+        return {}; // Mock return for edge functions in demo
+    }
     if (!supabase) throw new Error("Supabase not initialized");
     const { data, error } = await supabase.functions.invoke(functionName, { body });
     if (error) throw error;
@@ -12,6 +28,8 @@ const invoke = async (functionName: string, body: any) => {
 export const api = {
   auth: {
     getUser: async (): Promise<User | null> => {
+      if (isDemoMode()) return DEMO_USER;
+      
       if (!supabase) return null;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
@@ -20,11 +38,18 @@ export const api = {
       return data as User;
     },
     login: async (email: string, password: string) => {
+      if (email === 'demo@reviewflow.com') {
+          setDemoMode(true);
+          return;
+      }
+      setDemoMode(false);
+      
       if (!supabase) throw new Error("No database connection");
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
     register: async (name: string, email: string, password: string) => {
+      setDemoMode(false);
       if (!supabase) throw new Error("No database connection");
       const { error } = await supabase.auth.signUp({ 
           email, 
@@ -34,9 +59,11 @@ export const api = {
       if (error) throw error;
     },
     logout: async () => {
+        setDemoMode(false);
         if (supabase) await supabase.auth.signOut();
     },
     loginWithGoogle: async () => {
+        if (isDemoMode()) return; // Mock success
         if (!supabase) return;
         await supabase.auth.signInWithOAuth({ 
             provider: 'google',
@@ -50,6 +77,7 @@ export const api = {
         });
     },
     connectGoogleBusiness: async () => {
+        if (isDemoMode()) return true;
         // Re-trigger OAuth flow to get fresh tokens with business scope
         if (!supabase) return;
         const { data } = await supabase.auth.signInWithOAuth({
@@ -66,6 +94,7 @@ export const api = {
         return true;
     },
     updateProfile: async (data: Partial<User> & { password?: string }) => {
+        if (isDemoMode()) return data;
         const { data: { user } } = await supabase!.auth.getUser();
         if (!user) throw new Error("Not logged in");
         
@@ -81,16 +110,20 @@ export const api = {
         return data;
     },
     resetPassword: async (email: string) => {
+        if (isDemoMode()) return;
         if (supabase) await supabase.auth.resetPasswordForEmail(email, {
             redirectTo: window.location.origin + '/#/login?mode=reset'
         });
     },
     deleteAccount: async () => {
+        if (isDemoMode()) return;
         await invoke('delete_account', {});
     }
   },
   organization: {
       get: async (): Promise<Organization | null> => {
+          if (isDemoMode()) return DEMO_ORG;
+
           if (!supabase) return null;
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) return null;
@@ -114,6 +147,7 @@ export const api = {
           return data as any;
       },
       update: async (data: Partial<Organization>) => {
+          if (isDemoMode()) return;
           const org = await api.organization.get();
           if (!org) return;
           const { error } = await supabase!.from('organizations').update(data).eq('id', org.id);
@@ -121,6 +155,7 @@ export const api = {
       },
       // Capture tokens returned by Google OAuth redirect
       saveGoogleTokens: async () => {
+          if (isDemoMode()) return true;
           if (!supabase) return false;
           const { data: { session } } = await supabase.auth.getSession();
           
@@ -143,15 +178,19 @@ export const api = {
           return false;
       },
       generateApiKey: async (name: string) => {
+          if (isDemoMode()) return { key: 'sk_demo_123' };
           return await invoke('manage_org_settings', { action: 'generate_api_key', data: { name } });
       },
       revokeApiKey: async (id: string) => {
+          if (isDemoMode()) return;
           return await invoke('manage_org_settings', { action: 'revoke_api_key', data: { id } });
       },
       saveWebhook: async (url: string, events: string[]) => {
+          if (isDemoMode()) return;
           return await invoke('manage_org_settings', { action: 'save_webhook', data: { url, events } });
       },
       deleteWebhook: async (id: string) => {
+          if (isDemoMode()) return;
           return await invoke('manage_org_settings', { action: 'delete_webhook', data: { id } });
       },
       testWebhook: async (id: string) => {
@@ -159,10 +198,18 @@ export const api = {
           return true;
       },
       simulatePlanChange: async (plan: 'pro' | 'starter') => {
+          if (isDemoMode()) {
+              DEMO_ORG.subscription_plan = plan;
+              return;
+          }
           const org = await api.organization.get();
           if (org) await supabase!.from('organizations').update({ subscription_plan: plan }).eq('id', org.id);
       },
       addStaffMember: async (name: string, role: string) => {
+          if (isDemoMode()) {
+              DEMO_ORG.staff_members?.push({ id: Date.now().toString(), name, role, reviews_count: 0, average_rating: 0, organization_id: 'demo-org-id' });
+              return;
+          }
           const org = await api.organization.get();
           if (!org) return;
           await supabase!.from('staff_members').insert({
@@ -173,6 +220,10 @@ export const api = {
           });
       },
       removeStaffMember: async (id: string) => {
+          if (isDemoMode()) {
+              DEMO_ORG.staff_members = DEMO_ORG.staff_members?.filter(s => s.id !== id);
+              return;
+          }
           await supabase!.from('staff_members').delete().eq('id', id);
       },
       sendCongratulationEmail: async (id: string) => {
@@ -182,6 +233,19 @@ export const api = {
   },
   reviews: {
       list: async (filters: any) => {
+          if (isDemoMode()) {
+              let res = [...DEMO_REVIEWS];
+              // Basic filtering for demo
+              if (filters.rating && filters.rating !== 'Tout') {
+                  const r = parseInt(filters.rating.toString().replace(/\D/g, ''));
+                  res = res.filter(rev => rev.rating === r);
+              }
+              if (filters.status && filters.status !== 'Tout') {
+                  res = res.filter(rev => rev.status === filters.status);
+              }
+              return res;
+          }
+
           if (!supabase) return [];
           const org = await api.organization.get();
           if (!org) return [];
@@ -234,16 +298,27 @@ export const api = {
           return data.map((r: any) => ({ ...r, body: r.text }));
       },
       reply: async (reviewId: string, text: string) => {
+          if (isDemoMode()) {
+              const r = DEMO_REVIEWS.find(r => r.id === reviewId);
+              if (r) {
+                  r.status = 'sent';
+                  r.posted_reply = text;
+                  r.replied_at = new Date().toISOString();
+              }
+              return;
+          }
           // Call Edge Function to post to Google
           await invoke('post_google_reply', { reviewId, replyText: text });
       },
       saveDraft: async (reviewId: string, text: string) => {
+          if (isDemoMode()) return;
           await supabase!.from('reviews').update({
               status: 'draft',
               ai_reply: { text, needs_manual_validation: true, created_at: new Date().toISOString() }
           }).eq('id', reviewId);
       },
       addNote: async (reviewId: string, text: string) => {
+          if (isDemoMode()) return { id: 'note-1', text, author_name: 'Moi', created_at: new Date().toISOString() };
           const { data: review } = await supabase!.from('reviews').select('internal_notes').eq('id', reviewId).single();
           const currentNotes = review?.internal_notes || [];
           
@@ -260,6 +335,7 @@ export const api = {
           return newNote;
       },
       subscribe: (callback: (payload: any) => void) => {
+          if (isDemoMode()) return { unsubscribe: () => {} };
           if (!supabase) return { unsubscribe: () => {} };
           return supabase
             .channel('reviews-channel')
@@ -267,6 +343,7 @@ export const api = {
             .subscribe();
       },
       uploadCsv: async (file: File, locationId: string) => {
+          if (isDemoMode()) return 10;
           // Basic CSV parsing and inserting
           const text = await file.text();
           const lines = text.split('\n');
@@ -294,6 +371,9 @@ export const api = {
   },
   ai: {
       generateReply: async (review: Review, config: any) => {
+          if (isDemoMode()) {
+              return "Bonjour " + review.author_name + ", merci pour votre avis 5 étoiles ! Nous sommes ravis que l'expérience vous ait plu. À bientôt chez " + DEMO_ORG.name + ".";
+          }
           const { text } = await invoke('ai_generate', {
               task: 'generate_reply',
               context: { review, ...config }
@@ -301,6 +381,7 @@ export const api = {
           return text;
       },
       generateSocialPost: async (review: Review, platform: string) => {
+          if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. Toute l'équipe est motivée ! #Reviewflow #CustomerLove";
           const { text } = await invoke('ai_generate', {
               task: 'social_post',
               context: { review, platform }
@@ -308,6 +389,7 @@ export const api = {
           return text;
       },
       previewBrandVoice: async (config: any, review: any) => {
+          if (isDemoMode()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
           const { text } = await invoke('ai_generate', {
               task: 'generate_reply',
               context: { review, ...config } // Re-use reply logic for voice test
@@ -315,6 +397,7 @@ export const api = {
           return text;
       },
       runCustomTask: async (payload: any) => {
+          if (isDemoMode()) return { result: "Demo Mode Custom Task Executed" };
           return await invoke('ai_generate', {
               task: payload.task,
               context: payload.review || payload.context
@@ -323,6 +406,8 @@ export const api = {
   },
   analytics: {
       getOverview: async (period: string = '30j'): Promise<AnalyticsSummary> => {
+          if (isDemoMode()) return DEMO_STATS;
+
           const org = await api.organization.get();
           if (!org || org.locations.length === 0) {
               return {
@@ -404,20 +489,27 @@ export const api = {
   },
   competitors: {
       list: async () => {
+          if (isDemoMode()) return DEMO_COMPETITORS;
           if (!supabase) return [];
           const { data } = await supabase.from('competitors').select('*');
           return data || [];
       },
       create: async (data: Partial<Competitor>) => {
+          if (isDemoMode()) {
+              DEMO_COMPETITORS.push({ id: 'new-comp', ...data } as Competitor);
+              return;
+          }
           if (!supabase) return;
           const org = await api.organization.get();
           await supabase.from('competitors').insert({ ...data, organization_id: org?.id });
       },
       delete: async (id: string) => {
+          if (isDemoMode()) return;
           await supabase!.from('competitors').delete().eq('id', id);
       },
       // Uses the Real Google Places Edge Function
       autoDiscover: async (radius: number, sector: string, lat: number, lng: number) => {
+          if (isDemoMode()) return DEMO_COMPETITORS;
           const { results } = await invoke('fetch_places', {
               latitude: lat,
               longitude: lng,
@@ -428,6 +520,7 @@ export const api = {
       },
       // Uses the Real Gemini Analysis Edge Function
       getDeepAnalysis: async () => {
+          if (isDemoMode()) return { trends: ["Montée des prix", "Demande bio"], swot: { strengths: ["Localisation"], weaknesses: ["Prix"] } };
           const competitors = await api.competitors.list();
           const data = await invoke('analyze_market', {
               competitors: competitors,
@@ -443,6 +536,7 @@ export const api = {
           return org?.workflows || [];
       },
       saveWorkflow: async (wf: WorkflowRule) => {
+          if (isDemoMode()) return;
           const org = await api.organization.get();
           if (!org) return;
           
@@ -454,12 +548,14 @@ export const api = {
           await supabase!.from('organizations').update({ workflows }).eq('id', org.id);
       },
       deleteWorkflow: async (id: string) => {
+          if (isDemoMode()) return;
           const org = await api.organization.get();
           if (!org) return;
           const workflows = org.workflows?.filter(w => w.id !== id);
           await supabase!.from('organizations').update({ workflows }).eq('id', org.id);
       },
       run: async () => {
+          if (isDemoMode()) return { processed: 5, actions: 5 };
           const { processed, actions } = await invoke('process_reviews', {});
           return { processed, actions };
       }
@@ -471,6 +567,7 @@ export const api = {
       },
       markAllRead: async () => {},
       sendTestEmail: async () => {
+          if (isDemoMode()) return;
           const user = await api.auth.getUser();
           await invoke('send_campaign_emails', {
               emails: [user?.email],
@@ -481,12 +578,14 @@ export const api = {
   },
   team: {
       list: async () => {
+          if (isDemoMode()) return [DEMO_USER];
           const org = await api.organization.get();
           if (!org) return [];
           const { data } = await supabase!.from('users').select('*').eq('organization_id', org.id);
           return data || [];
       },
       invite: async (email: string, role: string) => {
+          if (isDemoMode()) return;
           await invoke('invite_user', { email, role });
       }
   },
@@ -498,10 +597,12 @@ export const api = {
   },
   billing: {
       getInvoices: async () => {
+          if (isDemoMode()) return [];
           const { invoices } = await invoke('get_invoices', {});
           return invoices || [];
       },
       createCheckoutSession: async (plan: string) => {
+          if (isDemoMode()) return 'https://example.com/checkout';
           const { url } = await invoke('create_checkout', { 
               plan,
               successUrl: window.location.origin + '/#/billing?success=true',
@@ -510,6 +611,7 @@ export const api = {
           return url;
       },
       createPortalSession: async () => {
+          if (isDemoMode()) return 'https://example.com/portal';
           const { url } = await invoke('create_portal', {
               returnUrl: window.location.origin + '/#/billing'
           });
@@ -537,11 +639,12 @@ export const api = {
               googleConnected: !!org?.integrations.google,
               brandVoiceConfigured: !!org?.brand?.tone,
               firstReviewReplied: reviews.length > 0 && reviews[0].status === 'sent',
-              completionPercentage: 0 // Calc logic here
+              completionPercentage: isDemoMode() ? 100 : 0 
           };
       }
   },
   seedCloudDatabase: async () => {
+      if (isDemoMode()) return;
       if (!supabase) return;
       
       const org = await api.organization.get();
@@ -601,18 +704,22 @@ export const api = {
 },
 locations: {
   create: async (data: any) => {
+      if (isDemoMode()) return;
       const org = await api.organization.get();
       await supabase!.from('locations').insert({ ...data, organization_id: org?.id });
   },
   update: async (id: string, data: any) => {
+      if (isDemoMode()) return;
       await supabase!.from('locations').update(data).eq('id', id);
   },
   delete: async (id: string) => {
+      if (isDemoMode()) return;
       await supabase!.from('locations').delete().eq('id', id);
   }
 },
 google: {
   fetchAllGoogleLocations: async () => {
+      if (isDemoMode()) return [];
       const { data: { session } } = await supabase!.auth.getSession();
       if (!session?.provider_token) throw new Error("Google Token missing. Reconnect Google.");
       
@@ -620,6 +727,7 @@ google: {
       return locations;
   },
   syncReviewsForLocation: async (id: string, ref: string) => {
+      if (isDemoMode()) return 10;
       const org = await api.organization.get();
       const { count } = await invoke('fetch_google_reviews', {
           locationId: id,
@@ -631,10 +739,12 @@ google: {
 },
 public: {
   getLocationInfo: async (id: string) => {
+      if (isDemoMode()) return DEMO_ORG.locations?.[0];
       const { data } = await supabase!.from('locations').select('*').eq('id', id).single();
       return data;
   },
   getActiveOffer: async (id: string, rating: number) => {
+      if (isDemoMode()) return DEMO_ORG.offers?.[0];
       const { data } = await supabase!
         .from('offers')
         .select('*')
@@ -647,9 +757,11 @@ public: {
       return data;
   },
   submitFeedback: async (id: string, rating: number, text: string, contact: string, tags: string[], staff?: string) => {
+      if (isDemoMode()) return;
       await invoke('submit_review', { locationId: id, rating, feedback: text, contact, tags, staffName: staff });
   },
   getWidgetReviews: async (id: string) => {
+      if (isDemoMode()) return DEMO_REVIEWS.filter(r => r.rating >= 4);
       const { data } = await supabase!
         .from('reviews')
         .select('*')
@@ -662,6 +774,7 @@ public: {
 },
 campaigns: {
   send: async (type: string, recipient: string, subject: string, content: string) => {
+      if (isDemoMode()) return;
       // If SMS, would use Twilio/other. For now assuming Email via Resend
       if (type === 'email') {
           await invoke('send_campaign_emails', {
@@ -674,18 +787,22 @@ campaigns: {
 },
 customers: {
   list: async (): Promise<Customer[]> => {
+      if (isDemoMode()) return [];
       // Mock or real table if implemented
       return [];
   }
 },
 offers: {
   generateCoupon: async (offerId: string, email: string): Promise<any> => {
+      if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Demo Offer' };
       return await invoke('manage_coupons', { action: 'create', offerId, email });
   },
   validate: async (code: string) => {
+      if (isDemoMode()) return { valid: true, discount: 'Café Offert' };
       return await invoke('manage_coupons', { action: 'validate', code });
   },
   redeem: async (code: string) => {
+      if (isDemoMode()) return { success: true };
       return await invoke('manage_coupons', { action: 'redeem', code });
   }
 },

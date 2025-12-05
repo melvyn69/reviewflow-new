@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
@@ -89,28 +90,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
 
   const handleDemoLogin = async () => {
       setIsLoading(true);
-      const email = 'demo@reviewflow.com';
-      const password = 'password123'; // Simple password for demo
-
+      
       try {
-          // 1. Try to login
-          try {
-              await api.auth.login(email, password);
-          } catch (loginError) {
-              // 2. If login fails, try to register
-              await api.auth.register('Demo User', email, password);
-              // Wait for DB triggers to create org
-              await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-          
-          // 3. Check if we need to seed data
-          const org = await api.organization.get();
-          if (org) {
-              if (!org.locations || org.locations.length === 0) {
-                  await api.seedCloudDatabase();
-              }
-          }
-
+          // Login with magic demo credentials handled in api.auth.login
+          await api.auth.login('demo@reviewflow.com', 'demo');
           onLoginSuccess();
       } catch (e: any) {
           setError("Erreur démo: " + e.message);
@@ -277,10 +260,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                     <button 
                         onClick={handleDemoLogin}
                         className="text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-indigo-600 transition-colors flex items-center justify-center gap-1 mx-auto"
-                        title="Contourner l'erreur 403 Google en développement"
+                        title="Mode Simulation pour Démonstration Commerciale"
                     >
                         <HelpCircle className="h-3 w-3" />
-                        Accès Démo Rapide
+                        Accès Démo Commerciale
                     </button>
                 </div>
             </div>
