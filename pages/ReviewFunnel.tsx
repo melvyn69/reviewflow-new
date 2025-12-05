@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail, Facebook, Ticket } from 'lucide-react';
+import { Star, MapPin, Loader2, ArrowRight, CheckCircle2, Copy, Heart, AlertTriangle, ExternalLink, Gift, Mail, Facebook, Ticket, User, Phone, Smartphone } from 'lucide-react';
 import { Button, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { useParams, useSearchParams } from '../components/ui';
@@ -36,7 +37,15 @@ export const ReviewFunnel = () => {
     const [step, setStep] = useState<'rating' | 'capture' | 'details' | 'redirecting' | 'success' | 'reward'>('rating');
     const [rating, setRating] = useState(0);
     const [feedback, setFeedback] = useState('');
-    const [contact, setContact] = useState('');
+    
+    // User Data State
+    const [formData, setFormData] = useState({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: ''
+    });
+
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
@@ -118,7 +127,7 @@ export const ReviewFunnel = () => {
                 locationId, 
                 rating, 
                 feedback || "Avis positif (Redirection directe)", 
-                contact, 
+                formData, 
                 [], 
                 staffName || undefined
             ).catch(err => console.error(err));
@@ -137,7 +146,7 @@ export const ReviewFunnel = () => {
     };
 
     const handleCaptureSubmit = async () => {
-        // Sauvegarde de l'avis POSITIF avec le message et l'email
+        // Sauvegarde de l'avis POSITIF avec le message et les infos
         if (locationId) {
             setLoading(true);
             try {
@@ -145,7 +154,7 @@ export const ReviewFunnel = () => {
                     locationId, 
                     rating, 
                     feedback || "Avis positif (Sans texte)", 
-                    contact, 
+                    formData, 
                     POSITIVE_TAGS, // Tag automatique
                     staffName || undefined
                 );
@@ -167,7 +176,7 @@ export const ReviewFunnel = () => {
                     locationId, 
                     rating, 
                     "Avis positif (Formulaire passé)", 
-                    "", 
+                    { firstName: '', lastName: '', email: '', phone: '' }, 
                     [], 
                     staffName || undefined
                 );
@@ -191,7 +200,7 @@ export const ReviewFunnel = () => {
         if (!locationId) return;
         setLoading(true);
         try {
-            await api.public.submitFeedback(locationId, rating, feedback, contact, selectedTags, staffName || undefined);
+            await api.public.submitFeedback(locationId, rating, feedback, formData, selectedTags, staffName || undefined);
             setIsSubmitted(true);
             setStep('success');
         } catch (error: any) {
@@ -205,7 +214,7 @@ export const ReviewFunnel = () => {
         if (!activeOffer) return;
         setLoading(true);
         try {
-            const newCoupon = await api.offers.generateCoupon(activeOffer.id, contact);
+            const newCoupon = await api.offers.generateCoupon(activeOffer.id, formData.email || 'anonymous');
             setCoupon(newCoupon);
             setRevealed(true);
         } catch (e) {
@@ -220,6 +229,53 @@ export const ReviewFunnel = () => {
     const hasGoogle = locationInfo.googleUrl && locationInfo.googleUrl.length > 5;
     const hasFacebook = locationInfo.facebookUrl && locationInfo.facebookUrl.length > 5;
     const hasTripAdvisor = locationInfo.tripadvisorUrl && locationInfo.tripadvisorUrl.length > 5;
+
+    // Contact Form Component used in both flows
+    const ContactForm = () => (
+        <div className="space-y-3 animate-in fade-in">
+            <div className="grid grid-cols-2 gap-3">
+                <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input 
+                        placeholder="Prénom" 
+                        className="pl-9 h-11 rounded-xl border-slate-300 text-sm"
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                    />
+                </div>
+                <div className="relative">
+                    <Input 
+                        placeholder="Nom" 
+                        className="h-11 rounded-xl border-slate-300 text-sm"
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                    />
+                </div>
+            </div>
+            
+            <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                    type="email"
+                    placeholder="Email (pour votre cadeau)" 
+                    className="pl-9 h-11 rounded-xl border-slate-300 text-sm"
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                />
+            </div>
+
+            <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                    type="tel"
+                    placeholder="Téléphone (optionnel)" 
+                    className="pl-9 h-11 rounded-xl border-slate-300 text-sm"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                />
+            </div>
+        </div>
+    );
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -277,7 +333,7 @@ export const ReviewFunnel = () => {
                                 <Gift className="h-8 w-8 text-indigo-600 mx-auto mb-2" />
                                 <h3 className="font-bold text-indigo-900">Merci pour cette note !</h3>
                                 <p className="text-sm text-indigo-700 mt-1">
-                                    Laissez votre email pour recevoir votre surprise.
+                                    Laissez vos coordonnées pour recevoir votre surprise.
                                 </p>
                             </div>
 
@@ -291,20 +347,14 @@ export const ReviewFunnel = () => {
                                         onChange={e => setFeedback(e.target.value)}
                                     />
                                 </div>
-                                <div className="relative">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                    <Input 
-                                        placeholder="votre@email.com" 
-                                        className="pl-10 h-12 rounded-xl border-slate-300"
-                                        value={contact}
-                                        onChange={(e) => setContact(e.target.value)}
-                                    />
-                                </div>
+                                
+                                <ContactForm />
+
                                 <Button 
                                     className="w-full h-12 rounded-xl shadow-lg shadow-indigo-200" 
                                     onClick={handleCaptureSubmit}
                                     isLoading={loading}
-                                    disabled={!contact.includes('@')}
+                                    disabled={!formData.firstName && !formData.email} // Require at least a name or email
                                 >
                                     Rejoindre & Publier mon avis
                                 </Button>
@@ -439,13 +489,8 @@ export const ReviewFunnel = () => {
                                 </div>
                                 
                                 <div className="animate-in fade-in">
-                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Email (pour vous répondre)</label>
-                                    <Input 
-                                        placeholder="votre@email.com"
-                                        value={contact}
-                                        onChange={e => setContact(e.target.value)}
-                                        className="rounded-xl"
-                                    />
+                                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Vos coordonnées (pour vous répondre)</label>
+                                    <ContactForm />
                                 </div>
 
                                 <Button 
@@ -453,6 +498,7 @@ export const ReviewFunnel = () => {
                                     className="w-full h-12 text-base rounded-xl shadow-lg shadow-indigo-100 mt-2" 
                                     isLoading={loading}
                                     icon={ArrowRight}
+                                    disabled={!formData.email && !formData.phone && !formData.firstName}
                                 >
                                     Envoyer
                                 </Button>
@@ -508,7 +554,7 @@ export const ReviewFunnel = () => {
                                     </p>
                                     
                                     <p className="text-xs text-green-600 font-bold flex items-center justify-center gap-1">
-                                        <CheckCircle2 className="h-3 w-3" /> Envoyé à {contact}
+                                        <CheckCircle2 className="h-3 w-3" /> Envoyé à {formData.email}
                                     </p>
                                 </div>
                             ) : (

@@ -1066,15 +1066,15 @@ export const api = {
           if (isDemoMode()) return null;
           return null;
       },
-      submitFeedback: async (locationId: string, rating: number, feedback: string, contact: string, tags: string[], staffName?: string) => {
+      submitFeedback: async (locationId: string, rating: number, feedback: string, userInfo: { firstName: string, lastName: string, email: string, phone: string }, tags: string[], staffName?: string) => {
           if (isDemoMode()) return;
           if (!supabase) return;
 
           // LOGIQUE DE DÉTECTION DU PERSONNEL (CLIENT-SIDE)
-          // Si staffName n'est pas fourni (pas de QR code spécifique), on cherche dans le texte
           let detectedStaffName = staffName;
           let internalNoteText = '';
 
+          // Si staffName n'est pas fourni (pas de QR code spécifique), on cherche dans le texte
           if (!detectedStaffName && feedback && feedback.length > 0) {
               // 1. Récupérer l'ID de l'organisation
               const { data: location } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
@@ -1085,34 +1085,32 @@ export const api = {
                   
                   if (staffMembers && staffMembers.length > 0) {
                       // 3. Chercher une correspondance
-                      // On trie par longueur de nom décroissante pour matcher "Jean-Pierre" avant "Jean"
                       const sortedStaff = staffMembers.sort((a, b) => b.name.length - a.name.length);
                       
                       for (const member of sortedStaff) {
-                          // Regex simple pour trouver le nom entier (mot complet)
                           const regex = new RegExp(`\\b${member.name}\\b`, 'i');
                           if (regex.test(feedback)) {
                               detectedStaffName = member.name;
                               internalNoteText = `Attribué automatiquement à ${member.name} (détecté dans le texte de l'avis).`;
                               
-                              // Incrémenter le compteur directement
+                              // Incrémenter le compteur
                               await supabase.from('staff_members')
                                   .update({ reviews_count: (member.reviews_count || 0) + 1 })
                                   .eq('id', member.id);
                               
-                              break; // On s'arrête au premier trouvé
+                              break;
                           }
                       }
                   }
               }
           } else if (detectedStaffName) {
-              // Cas où staffName est déjà là (QR Code), on incrémente aussi le compteur si on trouve le membre
+              // Cas où staffName est déjà là (QR Code)
               const { data: location } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
               if (location) {
                   const { data: staff } = await supabase.from('staff_members')
                       .select('id, reviews_count')
                       .eq('organization_id', location.organization_id)
-                      .eq('name', detectedStaffName) // On suppose que staffName du QR code match le name en base
+                      .eq('name', detectedStaffName)
                       .single();
                   
                   if (staff) {
@@ -1124,17 +1122,34 @@ export const api = {
               }
           }
 
+          // Construction du nom complet pour author_name
+          let authorName = 'Client Anonyme (Funnel)';
+          if (userInfo.firstName || userInfo.lastName) {
+              authorName = `${userInfo.firstName} ${userInfo.lastName}`.trim();
+          } else if (userInfo.email) {
+              authorName = userInfo.email; // Fallback to email if no name
+          }
+
+          const notes = [];
+          if (internalNoteText) {
+              notes.push({ id: Date.now().toString(), text: internalNoteText, author_name: 'Système', created_at: new Date().toISOString() });
+          }
+          if (userInfo.phone) {
+              notes.push({ id: Date.now().toString() + 'p', text: `Téléphone client: ${userInfo.phone}`, author_name: 'Système', created_at: new Date().toISOString() });
+          }
+
           const newReview = {
               location_id: locationId,
               rating: rating,
               text: feedback || '',
-              author_name: contact || 'Client Anonyme (Funnel)',
+              author_name: authorName,
               source: 'direct',
               status: 'pending',
               received_at: new Date().toISOString(),
               language: 'fr',
               staff_attributed_to: detectedStaffName || null,
-              internal_notes: internalNoteText ? [{ id: Date.now().toString(), text: internalNoteText, author_name: 'Système', created_at: new Date().toISOString() }] : [],
+              customer_email: userInfo.email || null, // Ensure this column exists in DB or map it appropriately
+              internal_notes: notes,
               analysis: { 
                   sentiment: rating >= 4 ? 'positive' : 'negative', 
                   themes: tags || [], 
