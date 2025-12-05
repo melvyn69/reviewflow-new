@@ -3,7 +3,7 @@ import { AnalyticsSummary, Competitor, Organization, Review, User } from '../typ
 
 export const DEMO_USER: User = {
     id: 'demo-user-id',
-    email: 'melvynbenichou@gmail.com',
+    email: 'demo@reviewflow.com',
     name: 'Gérant Démo',
     role: 'admin',
     avatar: 'https://ui-avatars.com/api/?name=Demo+User&background=4f46e5&color=fff',

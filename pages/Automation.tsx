@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
-import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select } from '../components/ui';
+import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select, ProLock } from '../components/ui';
 import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
@@ -21,6 +21,7 @@ const WorkflowTemplateCard = ({ title, description, icon: Icon, color, onClick }
     </div>
 );
 
+// ... WorkflowEditor component remains identical ...
 const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule | null, onSave: (w: WorkflowRule) => void, onCancel: () => void }) => {
     const [name, setName] = useState(workflow?.name || 'Nouveau Workflow');
     const [trigger, setTrigger] = useState<TriggerType>(workflow?.trigger || 'review_created');
@@ -288,6 +289,7 @@ export const AutomationPage = () => {
       setLoading(false);
   };
 
+  // ... (Keep existing handlers: handleDelete, handleSaveWorkflow, handleToggle, handleRunManually, applyTemplate)
   const handleDelete = async (id: string) => {
       if(confirm("Supprimer ce workflow ?")) {
           await api.automation.deleteWorkflow(id);
@@ -310,13 +312,12 @@ export const AutomationPage = () => {
 
   const handleToggle = async (workflow: WorkflowRule) => {
       const updated = { ...workflow, enabled: !workflow.enabled };
-      // Optimistic update
       setWorkflows(workflows.map(w => w.id === workflow.id ? updated : w));
       try {
           await api.automation.saveWorkflow(updated);
       } catch (e) {
           toast.error("Erreur mise à jour");
-          loadData(); // Revert
+          loadData(); 
       }
   };
 
@@ -387,19 +388,28 @@ export const AutomationPage = () => {
   // PAYWALL - PRO (GROWTH) PLAN ONLY
   if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
       return (
-          <div className="max-w-4xl mx-auto p-12 text-center bg-white rounded-2xl shadow-sm border border-slate-200 mt-12 relative overflow-hidden">
-              <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-[1px] z-0"></div>
-              <div className="relative z-10">
-                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Zap className="h-8 w-8 text-slate-400" />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">Automatisation Avancée</h2>
-                <p className="text-slate-500 mb-8 max-w-md mx-auto">
-                    Créez des règles personnalisées pour répondre automatiquement, alerter votre équipe ou trier vos avis. 
-                    <br/><strong>Fonctionnalité exclusive au plan Growth.</strong>
-                </p>
-                <Button onClick={() => navigate('/billing')} className="shadow-lg shadow-indigo-200">Passer au plan Growth</Button>
+          <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8">
+              <div className="text-center mb-8">
+                  <h1 className="text-3xl font-bold text-slate-900 mb-2">Automatisation Intelligente</h1>
+                  <p className="text-slate-500">Pilotez votre e-réputation sans lever le petit doigt.</p>
               </div>
+              
+              <ProLock 
+                  title="Débloquez l'Automatisation"
+                  description="Créez des règles personnalisées pour répondre automatiquement, alerter votre équipe ou trier vos avis."
+              >
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-8 filter blur-sm pointer-events-none opacity-50">
+                      {TEMPLATES.map((tpl, i) => (
+                          <div key={i} className="flex flex-col p-4 bg-white border border-slate-200 rounded-xl">
+                              <div className={`h-10 w-10 rounded-lg ${tpl.color} flex items-center justify-center mb-3`}>
+                                  <tpl.icon className="h-5 w-5 text-white" />
+                              </div>
+                              <h4 className="font-bold text-slate-900 text-sm mb-1">{tpl.title}</h4>
+                              <p className="text-xs text-slate-500 leading-relaxed">{tpl.description}</p>
+                          </div>
+                      ))}
+                  </div>
+              </ProLock>
           </div>
       );
   }
@@ -412,7 +422,11 @@ export const AutomationPage = () => {
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Automatisation</h1>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <Zap className="h-8 w-8 text-indigo-600" />
+              Automatisation
+              <Badge variant="pro">GROWTH</Badge>
+          </h1>
           <p className="text-slate-500">Gagnez du temps avec des scénarios intelligents.</p>
         </div>
         <div className="flex gap-3">
@@ -428,6 +442,7 @@ export const AutomationPage = () => {
           ))}
       </div>
 
+      {/* Existing Workflows */}
       <div className="space-y-4">
           <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2 mt-8 mb-4">
               <Zap className="h-5 w-5 text-indigo-600" />

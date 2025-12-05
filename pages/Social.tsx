@@ -1,10 +1,8 @@
 
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Review, Organization, SocialPost, SocialAccount } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Select, Badge } from '../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Select, Badge, ProLock } from '../components/ui';
 import { 
     Share2, 
     Instagram, 
@@ -42,6 +40,7 @@ const FORMATS = [
 ];
 
 export const SocialPage = () => {
+    // ... (Keep all existing state and effects from SocialPage)
     const [reviews, setReviews] = useState<Review[]>([]);
     const [selectedReview, setSelectedReview] = useState<Review | null>(null);
     const [loading, setLoading] = useState(true);
@@ -200,43 +199,31 @@ export const SocialPage = () => {
     // Helper to get template classes
     const getTemplateClass = (id: string) => TEMPLATES.find(t => t.id === id)?.style || '';
     const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
+    const reviewTextSize = (length: number) => {
+        if (length < 50) return 'text-7xl';
+        if (length < 100) return 'text-6xl';
+        if (length < 200) return 'text-5xl';
+        return 'text-4xl';
+    };
 
     // PAYWALL: Block Free AND Starter plans. Only allow Pro/Enterprise.
     if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
         return (
             <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                            <Share2 className="h-8 w-8 text-indigo-600" />
-                            Social Studio
-                        </h1>
-                        <p className="text-slate-500">Transformez vos meilleurs avis en posts viraux.</p>
-                    </div>
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Social Studio</h1>
+                    <p className="text-slate-500">Transformez vos meilleurs avis en posts viraux.</p>
                 </div>
                 
-                <Card className="relative overflow-hidden border-indigo-100 bg-white">
-                    <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-8 text-center">
-                        <div className="bg-indigo-50 p-4 rounded-full shadow-lg mb-6">
-                            <Sparkles className="h-10 w-10 text-indigo-600" />
-                        </div>
-                        <h2 className="text-3xl font-bold text-slate-900 mb-4">Débloquez le Social Studio</h2>
-                        <p className="text-slate-600 max-w-lg mb-8 text-lg">
-                            Créez des visuels HD, planifiez vos posts et publiez sur Instagram et LinkedIn.
-                            <br/><strong>Fonctionnalité exclusive au plan Growth.</strong>
-                        </p>
-                        <Button size="lg" className="shadow-xl shadow-indigo-200" onClick={() => navigate('/billing')}>
-                            Passer au plan Growth
-                        </Button>
+                <ProLock
+                    title="Débloquez le Social Studio"
+                    description="Créez des visuels HD, planifiez vos posts et publiez sur Instagram et LinkedIn automatiquement."
+                >
+                    <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 opacity-20 filter blur-[1px]">
+                        <div className="bg-white border border-slate-200 h-96 rounded-xl shadow-lg"></div>
+                        <div className="bg-slate-100 border border-slate-200 h-96 rounded-xl"></div>
                     </div>
-                    <CardContent className="p-8 opacity-20 filter blur-[2px]">
-                        <div className="flex justify-center">
-                            <div className="w-64 h-64 bg-slate-900 rounded-xl flex items-center justify-center text-white">
-                                Aperçu Bloqué
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                </ProLock>
             </div>
         );
     }
@@ -248,6 +235,7 @@ export const SocialPage = () => {
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                         <Share2 className="h-8 w-8 text-indigo-600" />
                         Social Studio
+                        <Badge variant="pro">GROWTH</Badge>
                     </h1>
                     <p className="text-slate-500">Transformez vos meilleurs avis en posts viraux.</p>
                 </div>
@@ -422,7 +410,7 @@ export const SocialPage = () => {
                 </div>
             )}
 
-            {/* --- TAB: PLANNING --- */}
+            {/* ... (Keep Planning and Accounts tabs as is) */}
             {activeTab === 'calendar' && (
                 <div className="space-y-6 animate-in fade-in">
                     <Card>
@@ -441,7 +429,6 @@ export const SocialPage = () => {
                                     {posts.sort((a,b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()).map(post => (
                                         <div key={post.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
                                             <div className="h-32 bg-gradient-to-r from-indigo-100 to-slate-100 flex items-center justify-center text-slate-400">
-                                                {/* Placeholder for saved image */}
                                                 <Sparkles className="h-8 w-8" />
                                             </div>
                                             <div className="p-4">
@@ -475,7 +462,6 @@ export const SocialPage = () => {
                 </div>
             )}
 
-            {/* --- TAB: ACCOUNTS --- */}
             {activeTab === 'accounts' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
                     <Card>
@@ -563,12 +549,4 @@ export const SocialPage = () => {
             )}
         </div>
     );
-};
-
-// Helper for dynamic font size based on text length
-const reviewTextSize = (length: number) => {
-    if (length < 50) return 'text-7xl';
-    if (length < 100) return 'text-6xl';
-    if (length < 200) return 'text-5xl';
-    return 'text-4xl';
 };

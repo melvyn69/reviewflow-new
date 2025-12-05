@@ -1,6 +1,6 @@
 
 import React, { InputHTMLAttributes, SelectHTMLAttributes, useContext, useState, useEffect, useMemo } from 'react';
-import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle } from 'lucide-react';
+import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle, Lock, Sparkles, ChevronRight } from 'lucide-react';
 // On utilise la vraie librairie pour éviter les conflits de contexte
 export { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 
@@ -151,7 +151,7 @@ export const CardContent: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ cl
 
 // --- BADGE ---
 interface BadgeProps {
-  variant?: 'default' | 'success' | 'warning' | 'error' | 'neutral';
+  variant?: 'default' | 'success' | 'warning' | 'error' | 'neutral' | 'pro';
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
@@ -164,15 +164,63 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, cla
     warning: "bg-amber-50 text-amber-700 border-amber-200",
     error: "bg-rose-50 text-rose-700 border-rose-200",
     neutral: "bg-slate-100 text-slate-600 border-slate-200",
+    pro: "bg-gradient-to-r from-indigo-500 to-violet-600 text-white border-transparent shadow-sm",
   };
   return (
     <span 
       onClick={onClick}
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${variants[variant]} ${className} ${onClick ? 'cursor-pointer hover:opacity-80' : ''}`}
     >
+      {variant === 'pro' && <Sparkles className="h-3 w-3 mr-1 fill-white" />}
       {children}
     </span>
   );
+};
+
+// --- PRO LOCK (Upsell Component) ---
+export const ProLock: React.FC<{ 
+    title: string, 
+    description: string, 
+    onUpgrade?: () => void,
+    children?: React.ReactNode
+}> = ({ title, description, onUpgrade, children }) => {
+    return (
+        <div className="relative group rounded-xl overflow-hidden border border-indigo-100 bg-slate-50/50">
+            {/* Blurred Content */}
+            <div className="filter blur-[3px] select-none opacity-50 pointer-events-none p-4" aria-hidden="true">
+                {children || (
+                    <div className="space-y-4">
+                        <div className="h-32 bg-slate-200 rounded-lg animate-pulse"></div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="h-24 bg-slate-200 rounded-lg animate-pulse"></div>
+                            <div className="h-24 bg-slate-200 rounded-lg animate-pulse"></div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Lock Overlay */}
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center bg-white/60 backdrop-blur-[2px]">
+                <div className="bg-white p-4 rounded-full shadow-xl mb-4 ring-4 ring-indigo-50 transform group-hover:scale-110 transition-transform duration-300">
+                    <Lock className="h-8 w-8 text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-extrabold text-slate-900 mb-2">{title}</h3>
+                <p className="text-slate-600 max-w-sm mb-6 text-sm leading-relaxed">
+                    {description}
+                </p>
+                <Button 
+                    size="lg" 
+                    className="shadow-xl shadow-indigo-200 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 border-none animate-pulse hover:animate-none" 
+                    onClick={onUpgrade || (() => window.location.hash = '#/billing')}
+                >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Débloquer avec le plan Growth
+                    <ChevronRight className="h-4 w-4 ml-1 opacity-70" />
+                </Button>
+                <p className="mt-3 text-xs text-slate-400 font-medium uppercase tracking-wide">Essai gratuit disponible</p>
+            </div>
+        </div>
+    );
 };
 
 // --- INPUTS ---

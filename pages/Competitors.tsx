@@ -1,9 +1,8 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Competitor, Organization, MarketReport } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, Badge, useToast, Input } from '../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, Badge, useToast, Input, ProLock } from '../components/ui';
 import { 
     Search, 
     MapPin, 
@@ -213,42 +212,31 @@ export const CompetitorsPage = () => {
     // PAYWALL - PRO (GROWTH) PLAN ONLY
     if (org.subscription_plan === 'free' || org.subscription_plan === 'starter') {
         return (
-            <div className="max-w-5xl mx-auto mt-12 relative overflow-hidden rounded-2xl border border-slate-200 shadow-xl bg-white">
-                <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-8 text-center">
-                    <div className="bg-white p-4 rounded-full shadow-lg mb-6">
-                        <Lock className="h-8 w-8 text-indigo-600" />
-                    </div>
-                    <h2 className="text-3xl font-bold text-slate-900 mb-4">Fonctionnalité Growth</h2>
-                    <p className="text-slate-600 max-w-lg mb-8 text-lg">
-                        La veille concurrentielle et l'analyse de marché par IA sont réservées aux membres du plan Growth.
-                        Espionnez vos concurrents légalement et récupérez leurs clients déçus.
-                    </p>
-                    <Button size="lg" className="shadow-xl shadow-indigo-200" onClick={() => navigate('/billing')}>
-                        Passer au plan Growth
-                    </Button>
+            <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Veille Concurrentielle</h1>
+                    <p className="text-slate-500">Espionnez légalement vos concurrents et analysez leur stratégie.</p>
                 </div>
                 
-                {/* Blurred Background Content Preview */}
-                <div className="p-8 filter blur-sm pointer-events-none opacity-50">
-                    <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-2xl font-bold">Veille Concurrentielle</h1>
-                        <div className="flex gap-2">
-                            <Button variant="outline">Ma Sélection</Button>
-                            <Button>Radar</Button>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-6">
-                        {[1,2,3].map(i => (
-                            <Card key={i}>
+                <ProLock 
+                    title="Débloquez le Radar Concurrentiel"
+                    description="Suivez jusqu'à 10 concurrents, analysez leurs faiblesses et recevez des alertes quand ils changent de stratégie."
+                >
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-8">
+                        {[1, 2, 3].map(i => (
+                            <Card key={i} className="opacity-50">
                                 <CardContent className="p-6">
-                                    <div className="h-4 w-1/3 bg-slate-200 rounded mb-4"></div>
-                                    <div className="h-3 w-2/3 bg-slate-100 rounded mb-2"></div>
-                                    <div className="h-3 w-1/2 bg-slate-100 rounded"></div>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="h-10 w-10 bg-slate-200 rounded-full"></div>
+                                        <div className="h-6 w-16 bg-slate-200 rounded"></div>
+                                    </div>
+                                    <div className="h-4 w-3/4 bg-slate-200 rounded mb-2"></div>
+                                    <div className="h-4 w-1/2 bg-slate-200 rounded"></div>
                                 </CardContent>
                             </Card>
                         ))}
                     </div>
-                </div>
+                </ProLock>
             </div>
         );
     }
@@ -260,6 +248,7 @@ export const CompetitorsPage = () => {
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                         <Target className="h-8 w-8 text-red-600" />
                         Veille Concurrentielle
+                        <Badge variant="pro">GROWTH</Badge>
                     </h1>
                     <p className="text-slate-500">Surveillez votre marché et anticipez les mouvements adverses.</p>
                 </div>
@@ -285,11 +274,10 @@ export const CompetitorsPage = () => {
                 </div>
             </div>
 
-            {/* INSIGHTS / SWOT SECTION */}
+            {/* REST OF THE PAGE - Only rendered if plan is Pro */}
+            
             {activeTab === 'insights' && (
                 <div className="grid grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
-                    
-                    {/* LEFT SIDEBAR: NEW ANALYSIS + HISTORY */}
                     <div className="col-span-12 lg:col-span-3 space-y-6">
                         <Card>
                             <CardHeader>
@@ -319,7 +307,6 @@ export const CompetitorsPage = () => {
                                 </Button>
                             </CardContent>
                         </Card>
-
                         {reportHistory.length > 0 && (
                             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                                 <div className="p-3 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
@@ -343,8 +330,6 @@ export const CompetitorsPage = () => {
                             </div>
                         )}
                     </div>
-
-                    {/* RIGHT MAIN CONTENT: REPORT */}
                     <div className="col-span-12 lg:col-span-9">
                         {loadingInsights ? (
                             <div className="h-full flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-200 min-h-[400px]">
@@ -356,7 +341,6 @@ export const CompetitorsPage = () => {
                             </div>
                         ) : marketData ? (
                             <div className="space-y-6">
-                                {/* REPORT HEADER */}
                                 <div className="flex justify-between items-end pb-4 border-b border-slate-200">
                                     <div>
                                         <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
@@ -369,9 +353,7 @@ export const CompetitorsPage = () => {
                                     </div>
                                     <Button variant="outline" size="sm" icon={Download}>PDF</Button>
                                 </div>
-
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                    {/* TRENDS CARD */}
                                     <Card className="lg:col-span-1 bg-slate-900 text-white border-none shadow-xl flex flex-col">
                                         <CardHeader>
                                             <CardTitle className="flex items-center gap-2">
@@ -390,10 +372,7 @@ export const CompetitorsPage = () => {
                                             </ul>
                                         </CardContent>
                                     </Card>
-
-                                    {/* SWOT MATRIX */}
                                     <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {/* Forces */}
                                         <Card className="bg-emerald-50 border-emerald-100 shadow-sm">
                                             <CardHeader className="pb-2">
                                                 <CardTitle className="text-emerald-800 flex items-center gap-2 text-base">
@@ -410,12 +389,10 @@ export const CompetitorsPage = () => {
                                                 </ul>
                                             </CardContent>
                                         </Card>
-
-                                        {/* Faiblesses */}
                                         <Card className="bg-rose-50 border-rose-100 shadow-sm">
                                             <CardHeader className="pb-2">
                                                 <CardTitle className="text-rose-800 flex items-center gap-2 text-base">
-                                                    <AlertTriangle className="h-5 w-5" /> Faiblesses (Opportunités)
+                                                    <AlertTriangle className="h-5 w-5" /> Faiblesses
                                                 </CardTitle>
                                             </CardHeader>
                                             <CardContent>
@@ -428,12 +405,10 @@ export const CompetitorsPage = () => {
                                                 </ul>
                                             </CardContent>
                                         </Card>
-
-                                        {/* Opportunités */}
                                         <Card className="bg-blue-50 border-blue-100 shadow-sm">
                                             <CardHeader className="pb-2">
                                                 <CardTitle className="text-blue-800 flex items-center gap-2 text-base">
-                                                    <Lightbulb className="h-5 w-5" /> Opportunités Stratégiques
+                                                    <Lightbulb className="h-5 w-5" /> Opportunités
                                                 </CardTitle>
                                             </CardHeader>
                                             <CardContent>
@@ -446,12 +421,10 @@ export const CompetitorsPage = () => {
                                                 </ul>
                                             </CardContent>
                                         </Card>
-
-                                        {/* Menaces */}
                                         <Card className="bg-amber-50 border-amber-100 shadow-sm">
                                             <CardHeader className="pb-2">
                                                 <CardTitle className="text-amber-800 flex items-center gap-2 text-base">
-                                                    <Shield className="h-5 w-5" /> Menaces & Risques
+                                                    <Shield className="h-5 w-5" /> Menaces
                                                 </CardTitle>
                                             </CardHeader>
                                             <CardContent>
@@ -466,7 +439,6 @@ export const CompetitorsPage = () => {
                                         </Card>
                                     </div>
                                 </div>
-                                
                                 <h3 className="text-lg font-bold text-slate-900 mt-8 mb-4">Détail par Concurrent</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {marketData.competitors_detailed?.map((comp: any, i: number) => (
@@ -503,15 +475,14 @@ export const CompetitorsPage = () => {
                     </div>
                 </div>
             )}
-
-            {/* SCANNER SECTION */}
+            
             {activeTab === 'scan' && (
                 <div className="space-y-6 animate-in fade-in">
                     <Card className="bg-slate-900 text-white border-none shadow-xl">
                         <CardContent className="p-8">
                             <div className="flex flex-col md:flex-row gap-6 items-end">
                                 <div className="flex-1 w-full">
-                                    <label className="block text-sm font-medium text-slate-400 mb-2">Secteur d'activité (ex: Pizzeria)</label>
+                                    <label className="block text-sm font-medium text-slate-400 mb-2">Secteur d'activité</label>
                                     <Input 
                                         placeholder="Mot-clé (facultatif)" 
                                         className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
@@ -545,7 +516,6 @@ export const CompetitorsPage = () => {
                             </div>
                         </CardContent>
                     </Card>
-
                     {scannedResults.length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4">
                             {scannedResults.map((result, i) => (
@@ -562,7 +532,6 @@ export const CompetitorsPage = () => {
                                                 Menace: {result.threat_level}%
                                             </div>
                                         </div>
-
                                         <div className="flex gap-4 mb-4 text-sm">
                                             <div>
                                                 <div className="text-slate-400 text-xs">Note</div>
@@ -573,7 +542,6 @@ export const CompetitorsPage = () => {
                                                 <div className="font-bold text-slate-900">{result.review_count} avis</div>
                                             </div>
                                         </div>
-
                                         <div className="space-y-2 mb-6">
                                             <div className="text-xs font-semibold text-green-700 bg-green-50 p-2 rounded">
                                                 👍 {result.strengths[0]}
@@ -582,7 +550,6 @@ export const CompetitorsPage = () => {
                                                 👎 {result.weaknesses[0]}
                                             </div>
                                         </div>
-
                                         <Button className="w-full" variant="outline" icon={Plus} onClick={() => handleTrack(result)}>
                                             Suivre ce concurrent
                                         </Button>
@@ -594,7 +561,6 @@ export const CompetitorsPage = () => {
                 </div>
             )}
 
-            {/* TRACKED LIST SECTION */}
             {activeTab === 'tracked' && (
                 <Card className="animate-in fade-in">
                     <CardHeader>

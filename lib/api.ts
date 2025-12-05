@@ -48,7 +48,7 @@ export const api = {
       };
     },
     login: async (email: string, password: string) => {
-      if (email === 'demo@reviewflow.com' || email === 'melvynbenichou@gmail.com') {
+      if (email === 'demo@reviewflow.com') {
           setDemoMode(true);
           return;
       }
