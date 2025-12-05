@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
@@ -1016,9 +1015,18 @@ export const api = {
           const user = await api.auth.getUser();
           if (!user || !user.organization_id) throw new Error("Organisation introuvable.");
 
-          // CORRECTION: On retire 'description' et 'public_config' qui peuvent manquer dans la DB
-          // pour éviter l'erreur "Could not find the description column"
-          const { description, public_config, ...safeData } = data;
+          // CORRECTION: On retire les colonnes potentiellment manquantes pour éviter les erreurs "Column not found"
+          const { 
+              description, 
+              public_config, 
+              facebook_review_url,
+              tripadvisor_review_url,
+              google_review_url,
+              public_profile_enabled,
+              booking_url,
+              cover_image,
+              ...safeData 
+          } = data;
 
           const { error } = await supabase.from('locations').insert({ ...safeData, organization_id: user.organization_id });
           
@@ -1034,8 +1042,18 @@ export const api = {
               return;
           }
           
-          // CORRECTION: On retire 'description' et 'public_config'
-          const { description, public_config, ...safeData } = data;
+          // CORRECTION: On retire les colonnes potentiellment manquantes
+          const { 
+              description, 
+              public_config,
+              facebook_review_url,
+              tripadvisor_review_url,
+              google_review_url,
+              public_profile_enabled,
+              booking_url,
+              cover_image,
+              ...safeData 
+          } = data;
 
           const { error } = await supabase!.from('locations').update(safeData).eq('id', id);
           if (error) throw new Error(error.message);
