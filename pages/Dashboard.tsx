@@ -382,7 +382,7 @@ export const DashboardPage = () => {
       </div>
 
       {/* Quick Actions Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button onClick={() => navigate('/collect')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all text-left group">
               <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <QrCode className="h-5 w-5" />
@@ -390,13 +390,7 @@ export const DashboardPage = () => {
               <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.qrcode')}</div>
               <div className="text-xs text-slate-500">{t('dashboard.actions.print')}</div>
           </button>
-          <button onClick={openFunnel} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-green-300 hover:shadow-md transition-all text-left group">
-              <div className="bg-green-50 text-green-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <ExternalLink className="h-5 w-5" />
-              </div>
-              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.funnel')}</div>
-              <div className="text-xs text-slate-500">{t('dashboard.actions.link')}</div>
-          </button>
+          
           <button onClick={() => navigate('/inbox')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left group">
               <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <MessageSquare className="h-5 w-5" />
@@ -404,6 +398,7 @@ export const DashboardPage = () => {
               <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.reply')}</div>
               <div className="text-xs text-slate-500">{t('dashboard.actions.inbox')}</div>
           </button>
+          
           <button onClick={() => navigate('/social')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-pink-300 hover:shadow-md transition-all text-left group">
               <div className="bg-pink-50 text-pink-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <Sparkles className="h-5 w-5" />
