@@ -725,6 +725,7 @@ export const api = {
       },
       autoDiscover: async (radius: number, sector: string, lat: number, lng: number) => {
           if (isDemoMode()) return DEMO_COMPETITORS;
+          // Note: fetch_places is distinct from GenAI, still uses Edge Function for Places API
           const { results } = await invoke('fetch_places', {
               latitude: lat,
               longitude: lng,
@@ -754,12 +755,56 @@ export const api = {
               };
           }
           
-          const data = await invoke('analyze_market', {
-              competitors: comps,
-              sector: sector || 'Commerce',
-              location: location || 'Locale'
-          });
-          return data;
+          // Use Client-Side GenAI instead of Edge Function
+          const ai = getAIClient();
+          const competitorsList = comps.slice(0, 10).map((c: any) => 
+              `- ${c.name} (${c.rating}★, ${c.review_count} avis): ${c.strengths.join(', ')} / ${c.weaknesses.join(', ')}`
+          ).join('\n');
+
+          const prompt = `
+              Agis comme un expert en stratégie d'entreprise et analyse de marché locale.
+              
+              CONTEXTE:
+              Secteur: ${sector || 'Non spécifié'}
+              Localisation: ${location || 'Locale'}
+              
+              DONNÉES CONCURRENTS (Top 10):
+              ${competitorsList}
+              
+              TACHE:
+              Génère une analyse de marché structurée au format JSON STRICT.
+              
+              FORMAT ATTENDU (JSON uniquement, pas de markdown, commence par {):
+              {
+                  "trends": ["Tendance 1", "Tendance 2"],
+                  "swot": {
+                      "strengths": ["Force"],
+                      "weaknesses": ["Faiblesse"],
+                      "opportunities": ["Opportunité"],
+                      "threats": ["Menace"]
+                  },
+                  "competitors_detailed": [
+                      {
+                          "name": "Nom",
+                          "last_month_growth": "Estimation",
+                          "sentiment_trend": "Positif/Négatif",
+                          "top_complaint": "Point faible"
+                      }
+                  ]
+              }
+          `;
+
+          try {
+              const result = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: prompt,
+                  config: { responseMimeType: 'application/json' }
+              });
+              return JSON.parse(result.text || "{}");
+          } catch (e) {
+              console.error("Analysis Error", e);
+              throw new Error("Erreur d'analyse IA");
+          }
       },
       saveReport: async (report: Omit<MarketReport, 'id'>) => {
           if (isDemoMode()) {
