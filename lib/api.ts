@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
@@ -379,35 +380,27 @@ export const api = {
               .single();
 
           if (review && review.source === 'direct') {
-              if (!review.customer_email) {
-                  throw new Error("Impossible de répondre : aucun email associé à cet avis.");
-              }
-
-              const locationName = (review.location as any)?.name || "Notre Établissement";
-
-              await invoke('send_campaign_emails', {
-                  emails: [review.customer_email],
-                  subject: `Réponse à votre avis chez ${locationName}`,
-                  html: `
-                    <div style="font-family: sans-serif; color: #333;">
-                        <h2>Bonjour ${review.author_name},</h2>
-                        <p>Merci d'avoir pris le temps de nous laisser un avis concernant votre visite chez <strong>${locationName}</strong>.</p>
-                        <p>Voici notre réponse :</p>
-                        <blockquote style="background: #f3f4f6; padding: 15px; border-left: 4px solid #4f46e5; margin: 20px 0; font-style: italic;">
-                            "${text}"
-                        </blockquote>
-                        <p>Au plaisir de vous revoir,<br/>L'équipe ${locationName}</p>
-                    </div>
-                  `
-              });
-
+              // Réponse locale pour les avis QR Code
               await supabase!.from('reviews').update({
                   status: 'sent',
                   posted_reply: text,
                   replied_at: new Date().toISOString()
               }).eq('id', reviewId);
 
+              // Tenter d'envoyer l'email
+              if (review.customer_email) {
+                  const locationName = (review.location as any)?.name || "Notre Établissement";
+                  try {
+                      await invoke('send_campaign_emails', {
+                          emails: [review.customer_email],
+                          subject: `Réponse à votre avis chez ${locationName}`,
+                          html: `<h2>Bonjour ${review.author_name},</h2><p>Merci pour votre avis.</p><blockquote>"${text}"</blockquote>`
+                      });
+                  } catch (e) { console.error("Failed to send reply email", e); }
+              }
+
           } else {
+              // Réponse Google via Edge Function
               await invoke('post_google_reply', { reviewId, replyText: text });
           }
       },
@@ -677,9 +670,9 @@ export const api = {
               };
           }
 
+          // Appel RPC sécurisé
           const { data: kpi, error: rpcError } = await supabase!.rpc('get_dashboard_stats', { org_id: org.id });
-          if (rpcError) console.warn("RPC get_dashboard_stats error:", rpcError);
-
+          
           const startDate = new Date();
           startDate.setDate(startDate.getDate() - 30);
           
@@ -692,6 +685,7 @@ export const api = {
 
           const reviews = recentReviews || [];
           
+          // Calcul stats manuelles si RPC échoue ou pour compléments
           const volumeMap = new Map<string, number>();
           reviews.forEach(r => {
               const d = new Date(r.received_at).toLocaleDateString();
@@ -770,7 +764,7 @@ export const api = {
               };
           }
           const ai = getAIClient();
-          const prompt = `Analyze competitors...`; // Simplified for brevity in this update
+          const prompt = `Analyze competitors...`; 
           try {
               const result = await ai.models.generateContent({
                   model: 'gemini-2.5-flash',
@@ -824,7 +818,6 @@ export const api = {
   },
   notifications: {
       list: async (): Promise<AppNotification[]> => {
-          if (isDemoMode()) return [];
           return [];
       },
       markAllRead: async () => {},
@@ -957,15 +950,11 @@ export const api = {
           if (!org) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
           
           const googleConnected = !!(org.integrations && (org.integrations as any).google === true);
-          const brandVoiceConfigured = !!(org.brand && (org.brand as any).tone && ((org.brand as any).description || (org.brand as any).knowledge_base));
+          const brandVoiceConfigured = !!(org.brand && (org.brand as any).tone);
           
-          const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', userProfile.organization_id);
-          const locationIds = locations?.map(l => l.id) || [];
-          let firstReviewReplied = false;
-          if (locationIds.length > 0) {
-              const { count } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).in('location_id', locationIds).eq('status', 'sent');
-              firstReviewReplied = (count || 0) > 0;
-          }
+          const { count } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('status', 'sent');
+          const firstReviewReplied = (count || 0) > 0;
+          
           const steps = [googleConnected, brandVoiceConfigured, firstReviewReplied];
           const completionPercentage = Math.round((steps.filter(Boolean).length / steps.length) * 100);
           return { googleConnected, brandVoiceConfigured, firstReviewReplied, completionPercentage };
@@ -994,6 +983,7 @@ export const api = {
       getActiveOffer: async (locationId: string, score: number) => {
           if (isDemoMode()) return null;
           if (!supabase) return null;
+          
           try {
               const { data: loc } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
               if (!loc) return null;
@@ -1003,18 +993,14 @@ export const api = {
                 .select('*')
                 .eq('organization_id', loc.organization_id)
                 .eq('active', true)
-                .limit(5);
+                .lte('trigger_rating', score) // Trigger rating must be less than or equal to score
+                .limit(1);
                 
-              if (offers && offers.length > 0) {
-                  const matching = offers
-                    .filter(o => o.trigger_rating <= score)
-                    .sort((a, b) => b.trigger_rating - a.trigger_rating);
-                  return matching.length > 0 ? matching[0] : null;
-              }
+              return offers && offers.length > 0 ? offers[0] : null;
           } catch(e) {
               console.error("Error fetching offers", e);
+              return null;
           }
-          return null;
       },
       submitFeedback: async (locationId: string, rating: number, feedback: string, userInfo: { firstName: string, lastName: string, email: string, phone: string }, tags: string[], staffName?: string) => {
           if (isDemoMode()) return;
@@ -1082,6 +1068,7 @@ export const api = {
       },
       generateCoupon: async (offerId: string, email: string) => {
           if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Offre Démo', discount_detail: '-10%', expires_at: new Date().toISOString(), status: 'active' };
+          
           try {
               // Try edge function first
               return await invoke('manage_coupons', { action: 'create', offerId, email });
