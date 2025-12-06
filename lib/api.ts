@@ -1122,21 +1122,80 @@ export const api = {
       },
       getActiveOffer: async (locationId: string, score: number) => {
           if (isDemoMode()) return null;
+          if (!supabase) return null;
+          
+          // Get Org ID from Location
+          const { data: loc } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
+          if (!loc) return null;
+          
+          // Fetch active offers for this org
+          const { data: offers } = await supabase
+            .from('offers')
+            .select('*')
+            .eq('organization_id', loc.organization_id)
+            .eq('active', true)
+            .limit(5); // Fetch a few to filter in JS if needed
+            
+          if (offers && offers.length > 0) {
+              // Find the best matching offer (Trigger Rating <= User Rating)
+              // Ex: Trigger 4, User 5 -> Match.
+              // We sort by trigger_rating desc to give the "hardest" offer first (usually best reward)
+              const matching = offers
+                .filter(o => o.trigger_rating <= score)
+                .sort((a, b) => b.trigger_rating - a.trigger_rating);
+                
+              return matching.length > 0 ? matching[0] : null;
+          }
           return null;
       },
       submitFeedback: async (locationId: string, rating: number, feedback: string, userInfo: { firstName: string, lastName: string, email: string, phone: string }, tags: string[], staffName?: string) => {
           if (isDemoMode()) return;
           
-          // IMPORTANT: Use Edge Function for public submissions to handle RLS and Emails securely
-          // Using invoke instead of direct supabase insert
-          return await invoke('submit_review', {
+          const payload = {
               locationId,
               rating,
               feedback,
               contact: userInfo.email || `${userInfo.firstName} ${userInfo.lastName}`,
               tags,
               staffName
-          });
+          };
+
+          try {
+              // 1. Tenter via Edge Function (Méthode privilégiée)
+              return await invoke('submit_review', payload);
+          } catch (e) {
+              console.warn("Edge Function failed, trying direct insert fallback...", e);
+              
+              // 2. Fallback: Insertion directe via Supabase Client (si RLS le permet)
+              if (!supabase) throw new Error("Supabase not initialized");
+              
+              // Reconstruction de l'objet review comme dans l'Edge Function
+              const newReview = {
+                  location_id: locationId,
+                  rating: rating,
+                  text: feedback || '', 
+                  author_name: payload.contact || 'Client Anonyme',
+                  source: 'direct',
+                  status: 'pending',
+                  received_at: new Date().toISOString(),
+                  language: 'fr',
+                  staff_attributed_to: staffName || null,
+                  analysis: { 
+                      sentiment: rating >= 4 ? 'positive' : 'negative', 
+                      themes: tags || [], 
+                      keywords: tags || [] 
+                  },
+              };
+
+              const { data, error } = await supabase.from('reviews').insert(newReview).select().single();
+              
+              if (error) {
+                  console.error("Fallback insert failed:", error);
+                  throw error; // Re-throw if even fallback fails
+              }
+              
+              return { success: true, review: data };
+          }
       },
       getWidgetReviews: async (locationId: string) => {
           if (isDemoMode()) return DEMO_REVIEWS;
