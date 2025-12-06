@@ -1015,20 +1015,10 @@ export const api = {
           const user = await api.auth.getUser();
           if (!user || !user.organization_id) throw new Error("Organisation introuvable.");
 
-          // CORRECTION: On retire les colonnes potentiellment manquantes pour éviter les erreurs "Column not found"
-          const { 
-              description, 
-              public_config, 
-              facebook_review_url,
-              tripadvisor_review_url,
-              google_review_url,
-              public_profile_enabled,
-              booking_url,
-              cover_image,
-              ...safeData 
-          } = data;
-
-          const { error } = await supabase.from('locations').insert({ ...safeData, organization_id: user.organization_id });
+          // On retire les colonnes potentiellment manquantes pour éviter les erreurs "Column not found"
+          // UPDATE: Colonnes ajoutées via SQL, on peut désormais tout envoyer.
+          // Pour sécurité, on envoie tout data
+          const { error } = await supabase.from('locations').insert({ ...data, organization_id: user.organization_id });
           
           if (error) {
               console.error("Location Create Error", error);
@@ -1042,20 +1032,8 @@ export const api = {
               return;
           }
           
-          // CORRECTION: On retire les colonnes potentiellment manquantes
-          const { 
-              description, 
-              public_config,
-              facebook_review_url,
-              tripadvisor_review_url,
-              google_review_url,
-              public_profile_enabled,
-              booking_url,
-              cover_image,
-              ...safeData 
-          } = data;
-
-          const { error } = await supabase!.from('locations').update(safeData).eq('id', id);
+          // UPDATE: Colonnes ajoutées via SQL, on peut désormais tout envoyer.
+          const { error } = await supabase!.from('locations').update(data).eq('id', id);
           if (error) throw new Error(error.message);
       },
       delete: async (id: string) => {
