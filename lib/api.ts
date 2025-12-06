@@ -1174,7 +1174,7 @@ export const api = {
                   location_id: locationId,
                   rating: rating,
                   text: feedback || '', 
-                  author_name: payload.contact || 'Client Anonyme',
+                  author_name: payload.contact || 'Client Anonyme (Funnel)',
                   source: 'direct',
                   status: 'pending',
                   received_at: new Date().toISOString(),
@@ -1183,7 +1183,8 @@ export const api = {
                   analysis: { 
                       sentiment: rating >= 4 ? 'positive' : 'negative', 
                       themes: tags || [], 
-                      keywords: tags || [] 
+                      keywords: tags || [], 
+                      flags: { hygiene: false, security: false } 
                   },
               };
 
