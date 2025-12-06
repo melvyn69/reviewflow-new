@@ -1126,97 +1126,17 @@ export const api = {
       },
       submitFeedback: async (locationId: string, rating: number, feedback: string, userInfo: { firstName: string, lastName: string, email: string, phone: string }, tags: string[], staffName?: string) => {
           if (isDemoMode()) return;
-          if (!supabase) return;
-
-          // LOGIQUE DE DÉTECTION DU PERSONNEL (CLIENT-SIDE)
-          let detectedStaffName = staffName;
-          let internalNoteText = '';
-
-          // Si staffName n'est pas fourni (pas de QR code spécifique), on cherche dans le texte
-          if (!detectedStaffName && feedback && feedback.length > 0) {
-              // 1. Récupérer l'ID de l'organisation
-              const { data: location } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
-              
-              if (location) {
-                  // 2. Récupérer les membres du staff
-                  const { data: staffMembers } = await supabase.from('staff_members').select('*').eq('organization_id', location.organization_id);
-                  
-                  if (staffMembers && staffMembers.length > 0) {
-                      // 3. Chercher une correspondance
-                      const sortedStaff = staffMembers.sort((a, b) => b.name.length - a.name.length);
-                      
-                      for (const member of sortedStaff) {
-                          const regex = new RegExp(`\\b${member.name}\\b`, 'i');
-                          if (regex.test(feedback)) {
-                              detectedStaffName = member.name;
-                              internalNoteText = `Attribué automatiquement à ${member.name} (détecté dans le texte de l'avis).`;
-                              
-                              // Incrémenter le compteur
-                              await supabase.from('staff_members')
-                                  .update({ reviews_count: (member.reviews_count || 0) + 1 })
-                                  .eq('id', member.id);
-                              
-                              break;
-                          }
-                      }
-                  }
-              }
-          } else if (detectedStaffName) {
-              // Cas où staffName est déjà là (QR Code)
-              const { data: location } = await supabase.from('locations').select('organization_id').eq('id', locationId).single();
-              if (location) {
-                  const { data: staff } = await supabase.from('staff_members')
-                      .select('id, reviews_count')
-                      .eq('organization_id', location.organization_id)
-                      .eq('name', detectedStaffName)
-                      .single();
-                  
-                  if (staff) {
-                      internalNoteText = `Attribué via QR Code à ${detectedStaffName}.`;
-                      await supabase.from('staff_members')
-                          .update({ reviews_count: (staff.reviews_count || 0) + 1 })
-                          .eq('id', staff.id);
-                  }
-              }
-          }
-
-          // Construction du nom complet pour author_name
-          let authorName = 'Client Anonyme (Funnel)';
-          if (userInfo.firstName || userInfo.lastName) {
-              authorName = `${userInfo.firstName} ${userInfo.lastName}`.trim();
-          } else if (userInfo.email) {
-              authorName = userInfo.email; // Fallback to email if no name
-          }
-
-          const notes = [];
-          if (internalNoteText) {
-              notes.push({ id: Date.now().toString(), text: internalNoteText, author_name: 'Système', created_at: new Date().toISOString() });
-          }
-          if (userInfo.phone) {
-              notes.push({ id: Date.now().toString() + 'p', text: `Téléphone client: ${userInfo.phone}`, author_name: 'Système', created_at: new Date().toISOString() });
-          }
-
-          const newReview = {
-              location_id: locationId,
-              rating: rating,
-              text: feedback || '',
-              author_name: authorName,
-              source: 'direct',
-              status: 'pending',
-              received_at: new Date().toISOString(),
-              language: 'fr',
-              staff_attributed_to: detectedStaffName || null,
-              customer_email: userInfo.email || null, // Ensure this column exists in DB or map it appropriately
-              internal_notes: notes,
-              analysis: { 
-                  sentiment: rating >= 4 ? 'positive' : 'negative', 
-                  themes: tags || [], 
-                  keywords: tags || [], 
-                  flags: { hygiene: false, security: false } 
-              }
-          };
-
-          await supabase.from('reviews').insert(newReview);
+          
+          // IMPORTANT: Use Edge Function for public submissions to handle RLS and Emails securely
+          // Using invoke instead of direct supabase insert
+          return await invoke('submit_review', {
+              locationId,
+              rating,
+              feedback,
+              contact: userInfo.email || `${userInfo.firstName} ${userInfo.lastName}`,
+              tags,
+              staffName
+          });
       },
       getWidgetReviews: async (locationId: string) => {
           if (isDemoMode()) return DEMO_REVIEWS;
