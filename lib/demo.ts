@@ -127,7 +127,8 @@ export const DEMO_REVIEWS: Review[] = [
         ai_reply: {
             text: "Merci infiniment Sophie ! Nous sommes ravis que le soufflé vous ait plu. Toute l'équipe espère vous revoir très bientôt pour d'autres douceurs.",
             tone: 'enthusiastic',
-            needs_manual_validation: false
+            needs_manual_validation: false,
+            created_at: new Date().toISOString()
         }
     },
     {
@@ -185,7 +186,8 @@ export const DEMO_REVIEWS: Review[] = [
         ai_reply: {
             text: "Bonjour, nous sommes sincèrement désolés pour cette attente inhabituelle malgré votre réservation. Ce n'est pas le standard de service que nous visons. Pouvez-vous nous contacter par email pour que nous puissions nous rattraper ?",
             tone: 'apologetic',
-            needs_manual_validation: true
+            needs_manual_validation: true,
+            created_at: new Date().toISOString()
         }
     }
 ];

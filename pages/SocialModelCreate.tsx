@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Card, CardContent, Button, Input, useToast } from '../components/ui';
-import { ArrowLeft, Save, Palette, Layout, Type } from 'lucide-react';
+import { Card, CardContent, Button, Input, useToast, Badge } from '../components/ui';
+import { ArrowLeft, Save, Palette, Layout, Type, Tag, X } from 'lucide-react';
 import { useNavigate } from '../components/ui';
+import { api } from '../lib/api';
 
 export const SocialModelCreatePage = () => {
     const navigate = useNavigate();
@@ -10,12 +11,41 @@ export const SocialModelCreatePage = () => {
     const [bgStyle, setBgStyle] = useState('bg-white');
     const [textColor, setTextColor] = useState('text-slate-900');
     const [fontStyle, setFontStyle] = useState('font-sans');
+    const [tags, setTags] = useState<string[]>([]);
+    const [tagInput, setTagInput] = useState('');
+    const [saving, setSaving] = useState(false);
 
-    const handleSave = () => {
+    const handleAddTag = () => {
+        if (tagInput.trim() && !tags.includes(tagInput.trim())) {
+            setTags([...tags, tagInput.trim()]);
+            setTagInput('');
+        }
+    };
+
+    const handleRemoveTag = (tag: string) => {
+        setTags(tags.filter(t => t !== tag));
+    };
+
+    const handleSave = async () => {
         if (!name) return toast.error("Veuillez donner un nom à votre modèle.");
-        // Mock save logic
-        toast.success("Modèle créé avec succès !");
-        setTimeout(() => navigate('/social'), 500);
+        setSaving(true);
+        try {
+            await api.social.saveTemplate({
+                name,
+                style: {
+                    bg: bgStyle,
+                    text: textColor,
+                    font: fontStyle
+                },
+                tags
+            });
+            toast.success("Modèle créé avec succès !");
+            setTimeout(() => navigate('/social'), 500);
+        } catch (e) {
+            toast.error("Erreur lors de la sauvegarde.");
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -29,7 +59,7 @@ export const SocialModelCreatePage = () => {
                     <p className="text-slate-500">Personnalisez l'apparence de vos futurs posts sociaux.</p>
                 </div>
                 <div className="ml-auto">
-                    <Button onClick={handleSave} icon={Save} className="shadow-lg shadow-indigo-200">
+                    <Button onClick={handleSave} icon={Save} isLoading={saving} className="shadow-lg shadow-indigo-200">
                         Enregistrer le modèle
                     </Button>
                 </div>
@@ -73,6 +103,34 @@ export const SocialModelCreatePage = () => {
                                     placeholder="Ex: Élégance Noire" 
                                     className="text-lg font-medium"
                                 />
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="block text-sm font-bold text-slate-700 flex items-center gap-2">
+                                    <Tag className="h-4 w-4 text-indigo-600"/> Tags (Organisation)
+                                </label>
+                                <div className="flex gap-2">
+                                    <Input 
+                                        value={tagInput}
+                                        onChange={e => setTagInput(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleAddTag()}
+                                        placeholder="Ex: Promotion, Été..."
+                                        className="text-sm"
+                                    />
+                                    <Button variant="secondary" onClick={handleAddTag}>Ajouter</Button>
+                                </div>
+                                {tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {tags.map(tag => (
+                                            <Badge key={tag} variant="neutral" className="pr-1">
+                                                {tag}
+                                                <button onClick={() => handleRemoveTag(tag)} className="ml-1 hover:text-red-500">
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-3">

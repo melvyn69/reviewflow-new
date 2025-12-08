@@ -49,7 +49,8 @@ export const OnboardingPage = () => {
                         language_style: style as any, 
                         description: '', 
                         use_emojis: true, 
-                        signature: companyName 
+                        signature: companyName,
+                        knowledge_base: ''
                     } 
                 });
                 toast.success("Configuration terminée !");
