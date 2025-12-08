@@ -1,6 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/genai'
+import { GoogleGenAI } from 'https://esm.sh/@google/genai'
 
 declare const Deno: any;
 
@@ -29,10 +29,10 @@ Deno.serve(async (req: Request) => {
 
     // 2. Parse Body
     const { task, context, config } = await req.json()
-    const ai = new GoogleGenerativeAI({ apiKey: geminiKey })
+    const ai = new GoogleGenAI({ apiKey: geminiKey })
     
     // Using Flash for speed/cost effectiveness for interactive tasks
-    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const modelName = 'gemini-2.5-flash';
 
     let prompt = ""
 
@@ -155,9 +155,11 @@ Deno.serve(async (req: Request) => {
             Consignes:
             - Langue: Français.
             - Format JSON strict: { "subject": "...", "body": "..." }
-            - Le corps doit être en HTML simple (p, br, strong).
+            - L'Objet (subject) doit être accrocheur (moins de 50 caractères), utiliser un emoji si pertinent.
+            - Le Corps (body) doit être en HTML simple (p, br, strong, ul, li).
             - Utilise les variables {{name}} pour le prénom et {{link}} pour le lien d'action.
             - Ton: Engageant, personnel, incite au clic.
+            - Ne pas inclure de markdown (\`\`\`json), juste le JSON brut.
         `;
     }
     else {
@@ -165,8 +167,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // 4. Generate
-    const result = await model.generateContent(prompt)
-    let text = result.response.text()
+    const result = await ai.models.generateContent({
+        model: modelName,
+        contents: prompt
+    })
+    let text = result.text || ""
 
     // Nettoyage basique JSON
     if (task === 'enrich_customer' || task === 'generate_email_campaign') {

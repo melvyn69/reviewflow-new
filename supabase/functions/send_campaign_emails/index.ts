@@ -27,29 +27,29 @@ serve(async (req: Request) => {
       throw new Error("Missing required fields (recipients array, subject, html)");
     }
 
-    // Batch Process in chunks of 100 (Resend limit per call, or just loop for personalization)
-    // To handle personalization {{name}}, we MUST loop or use Resend's batch endpoint properly.
-    // Here we loop to keep it simple and ensure substitution works.
-    
-    let sentCount = 0;
-    let errorCount = 0;
-
-    // Limit to 50 for safety in this function execution time
+    // Batch Process in chunks of 50 to respect Resend constraints and execution time
     const batch = recipients.slice(0, 50);
 
     const emailBatch = batch.map((r: any) => {
         let personalizedHtml = html;
         let personalizedSubject = subject;
 
-        // Simple Variable Replacement
-        if (r.name) {
-            personalizedHtml = personalizedHtml.replace(/{{name}}/g, r.name).replace(/{{prénom}}/g, r.name.split(' ')[0]);
-            personalizedSubject = personalizedSubject.replace(/{{name}}/g, r.name).replace(/{{prénom}}/g, r.name.split(' ')[0]);
-        }
-        
-        // Link replacement if provided in recipient object or global context (simplified here)
-        if (r.link) {
-             personalizedHtml = personalizedHtml.replace(/{{link}}/g, r.link).replace(/{{lien_avis}}/g, r.link);
+        // Common Variables Replacement
+        // Handles: {{name}}, {{prénom}}, {{lien_avis}}, {{nom_etablissement}}
+        const variables: any = {
+            '{{name}}': r.name || 'Client',
+            '{{prénom}}': r.name ? r.name.split(' ')[0] : 'Client',
+            '{{prenom}}': r.name ? r.name.split(' ')[0] : 'Client', // Fallback
+            '{{lien_avis}}': r.link || '#',
+            '{{link}}': r.link || '#',
+            '{{nom_etablissement}}': r.businessName || 'Notre Établissement'
+        };
+
+        // Replace all occurrences
+        for (const [key, value] of Object.entries(variables)) {
+            const regex = new RegExp(key, 'g');
+            personalizedHtml = personalizedHtml.replace(regex, value);
+            personalizedSubject = personalizedSubject.replace(regex, value);
         }
 
         return {

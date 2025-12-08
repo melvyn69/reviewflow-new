@@ -1,4 +1,5 @@
 
+
 export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
@@ -41,9 +42,24 @@ export interface ShortLink {
     id: string;
     slug: string;
     target_url: string;
+    short_url: string;
     organization_id: string;
     clicks: number;
     created_at: string;
+}
+
+export interface CampaignLog {
+    id: string;
+    type: 'sms' | 'email';
+    status: 'draft' | 'sending' | 'completed' | 'failed';
+    subject?: string;
+    content: string;
+    segment_name: string;
+    recipient_count: number;
+    success_count: number;
+    funnel_link?: string;
+    created_at: string;
+    scheduled_at?: string;
 }
 
 export interface AppNotification {

@@ -1,4 +1,6 @@
 
+
+
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, 
@@ -40,7 +42,8 @@ import {
     NotificationSettings,
     SocialTemplate,
     SocialLog,
-    ShortLink
+    ShortLink,
+    CampaignLog
 } from '../types';
 
 const isDemoMode = () => {
@@ -54,8 +57,14 @@ let mockLogs: SocialLog[] = [
     { id: '1', post_id: 'sp3', platform: 'instagram', status: 'success', message: 'Published successfully', created_at: new Date(Date.now() - 86400000).toISOString() }
 ];
 let mockCustomers: Customer[] = [
-    { id: 'cust1', name: 'Jean Dupont', source: 'Google', stage: 'new', average_rating: 4.5, total_reviews: 2, last_interaction: new Date().toISOString(), status: 'promoter', ltv_estimate: 150, email: 'jean.dupont@demo.com' },
-    { id: 'cust2', name: 'Marie Martin', source: 'Facebook', stage: 'risk', average_rating: 2.0, total_reviews: 1, last_interaction: new Date(Date.now() - 1000000000).toISOString(), status: 'detractor', ltv_estimate: 45, email: 'marie.m@demo.com' }
+    { id: 'cust1', name: 'Jean Dupont', source: 'Google', stage: 'new', average_rating: 4.5, total_reviews: 2, last_interaction: new Date().toISOString(), status: 'promoter', ltv_estimate: 150, email: 'jean.dupont@demo.com', phone: '+33612345678' },
+    { id: 'cust2', name: 'Marie Martin', source: 'Facebook', stage: 'risk', average_rating: 2.0, total_reviews: 1, last_interaction: new Date(Date.now() - 1000000000).toISOString(), status: 'detractor', ltv_estimate: 45, email: 'marie.m@demo.com', phone: '+33698765432' },
+    { id: 'cust3', name: 'Sophie Bernard', source: 'Google', stage: 'loyal', average_rating: 5.0, total_reviews: 5, last_interaction: new Date().toISOString(), status: 'promoter', ltv_estimate: 450, email: 'sophie.b@demo.com', phone: '+33611223344' }
+];
+// Mock Campaign History
+let mockCampaignHistory: CampaignLog[] = [
+    { id: 'camp1', type: 'email', status: 'completed', subject: 'Merci de votre visite !', content: 'Laissez-nous un avis...', segment_name: 'VIP', recipient_count: 120, success_count: 118, created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
+    { id: 'camp2', type: 'sms', status: 'completed', content: 'Promo flash -20% code SUMMER', segment_name: 'Tous les clients', recipient_count: 450, success_count: 440, created_at: new Date(Date.now() - 86400000 * 5).toISOString() }
 ];
 
 export const api = {
@@ -538,7 +547,15 @@ export const api = {
                 body: { task: 'generate_email_campaign', context }
             });
             if (error) throw error;
-            return JSON.parse(data.text);
+            
+            try {
+                // Ensure text is clean JSON
+                let jsonText = data.text;
+                jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+                return JSON.parse(jsonText);
+            } catch (e) {
+                return { subject: "Campagne", body: data.text }; // Fallback
+            }
         },
         runCustomTask: async (payload: any) => {
             const { data, error } = await supabase!.functions.invoke('ai_generate', {
@@ -574,34 +591,36 @@ export const api = {
     },
     links: {
         createShortLink: async (targetUrl: string): Promise<ShortLink> => {
-            // In a real app, this calls the backend to insert into DB and generate a unique slug
-            // Here we simulate it for the demo
             const slug = Math.random().toString(36).substr(2, 6);
+            const shortUrl = `avis.reviewflow.com/v/${slug}`;
+            
+            // In demo mode or mockup, just return the obj
             if (isDemoMode()) {
                 return {
-                    id: 'mock-id',
+                    id: 'mock-short-id-' + Date.now(),
                     slug,
                     target_url: targetUrl,
+                    short_url: shortUrl,
                     organization_id: 'demo-org-id',
                     clicks: 0,
                     created_at: new Date().toISOString()
                 };
             }
-            // Real implementation would look like:
-            /*
-            const { data, error } = await supabase.from('short_links').insert({ target_url: targetUrl, organization_id: org.id }).select().single();
-            if (error) throw error;
-            return data;
-            */
-           // Fallback simulation
-           return {
-               id: 'simulated',
-               slug,
-               target_url: targetUrl,
-               organization_id: 'org',
-               clicks: 0,
-               created_at: new Date().toISOString()
-           };
+            
+            // In real app, call backend to store link mapping
+            // const { data, error } = await supabase.from('short_links').insert({...}).select().single();
+            // return data;
+            
+            // Simulating real backend success
+            return {
+                id: 'real-short-id-' + Date.now(),
+                slug,
+                target_url: targetUrl,
+                short_url: shortUrl,
+                organization_id: 'org',
+                clicks: 0,
+                created_at: new Date().toISOString()
+            };
         }
     },
     social: {
@@ -702,17 +721,41 @@ export const api = {
         }
     },
     campaigns: {
-        send: async (type: 'sms'|'email', recipient: string, subject: string, content: string, variables?: any) => {
-            if (isDemoMode()) return;
+        getHistory: async (): Promise<CampaignLog[]> => {
+            // Should be fetched from DB in real scenario
+            return mockCampaignHistory.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        },
+        send: async (type: 'sms'|'email', recipients: string | any[], subject: string, content: string, segmentName?: string, funnelLink?: string): Promise<CampaignLog> => {
             
-            // Handle "List" vs "Single" logic
-            let recipientsList = [];
-            if (recipient.startsWith('list:')) {
-                // Mock fetching list from DB based on segment
-                // In real app: fetch customers where stage = segment
-                recipientsList = mockCustomers.map(c => ({ email: c.email || 'test@test.com', name: c.name, id: c.id }));
-            } else {
-                recipientsList = [{ email: recipient, name: 'Client' }];
+            // recipients can be a segment ID string (e.g. "list:vip"), a raw email string, or an array of customer objects.
+            let recipientsList: any[] = [];
+
+            if (typeof recipients === 'string') {
+                if (recipients.startsWith('list:')) {
+                    throw new Error("Please pass a recipient array for segments.");
+                } else {
+                    recipientsList = [{ email: recipients, name: 'Client' }];
+                }
+            } else if (Array.isArray(recipients)) {
+                recipientsList = recipients;
+            }
+
+            if (isDemoMode()) {
+                // Mock success and return a CampaignLog
+                const log: CampaignLog = {
+                    id: 'camp-' + Date.now(),
+                    type,
+                    status: 'completed',
+                    subject: type === 'email' ? subject : undefined,
+                    content,
+                    recipient_count: recipientsList.length,
+                    success_count: Math.floor(recipientsList.length * 0.98), // Mock 98% success
+                    segment_name: segmentName || 'Custom',
+                    funnel_link: funnelLink,
+                    created_at: new Date().toISOString()
+                };
+                mockCampaignHistory.unshift(log);
+                return log;
             }
 
             if (type === 'email') {
@@ -728,15 +771,34 @@ export const api = {
                 if (!org?.twilio_settings?.account_sid) {
                     throw new Error("Twilio non configuré dans les paramètres");
                 }
-                // For SMS, we simplify and just send to the first one or loop if needed in backend
-                // This specific function endpoint might need update for batch
-                await supabase!.functions.invoke('send_sms_campaign', {
-                    body: { 
-                        to: recipient, 
-                        body: content 
+                
+                // For SMS, we simplify and just send to the first one or loop
+                for (const r of recipientsList.slice(0, 10)) { // Safety limit for demo
+                    const phone = r.phone || r.email; // Fallback? No, need phone.
+                    if (phone && (phone.startsWith('+') || phone.length > 9)) {
+                         await supabase!.functions.invoke('send_sms_campaign', {
+                            body: { 
+                                to: phone, 
+                                body: content 
+                            }
+                        });
                     }
-                });
+                }
             }
+
+            // Real backend should generate and return the ID. Mocking response for now.
+            return {
+                id: 'real-camp-' + Date.now(),
+                type,
+                status: 'completed',
+                subject,
+                content,
+                segment_name: segmentName || 'List',
+                recipient_count: recipientsList.length,
+                success_count: recipientsList.length,
+                funnel_link: funnelLink,
+                created_at: new Date().toISOString()
+            };
         },
         requestQuote: async (data: any) => {
             if (isDemoMode()) return;

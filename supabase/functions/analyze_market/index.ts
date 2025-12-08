@@ -1,5 +1,6 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/genai'
+import { GoogleGenAI } from 'https://esm.sh/@google/genai'
 
 declare const Deno: any;
 
@@ -32,8 +33,7 @@ Deno.serve(async (req: Request) => {
     // Note: We allow analysis even with empty competitors list to get general market trends for the sector/location
     const hasCompetitors = competitors && competitors.length > 0;
 
-    const ai = new GoogleGenerativeAI({ apiKey: geminiKey })
-    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const ai = new GoogleGenAI({ apiKey: geminiKey })
 
     // 3. Construct Prompt
     const competitorsList = hasCompetitors 
@@ -85,8 +85,11 @@ Deno.serve(async (req: Request) => {
     `;
 
     // 4. Generate
-    const result = await model.generateContent(prompt)
-    let jsonString = result.response.text()
+    const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+    })
+    let jsonString = result.text || ""
     
     // Nettoyage basique du markdown si Gemini en met
     jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();

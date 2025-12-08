@@ -1,6 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai'
+import { GoogleGenAI } from 'https://esm.sh/@google/genai'
 
 declare const Deno: any
 
@@ -43,9 +43,10 @@ Deno.serve(async (req: Request) => {
     if (!geminiKey) throw new Error("API_KEY (Gemini) missing")
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
-    const ai = new GoogleGenerativeAI(geminiKey)
+    const ai = new GoogleGenAI({ apiKey: geminiKey })
+    
     // Utilisation du modèle flash pour la rapidité et le coût
-    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const modelName = 'gemini-2.5-flash';
 
     // 1. Fetch pending reviews with org data
     // Limit to 10 per run to ensure we stay well within timeout limits (Function execution limit)
@@ -110,9 +111,12 @@ Deno.serve(async (req: Request) => {
                         `
                         
                         try {
-                            const result = await model.generateContent(prompt)
-                            replyText = result.response.text()
-                            aiModelUsed = 'gemini-2.5-flash'
+                            const result = await ai.models.generateContent({
+                                model: modelName,
+                                contents: prompt
+                            })
+                            replyText = result.text || ""
+                            aiModelUsed = modelName
                             
                             if (action.type === 'auto_reply') {
                                 finalStatus = 'sent' 
