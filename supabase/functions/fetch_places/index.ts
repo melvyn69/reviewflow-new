@@ -54,6 +54,7 @@ Deno.serve(async (req: Request) => {
     let finalError = null;
 
     // Radius in meters (default 5000m = 5km)
+    // The radius parameter from frontend is in km, convert to meters
     const searchRadius = (radius || 5) * 1000;
     
     // Construct text search query: "keyword near lat,lng" logic
@@ -136,7 +137,9 @@ Deno.serve(async (req: Request) => {
             location: place.geometry.location,
             threat_level: Math.round(threat),
             strengths: strengths.length > 0 ? strengths : ["Localisation"],
-            weaknesses: weaknesses.length > 0 ? weaknesses : ["Potentiel inexploité"]
+            weaknesses: weaknesses.length > 0 ? weaknesses : ["Potentiel inexploité"],
+            // Construct Google Maps URL using Place ID for reliability
+            url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${place.place_id}`
         };
     });
 

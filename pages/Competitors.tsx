@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Competitor, Organization, MarketReport } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, useToast, Input, ProLock } from '../components/ui';
@@ -23,12 +23,15 @@ import {
     History,
     FileText,
     Play,
-    Zap
+    Zap,
+    ExternalLink
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
+import jsPDF from 'jspdf';
+import { toPng } from 'html-to-image';
 
 // --- SONAR RADAR COMPONENT ---
-const SonarRadar = ({ competitors, industry }: { competitors: any[], industry: string }) => {
+const SonarRadar = ({ competitors, industry, className = "" }: { competitors: any[], industry: string, className?: string }) => {
     // Calculate aggregate metrics for the 4 axes
     const avgRating = competitors.length ? competitors.reduce((acc, c) => acc + (c.rating || 0), 0) / competitors.length : 0;
     const avgVolume = competitors.length ? competitors.reduce((acc, c) => acc + (c.review_count || 0), 0) / competitors.length : 0;
@@ -58,7 +61,7 @@ const SonarRadar = ({ competitors, industry }: { competitors: any[], industry: s
     }).join(' ');
 
     return (
-        <div className="relative w-full h-[400px] bg-black rounded-xl overflow-hidden shadow-2xl border border-emerald-900/50 flex flex-col items-center justify-center font-mono">
+        <div className={`relative w-full h-[400px] bg-black rounded-xl overflow-hidden shadow-2xl border border-emerald-900/50 flex flex-col items-center justify-center font-mono ${className}`}>
             {/* Grid Overlay */}
             <div className="absolute inset-0" style={{ 
                 backgroundImage: 'linear-gradient(rgba(0, 255, 0, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 0, 0.1) 1px, transparent 1px)', 
@@ -142,9 +145,11 @@ export const CompetitorsPage = () => {
     const [locationInput, setLocationInput] = useState('');
     const [reportHistory, setReportHistory] = useState<MarketReport[]>([]);
     const [selectedReport, setSelectedReport] = useState<MarketReport | null>(null);
+    const [generatingPdf, setGeneratingPdf] = useState(false);
 
     const toast = useToast();
     const navigate = useNavigate();
+    const pdfRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         loadData();
@@ -291,6 +296,44 @@ export const CompetitorsPage = () => {
     const handleSelectReport = (report: MarketReport) => {
         setSelectedReport(report);
         setMarketData(report.data || { trends: report.trends, swot: report.swot, competitors_detailed: report.competitors_detailed });
+    };
+
+    const handleDownloadPDF = async () => {
+        if (!marketData || !pdfRef.current) return;
+        setGeneratingPdf(true);
+        toast.info("Génération du rapport PDF...");
+
+        try {
+            // Wait a moment for the hidden div to fully render graphics
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Use toPng to capture the hidden div as an image
+            const imgData = await toPng(pdfRef.current, { 
+                cacheBust: true, 
+                pixelRatio: 2,
+                backgroundColor: '#ffffff'
+            });
+
+            const imgProps = doc.getImageProperties(imgData);
+            const pdfHeight = (imgProps.height * pageWidth) / imgProps.width;
+
+            // If height is greater than page height, we might need multiple pages or scaling
+            // For simplicity in this version, we scale to fit or split if super long.
+            // Here we just add the image to the first page.
+            doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pdfHeight);
+
+            doc.save(`Rapport_Concurrentiel_${selectedReport?.sector || 'Analyse'}.pdf`);
+            toast.success("PDF téléchargé !");
+        } catch (e) {
+            console.error(e);
+            toast.error("Erreur lors de la génération du PDF.");
+        } finally {
+            setGeneratingPdf(false);
+        }
     };
 
     if (initialLoading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
@@ -457,7 +500,9 @@ export const CompetitorsPage = () => {
                                             Analyse: {selectedReport?.sector || org.industry} - {locationInput || selectedReport?.location}
                                         </h2>
                                     </div>
-                                    <Button variant="outline" size="sm" icon={Download}>PDF</Button>
+                                    <Button variant="outline" size="sm" icon={Download} onClick={handleDownloadPDF} isLoading={generatingPdf}>
+                                        Export PDF
+                                    </Button>
                                 </div>
 
                                 {/* Trends & SWOT */}
@@ -615,7 +660,8 @@ export const CompetitorsPage = () => {
                                         value={scanRadius}
                                         onChange={e => setScanRadius(parseInt(e.target.value))}
                                     >
-                                        <option value={2}>2 km (Quartier)</option>
+                                        <option value={1}>1 km (Quartier)</option>
+                                        <option value={3}>3 km (Large)</option>
                                         <option value={5}>5 km (Ville)</option>
                                         <option value={10}>10 km (Agglo)</option>
                                         <option value={50}>50 km (Région)</option>
@@ -669,9 +715,22 @@ export const CompetitorsPage = () => {
                                                 <span>👎</span> <span className="truncate">{result.weaknesses[0]}</span>
                                             </div>
                                         </div>
-                                        <Button className="w-full" variant="outline" icon={Plus} onClick={() => handleTrack(result)}>
-                                            Suivre ce concurrent
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button className="flex-1" variant="outline" icon={Plus} onClick={() => handleTrack(result)}>
+                                                Suivre
+                                            </Button>
+                                            {result.url && (
+                                                <a 
+                                                    href={result.url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 flex items-center justify-center text-slate-600"
+                                                    title="Voir sur Google Maps"
+                                                >
+                                                    <ExternalLink className="h-4 w-4" />
+                                                </a>
+                                            )}
+                                        </div>
                                     </CardContent>
                                 </Card>
                             ))}
@@ -752,6 +811,58 @@ export const CompetitorsPage = () => {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Hidden PDF Template (Only rendered when generating PDF) */}
+            <div className="fixed top-0 left-0 w-[210mm] opacity-0 pointer-events-none z-[-1]" ref={pdfRef} style={{ background: 'white', padding: '20mm' }}>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-6 mb-8">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900">Rapport de Veille Concurrentielle</h1>
+                        <p className="text-sm text-slate-500 mt-1">{org.industry} • {selectedReport?.location}</p>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-xs text-slate-400 uppercase font-bold">Reviewflow Intelligence</div>
+                        <div className="text-sm font-medium text-slate-900">{new Date().toLocaleDateString()}</div>
+                    </div>
+                </div>
+
+                <div className="mb-8">
+                    <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-indigo-600 pl-3">Radar Stratégique</h2>
+                    {/* Render static version of radar for PDF */}
+                    <SonarRadar competitors={scannedResults.length ? scannedResults : trackedCompetitors} industry={org.industry || ''} className="h-[300px] border-none shadow-none" />
+                </div>
+
+                {marketData && (
+                    <>
+                        <div className="mb-8">
+                            <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-yellow-500 pl-3">Tendances du Marché</h2>
+                            <ul className="list-disc pl-5 space-y-2">
+                                {marketData.trends?.map((t: string, i: number) => (
+                                    <li key={i} className="text-sm text-slate-700">{t}</li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-8 mb-8">
+                            <div>
+                                <h3 className="font-bold text-emerald-700 mb-2 uppercase text-xs">Forces</h3>
+                                <ul className="text-xs space-y-1">
+                                    {marketData.swot?.strengths?.map((s: string, i: number) => <li key={i}>+ {s}</li>)}
+                                </ul>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-rose-700 mb-2 uppercase text-xs">Faiblesses</h3>
+                                <ul className="text-xs space-y-1">
+                                    {marketData.swot?.weaknesses?.map((s: string, i: number) => <li key={i}>- {s}</li>)}
+                                </ul>
+                            </div>
+                        </div>
+                    </>
+                )}
+                
+                <div className="mt-8 pt-8 border-t border-slate-200 text-center text-xs text-slate-400">
+                    Généré automatiquement par Reviewflow AI Engine.
+                </div>
+            </div>
         </div>
     );
 };
