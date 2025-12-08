@@ -172,8 +172,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.platform')}</div>
+          
+          {/* Main Navigation */}
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
+          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isLocked} />
           <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
           <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isPro={isLocked} />
           
@@ -182,8 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={onClose} />
           <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
           
-          {/* Pro Features */}
-          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isLocked} />
+          {/* Advanced / Pro Features */}
           <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isPro={isLocked} />
           <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isPro={isLocked} />
 

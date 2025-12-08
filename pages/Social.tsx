@@ -39,7 +39,8 @@ import {
     UploadCloud,
     Film,
     ChevronRight,
-    ChevronLeft
+    ChevronLeft,
+    Rocket
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useLocation, useNavigate } from '../components/ui';
@@ -177,6 +178,7 @@ export const SocialPage = () => {
     const [locations, setLocations] = useState<Location[]>([]);
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
     const [activeTab, setActiveTab] = useState<'create' | 'calendar' | 'accounts'>('create');
+    const [showInfoBanner, setShowInfoBanner] = useState(true);
     
     // Data Lists
     const [posts, setPosts] = useState<SocialPost[]>([]);
@@ -344,6 +346,27 @@ export const SocialPage = () => {
                     </div>
                 )}
             </div>
+
+            {/* Consolidation Banner */}
+            {showInfoBanner && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex justify-between items-start animate-in fade-in slide-in-from-top-2">
+                    <div className="flex gap-4">
+                        <div className="p-2 bg-white rounded-lg border border-indigo-100 shadow-sm text-indigo-600">
+                            <Rocket className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-indigo-900 text-sm">Le Social Booster fusionne avec Social Studio !</h4>
+                            <p className="text-sm text-indigo-700 mt-1 max-w-2xl leading-relaxed">
+                                Pour plus de simplicité, nous avons regroupé la publication manuelle et l'automatisation. 
+                                Retrouvez vos <strong>Autoposts IA</strong> directement dans l'onglet <span className="font-semibold underline cursor-pointer hover:text-indigo-900" onClick={() => navigate('/automation')}>Automatisation</span>.
+                            </p>
+                        </div>
+                    </div>
+                    <button onClick={() => setShowInfoBanner(false)} className="text-indigo-400 hover:text-indigo-600 transition-colors">
+                        <X className="h-5 w-5" />
+                    </button>
+                </div>
+            )}
 
             {/* Tabs */}
             <div className="flex border-b border-slate-200">

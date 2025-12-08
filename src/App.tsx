@@ -145,6 +145,11 @@ function AppRoutes() {
                         <Route path="inbox" element={<InboxPage />} />
                         <Route path="social" element={<SocialPage />} /> 
                         <Route path="social/models/create" element={<SocialModelCreatePage />} />
+                        
+                        {/* Cleanup: Ghost Routes for old "Social Booster" to redirect to Social Studio */}
+                        <Route path="social-booster" element={<Navigate to="/social" replace />} />
+                        <Route path="booster" element={<Navigate to="/social" replace />} />
+
                         <Route path="analytics" element={<AnalyticsPage />} />
                         <Route path="competitors" element={<CompetitorsPage />} />
                         <Route path="automation" element={<AutomationPage />} />
