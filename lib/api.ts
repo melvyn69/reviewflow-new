@@ -290,6 +290,9 @@ export const api = {
 
             if (filters.limit) query = query.limit(filters.limit);
             if (filters.page) query = query.range(filters.page * (filters.limit || 20), (filters.page + 1) * (filters.limit || 20) - 1);
+            
+            if (filters.startDate) query = query.gte('received_at', filters.startDate);
+            if (filters.endDate) query = query.lte('received_at', filters.endDate);
 
             const { data, error } = await query.order('received_at', { ascending: false });
             if (error) throw error;
@@ -598,6 +601,32 @@ export const api = {
             });
             if (error) throw error;
             return JSON.parse(data.text);
+        },
+        import: async (customers: Partial<Customer>[]) => {
+            if (isDemoMode()) return customers.length;
+            const org = await api.organization.get();
+            if (!org) throw new Error("No org");
+
+            // Batch upsert to handle duplicates (email collision -> update)
+            const payload = customers.map(c => ({
+                ...c,
+                organization_id: org.id,
+                // Defaults for new customers
+                stage: 'new',
+                status: 'passive',
+                total_reviews: 0,
+                average_rating: 0,
+                last_interaction: new Date().toISOString()
+            }));
+
+            // Using upsert with email constraint
+            const { data, error } = await supabase!.from('customers').upsert(payload, { 
+                onConflict: 'email', 
+                ignoreDuplicates: false 
+            });
+            
+            if (error) throw error;
+            return payload.length;
         }
     },
     offers: {

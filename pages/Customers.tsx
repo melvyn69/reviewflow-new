@@ -1,53 +1,216 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Customer, PipelineStage } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input, useToast, Select } from '../components/ui';
-import { Users, Search, Download, Star, Filter, Heart, AlertTriangle, X, Mail, MessageCircle, DollarSign, Calendar, LayoutGrid, List, Sparkles, Wand2, ArrowRight, Zap } from 'lucide-react';
+import { Users, Search, Download, Star, Filter, Heart, AlertTriangle, X, Mail, MessageCircle, DollarSign, Calendar, LayoutGrid, List, Sparkles, Wand2, ArrowRight, Zap, UploadCloud, FileText, CheckCircle2, Phone, Info } from 'lucide-react';
 
-const STAGES: { id: PipelineStage; label: string; color: string }[] = [
-    { id: 'new', label: 'Nouveaux', color: 'bg-blue-50 border-blue-200 text-blue-700' },
-    { id: 'risk', label: 'À Traiter (Risque)', color: 'bg-red-50 border-red-200 text-red-700' },
-    { id: 'loyal', label: 'Fidélisés (VIP)', color: 'bg-green-50 border-green-200 text-green-700' },
-    { id: 'churned', label: 'Perdus / Archivés', color: 'bg-slate-50 border-slate-200 text-slate-600' }
-];
+// --- UTILS ---
 
-const KanbanColumn: React.FC<{ stage: typeof STAGES[0], customers: Customer[], onSelect: (c: Customer) => void }> = ({ stage, customers, onSelect }) => (
-    <div className="flex-1 min-w-[280px] bg-slate-50/50 rounded-xl p-3 border border-slate-200 flex flex-col h-full">
-        <div className={`mb-3 px-3 py-2 rounded-lg font-bold text-sm uppercase tracking-wide border ${stage.color} flex justify-between items-center`}>
-            {stage.label}
-            <span className="bg-white/50 px-2 py-0.5 rounded-full text-xs">{customers.length}</span>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
-            {customers.map(c => (
-                <div 
-                    key={c.id} 
-                    onClick={() => onSelect(c)}
-                    className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all hover:border-indigo-300 group"
-                >
-                    <div className="flex justify-between items-start mb-2">
-                        <div className="font-bold text-slate-900 truncate max-w-[150px]">{c.name}</div>
-                        <div className="flex items-center gap-1 text-xs font-bold bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
-                            {c.average_rating} <Star className="h-3 w-3 fill-current text-amber-400" />
+const getStageLabel = (stage: PipelineStage) => {
+    switch (stage) {
+        case 'new': return { label: 'Nouveaux', color: 'bg-blue-50 border-blue-200 text-blue-700' };
+        case 'risk': return { label: 'À Traiter', color: 'bg-red-50 border-red-200 text-red-700' };
+        case 'loyal': return { label: 'Fidélisés', color: 'bg-green-50 border-green-200 text-green-700' };
+        case 'churned': return { label: 'Inactifs', color: 'bg-slate-50 border-slate-200 text-slate-600' };
+        default: return { label: stage, color: 'bg-slate-50' };
+    }
+};
+
+const getCustomerStatusLabel = (status: string) => {
+    switch (status) {
+        case 'promoter': return { label: 'Ambassadeur', variant: 'success' as const };
+        case 'detractor': return { label: 'Insatisfait', variant: 'error' as const };
+        case 'passive': return { label: 'Neutre', variant: 'neutral' as const };
+        default: return { label: 'Inconnu', variant: 'neutral' as const };
+    }
+};
+
+const formatCurrency = (amount?: number) => {
+    if (amount === undefined || amount === null) return '-';
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
+};
+
+const KanbanColumn: React.FC<{ stageId: PipelineStage, customers: Customer[], onSelect: (c: Customer) => void }> = ({ stageId, customers, onSelect }) => {
+    const { label, color } = getStageLabel(stageId);
+    
+    return (
+        <div className="flex-1 min-w-[280px] bg-slate-50/50 rounded-xl p-3 border border-slate-200 flex flex-col h-full snap-center">
+            <div className={`mb-3 px-3 py-2 rounded-lg font-bold text-sm uppercase tracking-wide border ${color} flex justify-between items-center sticky top-0 bg-opacity-90 backdrop-blur-sm z-10`}>
+                {label}
+                <span className="bg-white/50 px-2 py-0.5 rounded-full text-xs">{customers.length}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1 pb-2">
+                {customers.map(c => (
+                    <div 
+                        key={c.id} 
+                        onClick={() => onSelect(c)}
+                        className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all hover:border-indigo-300 group relative"
+                    >
+                        <div className="flex justify-between items-start mb-2">
+                            <div className="font-bold text-slate-900 truncate max-w-[150px]">{c.name}</div>
+                            <div className="flex items-center gap-1 text-xs font-bold bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                                {c.average_rating} <Star className="h-3 w-3 fill-current text-amber-400" />
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+                            <span>{c.total_reviews} avis</span>
+                            <span className="text-indigo-600 font-medium" title="Valeur Client Estimée">{formatCurrency(c.ltv_estimate)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-2">
+                            <Badge variant={getCustomerStatusLabel(c.status).variant} className="text-[10px] h-5 px-1.5">
+                                {getCustomerStatusLabel(c.status).label}
+                            </Badge>
+                            {c.email && <Mail className="h-3 w-3 text-slate-300" />}
                         </div>
                     </div>
-                    
-                    <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
-                        <span>{c.total_reviews} avis</span>
-                        <span className="text-indigo-600 font-medium">{c.ltv_estimate ? c.ltv_estimate + '€' : '-'}</span>
-                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
-                    {c.tags && c.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                            {c.tags.slice(0, 2).map(tag => (
-                                <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded text-slate-500">{tag}</span>
-                            ))}
+// --- IMPORT MODAL COMPONENT ---
+const ImportModal = ({ onClose, onImport }: { onClose: () => void, onImport: () => void }) => {
+    const [step, setStep] = useState(1);
+    const [file, setFile] = useState<File | null>(null);
+    const [csvData, setCsvData] = useState<string[][]>([]);
+    const [headers, setHeaders] = useState<string[]>([]);
+    const [mapping, setMapping] = useState({ name: '', email: '', phone: '' });
+    const [importing, setImporting] = useState(false);
+    const toast = useToast();
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (f) {
+            setFile(f);
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const text = evt.target?.result as string;
+                // Basic CSV parser (handles commas and semicolons)
+                const rows = text.split('\n').map(row => {
+                    // Detect separator
+                    const separator = row.includes(';') ? ';' : ',';
+                    return row.split(separator).map(cell => cell.trim().replace(/^"|"$/g, ''));
+                });
+                
+                if (rows.length > 0) {
+                    setHeaders(rows[0]);
+                    // Auto-map if possible
+                    const lowerHeaders = rows[0].map(h => h.toLowerCase());
+                    setMapping({
+                        name: rows[0][lowerHeaders.findIndex(h => h.includes('nom') || h.includes('name'))] || '',
+                        email: rows[0][lowerHeaders.findIndex(h => h.includes('mail'))] || '',
+                        phone: rows[0][lowerHeaders.findIndex(h => h.includes('tél') || h.includes('phone'))] || ''
+                    });
+                    
+                    setCsvData(rows.slice(1).filter(r => r.length > 1));
+                    setStep(2);
+                }
+            };
+            reader.readAsText(f);
+        }
+    };
+
+    const handleProcessImport = async () => {
+        if (!mapping.email && !mapping.name) return toast.error("Le Nom ou l'Email est requis.");
+        setImporting(true);
+        try {
+            const nameIdx = headers.indexOf(mapping.name);
+            const emailIdx = headers.indexOf(mapping.email);
+            const phoneIdx = headers.indexOf(mapping.phone);
+
+            const customersToImport = csvData.map(row => ({
+                name: nameIdx >= 0 ? row[nameIdx] : 'Client Importé',
+                email: emailIdx >= 0 ? row[emailIdx] : undefined,
+                phone: phoneIdx >= 0 ? row[phoneIdx] : undefined,
+                source: 'import_csv'
+            })).filter(c => c.name || c.email);
+
+            await api.customers.import(customersToImport);
+            toast.success(`${customersToImport.length} clients traités (les doublons email ont été mis à jour).`);
+            onImport();
+            onClose();
+        } catch (e: any) {
+            toast.error("Erreur d'import : " + e.message);
+        } finally {
+            setImporting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <Card className="w-full max-w-lg shadow-xl">
+                <CardHeader className="border-b border-slate-100 flex flex-row items-center justify-between pb-4">
+                    <CardTitle className="flex items-center gap-2"><UploadCloud className="h-5 w-5 text-indigo-600"/> Import CSV</CardTitle>
+                    <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-6">
+                    {step === 1 && (
+                        <div className="text-center py-8 border-2 border-dashed border-slate-300 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer relative group">
+                            <input type="file" accept=".csv" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                            <div className="group-hover:scale-105 transition-transform duration-200">
+                                <FileText className="h-12 w-12 text-indigo-200 mx-auto mb-3" />
+                                <p className="text-sm font-medium text-slate-700">Cliquez pour choisir un fichier CSV</p>
+                                <p className="text-xs text-slate-500 mt-1">Séparateur virgule ou point-virgule supporté</p>
+                            </div>
                         </div>
                     )}
-                </div>
-            ))}
+
+                    {step === 2 && (
+                        <div className="space-y-4">
+                            <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+                                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                                <p>Associez les colonnes de votre fichier. Les contacts existants (même email) seront mis à jour automatiquement.</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Nom <span className="text-red-500">*</span></label>
+                                    <select className="w-full p-2 border rounded text-sm bg-white" value={mapping.name} onChange={e => setMapping({...mapping, name: e.target.value})}>
+                                        <option value="">-- Ignorer --</option>
+                                        {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Email</label>
+                                    <select className="w-full p-2 border rounded text-sm bg-white" value={mapping.email} onChange={e => setMapping({...mapping, email: e.target.value})}>
+                                        <option value="">-- Ignorer --</option>
+                                        {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">Téléphone</label>
+                                    <select className="w-full p-2 border rounded text-sm bg-white" value={mapping.phone} onChange={e => setMapping({...mapping, phone: e.target.value})}>
+                                        <option value="">-- Ignorer --</option>
+                                        {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 p-3 rounded-lg text-xs text-slate-500 mt-2 border border-slate-200">
+                                <strong className="block mb-2 text-slate-700">Aperçu des données :</strong>
+                                {csvData.slice(0, 2).map((row, i) => (
+                                    <div key={i} className="truncate mt-1 font-mono">{row.join(' | ')}</div>
+                                ))}
+                                <div className="mt-1 text-slate-400 italic">... et {csvData.length - 2} autres lignes.</div>
+                            </div>
+
+                            <div className="flex justify-end pt-4 gap-2 border-t border-slate-100">
+                                <Button variant="ghost" onClick={() => setStep(1)}>Retour</Button>
+                                <Button onClick={handleProcessImport} isLoading={importing} disabled={!mapping.name && !mapping.email}>
+                                    Importer {csvData.length} contacts
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
-    </div>
-);
+    );
+};
 
 export const CustomersPage = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -57,6 +220,7 @@ export const CustomersPage = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   
   // Filters
   const [filterSentiment, setFilterSentiment] = useState('all');
@@ -105,20 +269,46 @@ export const CustomersPage = () => {
   };
 
   const handleExport = () => {
-      const rows = [
-          ['Nom', 'Source', 'Note Moyenne', 'Total Avis', 'Statut', 'Dernière Interaction'],
-          ...filteredCustomers.map(c => [c.name, c.source, c.average_rating.toFixed(1), c.total_reviews, c.status, new Date(c.last_interaction).toLocaleDateString()])
-      ];
+      // Prepare CSV Data with BOM for Excel UTF-8 compatibility
+      const headers = ['Prénom', 'Nom', 'Email', 'Téléphone', 'Source', 'Date Création', 'Total Avis', 'Note Moyenne', 'Statut', 'Valeur Client (Est.)', 'Tags'];
       
-      const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
-      const encodedUri = encodeURI(csvContent);
+      const rows = filteredCustomers.map(c => {
+          const nameParts = c.name.split(' ');
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          const statusLabel = getCustomerStatusLabel(c.status).label;
+          
+          return [
+              firstName,
+              lastName,
+              c.email || '',
+              c.phone || '',
+              c.source,
+              new Date(c.last_interaction).toLocaleDateString(),
+              c.total_reviews.toString(),
+              c.average_rating.toFixed(1).replace('.', ','),
+              statusLabel,
+              c.ltv_estimate ? c.ltv_estimate.toString() : '0',
+              c.tags?.join(', ') || ''
+          ];
+      });
+      
+      // Add Header
+      const csvContent = [headers, ...rows]
+          .map(e => e.map(cell => `"${cell}"`).join(";")) // Use semicolon for Excel Europe
+          .join("\n");
+      
+      const bom = "\uFEFF"; 
+      const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+      
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "base_clients.csv");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `clients_export_${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      toast.success("Export terminé");
+      toast.success("Export terminé (Format Excel Compatible)");
   };
 
   const handleStageChange = async (newStage: PipelineStage) => {
@@ -155,49 +345,54 @@ export const CustomersPage = () => {
       }
   };
 
+  const PIPELINE_STAGES: PipelineStage[] = ['new', 'risk', 'loyal', 'churned'];
+
   return (
     <div className="max-w-7xl mx-auto h-[calc(100vh-8rem)] flex flex-col animate-in fade-in duration-500">
       
+      {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} onImport={loadCustomers} />}
+
       {/* HEADER & CONTROLS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               CRM Clients
-              <Badge variant="neutral" className="text-sm font-normal">{customers.length}</Badge>
+              <Badge variant="neutral" className="text-sm font-normal">{filteredCustomers.length}</Badge>
           </h1>
-          <p className="text-slate-500">Gérez vos relations et identifiez vos ambassadeurs.</p>
+          <p className="text-slate-500 text-sm">Gérez vos relations et transformez vos clients en ambassadeurs.</p>
         </div>
-        <div className="flex items-center gap-2">
-            <div className="flex bg-slate-100 p-1 rounded-lg">
-                <button onClick={() => setViewMode('board')} className={`p-2 rounded ${viewMode === 'board' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="flex bg-slate-100 p-1 rounded-lg mr-2">
+                <button onClick={() => setViewMode('board')} className={`p-2 rounded transition-all ${viewMode === 'board' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
                     <LayoutGrid className="h-4 w-4" />
                 </button>
-                <button onClick={() => setViewMode('list')} className={`p-2 rounded ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                <button onClick={() => setViewMode('list')} className={`p-2 rounded transition-all ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
                     <List className="h-4 w-4" />
                 </button>
             </div>
-            <Button variant="outline" icon={Download} onClick={handleExport}>Export</Button>
+            <Button variant="outline" size="sm" icon={UploadCloud} onClick={() => setShowImportModal(true)} className="flex-1 md:flex-none">Import</Button>
+            <Button variant="outline" size="sm" icon={Download} onClick={handleExport} className="flex-1 md:flex-none">Export</Button>
         </div>
       </div>
 
       {/* FILTERS */}
-      <div className="flex gap-4 mb-6 shrink-0 overflow-x-auto pb-2">
-          <div className="relative w-64 shrink-0">
+      <div className="flex gap-3 mb-6 shrink-0 overflow-x-auto pb-2 w-full no-scrollbar items-center">
+          <div className="relative w-full md:w-64 shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input 
-                placeholder="Rechercher..." 
-                className="pl-9" 
+                placeholder="Nom, email..." 
+                className="pl-9 w-full bg-white" 
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
           </div>
-          <Select value={filterSentiment} onChange={e => setFilterSentiment(e.target.value)} className="w-40 shrink-0">
+          <Select value={filterSentiment} onChange={e => setFilterSentiment(e.target.value)} className="w-40 shrink-0 bg-white">
               <option value="all">Tous Status</option>
-              <option value="promoter">Promoteurs</option>
-              <option value="detractor">Détracteurs</option>
+              <option value="promoter">Ambassadeurs</option>
+              <option value="detractor">Critiques</option>
           </Select>
-          <Select value={filterLtv} onChange={e => setFilterLtv(e.target.value)} className="w-40 shrink-0">
-              <option value="all">LTV: Tous</option>
+          <Select value={filterLtv} onChange={e => setFilterLtv(e.target.value)} className="w-40 shrink-0 bg-white">
+              <option value="all">Valeur: Tous</option>
               <option value="high">VIP (&gt; 200€)</option>
           </Select>
       </div>
@@ -205,15 +400,15 @@ export const CustomersPage = () => {
       {/* CONTENT AREA */}
       <div className="flex-1 min-h-0 relative">
           
-          {/* BOARD VIEW */}
+          {/* BOARD VIEW (Kanban) */}
           {viewMode === 'board' && (
-              <div className="h-full overflow-x-auto overflow-y-hidden">
-                  <div className="flex gap-4 h-full min-w-[1000px]">
-                      {STAGES.map(stage => (
+              <div className="h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory">
+                  <div className="flex gap-4 h-full min-w-[100%] md:min-w-0 pb-4 px-1">
+                      {PIPELINE_STAGES.map(stageId => (
                           <KanbanColumn 
-                              key={stage.id} 
-                              stage={stage} 
-                              customers={filteredCustomers.filter(c => c.stage === stage.id)} 
+                              key={stageId} 
+                              stageId={stageId} 
+                              customers={filteredCustomers.filter(c => c.stage === stageId)} 
                               onSelect={setSelectedCustomer}
                           />
                       ))}
@@ -221,54 +416,100 @@ export const CustomersPage = () => {
               </div>
           )}
 
-          {/* LIST VIEW */}
+          {/* LIST VIEW (Optimized) */}
           {viewMode === 'list' && (
-              <Card className="h-full overflow-hidden flex flex-col">
-                  <div className="flex-1 overflow-auto">
-                      <table className="min-w-full divide-y divide-slate-100">
-                          <thead className="bg-slate-50 sticky top-0 z-10">
-                              <tr>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Étape</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Note Moy.</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">LTV</th>
-                                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dernier Avis</th>
-                              </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-slate-50">
-                              {filteredCustomers.map(customer => (
-                                  <tr 
-                                    key={customer.id} 
-                                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                                    onClick={() => setSelectedCustomer(customer)}
-                                  >
-                                      <td className="px-6 py-4 whitespace-nowrap">
-                                          <div className="flex items-center">
-                                              <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs mr-3 border border-indigo-200">
+              <Card className="h-full overflow-hidden flex flex-col border-slate-200 shadow-sm">
+                  <div className="flex-1 overflow-auto bg-slate-50/30">
+                      
+                      {/* Mobile Card View */}
+                      <div className="md:hidden divide-y divide-slate-100">
+                          {filteredCustomers.map(customer => {
+                              const status = getCustomerStatusLabel(customer.status);
+                              return (
+                                  <div key={customer.id} onClick={() => setSelectedCustomer(customer)} className="p-4 bg-white hover:bg-slate-50 active:bg-slate-100 cursor-pointer">
+                                      <div className="flex justify-between items-start mb-2">
+                                          <div className="flex items-center gap-3">
+                                              <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
                                                   {customer.name.charAt(0)}
                                               </div>
                                               <div>
-                                                  <div className="font-medium text-slate-900">{customer.name}</div>
-                                                  <div className="text-xs text-slate-500">{customer.email}</div>
+                                                  <div className="font-bold text-slate-900 line-clamp-1">{customer.name}</div>
+                                                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                                                      {customer.email ? <Mail className="h-3 w-3"/> : <Phone className="h-3 w-3"/>}
+                                                      <span className="truncate max-w-[150px]">{customer.email || customer.phone || 'N/A'}</span>
+                                                  </div>
                                               </div>
                                           </div>
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap">
-                                          <Badge variant="neutral" className="uppercase text-[10px]">{STAGES.find(s => s.id === customer.stage)?.label}</Badge>
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap">
-                                          <div className="flex items-center gap-1 font-bold text-slate-700">
-                                              {customer.average_rating.toFixed(1)} <Star className="h-3 w-3 text-amber-400 fill-current" />
+                                          <div className="text-right">
+                                              <div className="font-bold text-slate-700 flex items-center justify-end gap-1">
+                                                  {customer.average_rating.toFixed(1)} <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                              </div>
+                                              <div className="text-[10px] text-slate-400">{customer.total_reviews} avis</div>
                                           </div>
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs">
-                                          {customer.ltv_estimate ? customer.ltv_estimate + '€' : '-'}
-                                      </td>
-                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                          {new Date(customer.last_interaction).toLocaleDateString()}
-                                      </td>
-                                  </tr>
-                              ))}
+                                      </div>
+                                      <div className="flex items-center justify-between mt-3 pl-1">
+                                          <Badge variant={status.variant} className="text-[10px] px-2 py-0.5">{status.label}</Badge>
+                                          <div className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                                               <DollarSign className="h-3 w-3 text-slate-400" />
+                                               {formatCurrency(customer.ltv_estimate)}
+                                          </div>
+                                      </div>
+                                  </div>
+                              );
+                          })}
+                      </div>
+
+                      {/* Desktop Table View */}
+                      <table className="min-w-full divide-y divide-slate-100 hidden md:table">
+                          <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
+                              <tr>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Client</th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Statut</th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Note Moyenne</th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider" title="Valeur estimée">Valeur Client</th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Dernier Avis</th>
+                              </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-slate-50">
+                              {filteredCustomers.map(customer => {
+                                  const status = getCustomerStatusLabel(customer.status);
+                                  return (
+                                      <tr 
+                                        key={customer.id} 
+                                        className="hover:bg-slate-50 transition-colors cursor-pointer group"
+                                        onClick={() => setSelectedCustomer(customer)}
+                                      >
+                                          <td className="px-6 py-4 whitespace-nowrap">
+                                              <div className="flex items-center">
+                                                  <div className="h-9 w-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs mr-3 border border-indigo-200 group-hover:bg-indigo-200 transition-colors">
+                                                      {customer.name.charAt(0)}
+                                                  </div>
+                                                  <div>
+                                                      <div className="font-semibold text-slate-900">{customer.name}</div>
+                                                      <div className="text-xs text-slate-500 flex items-center gap-1">
+                                                          {customer.email}
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap">
+                                              <Badge variant={status.variant} className="uppercase text-[10px]">{status.label}</Badge>
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap">
+                                              <div className="flex items-center gap-1 font-bold text-slate-700">
+                                                  {customer.average_rating.toFixed(1)} <Star className="h-3.5 w-3.5 text-amber-400 fill-current" />
+                                                  <span className="text-xs font-normal text-slate-400 ml-1">({customer.total_reviews})</span>
+                                              </div>
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-indigo-600 font-medium">
+                                              {formatCurrency(customer.ltv_estimate)}
+                                          </td>
+                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                              {new Date(customer.last_interaction).toLocaleDateString()}
+                                          </td>
+                                      </tr>
+                                  );
+                              })}
                           </tbody>
                       </table>
                   </div>
@@ -278,38 +519,45 @@ export const CustomersPage = () => {
 
       {/* CUSTOMER DETAIL DRAWER */}
       {selectedCustomer && (
-          <div className="fixed inset-y-0 right-0 w-full md:w-[500px] bg-white shadow-2xl z-50 border-l border-slate-200 transform transition-transform duration-300 overflow-y-auto animate-in slide-in-from-right flex flex-col">
+          <>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-40 transition-opacity" onClick={() => setSelectedCustomer(null)}></div>
+            <div className="fixed inset-y-0 right-0 w-full md:w-[500px] bg-white shadow-2xl z-50 border-l border-slate-200 transform transition-transform duration-300 overflow-y-auto animate-in slide-in-from-right flex flex-col">
               
               {/* HEADER */}
               <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex justify-between items-start mb-6">
                       <div className="flex items-center gap-4">
-                          <div className="h-16 w-16 bg-white border-2 border-indigo-100 rounded-full flex items-center justify-center font-bold text-2xl text-indigo-600 shadow-sm">
+                          <div className="h-16 w-16 bg-white border-4 border-white ring-1 ring-slate-200 rounded-full flex items-center justify-center font-bold text-2xl text-indigo-600 shadow-md">
                               {selectedCustomer.name.charAt(0)}
                           </div>
                           <div>
-                              <h2 className="text-xl font-bold text-slate-900">{selectedCustomer.name}</h2>
-                              <div className="flex items-center gap-2 text-sm text-slate-500">
-                                  {selectedCustomer.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3"/> {selectedCustomer.email}</span>}
+                              <h2 className="text-xl font-bold text-slate-900 leading-tight">{selectedCustomer.name}</h2>
+                              <div className="flex flex-col text-sm text-slate-500 mt-1 space-y-0.5">
+                                  {selectedCustomer.email && <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400"/> {selectedCustomer.email}</span>}
+                                  {selectedCustomer.phone && <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400"/> {selectedCustomer.phone}</span>}
                               </div>
                           </div>
                       </div>
-                      <button onClick={() => setSelectedCustomer(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
-                          <X className="h-5 w-5" />
+                      <button onClick={() => setSelectedCustomer(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                          <X className="h-6 w-6" />
                       </button>
                   </div>
 
                   {/* STAGE SELECTOR */}
-                  <div className="bg-white p-1 rounded-lg border border-slate-200 flex shadow-sm">
-                      {STAGES.map((s, i) => (
-                          <button
-                              key={s.id}
-                              onClick={() => handleStageChange(s.id)}
-                              className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${selectedCustomer.stage === s.id ? s.color + ' shadow-sm' : 'text-slate-400 hover:bg-slate-50'}`}
-                          >
-                              {s.label.split(' ')[0]}
-                          </button>
-                      ))}
+                  <div className="bg-white p-1.5 rounded-xl border border-slate-200 flex shadow-sm overflow-x-auto no-scrollbar gap-1">
+                      {PIPELINE_STAGES.map((sId) => {
+                          const { label, color } = getStageLabel(sId);
+                          const isActive = selectedCustomer.stage === sId;
+                          return (
+                              <button
+                                  key={sId}
+                                  onClick={() => handleStageChange(sId)}
+                                  className={`flex-1 py-2 px-3 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all whitespace-nowrap ${isActive ? color + ' shadow-sm ring-1 ring-black/5' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}
+                              >
+                                  {label}
+                              </button>
+                          );
+                      })}
                   </div>
               </div>
 
@@ -317,18 +565,19 @@ export const CustomersPage = () => {
                   
                   {/* METRICS */}
                   <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 p-2 opacity-5"><DollarSign className="h-16 w-16" /></div>
                           <span className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1">
-                              <DollarSign className="h-3 w-3" /> Valeur Vie (LTV)
+                              Valeur Client (LTV)
                           </span>
-                          <div className="text-2xl font-bold text-slate-900">{selectedCustomer.ltv_estimate ? selectedCustomer.ltv_estimate + '€' : 'N/A'}</div>
+                          <div className="text-2xl font-bold text-slate-900">{formatCurrency(selectedCustomer.ltv_estimate)}</div>
                       </div>
                       <div className={`p-4 rounded-xl border ${selectedCustomer.status === 'promoter' ? 'bg-green-50 border-green-100' : selectedCustomer.status === 'detractor' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-200'}`}>
                           <span className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1">
-                              <Heart className="h-3 w-3" /> Fidélité
+                              <Heart className="h-3 w-3" /> Statut
                           </span>
-                          <div className={`text-2xl font-bold capitalize ${selectedCustomer.status === 'promoter' ? 'text-green-700' : selectedCustomer.status === 'detractor' ? 'text-red-700' : 'text-slate-700'}`}>
-                              {selectedCustomer.status}
+                          <div className={`text-2xl font-bold ${selectedCustomer.status === 'promoter' ? 'text-green-700' : selectedCustomer.status === 'detractor' ? 'text-red-700' : 'text-slate-700'}`}>
+                              {getCustomerStatusLabel(selectedCustomer.status).label}
                           </div>
                       </div>
                   </div>
@@ -391,7 +640,7 @@ export const CustomersPage = () => {
               </div>
 
               {/* FOOTER ACTIONS */}
-              <div className="p-4 border-t border-slate-200 bg-white grid grid-cols-2 gap-3">
+              <div className="p-4 border-t border-slate-200 bg-white grid grid-cols-2 gap-3 shrink-0 pb-safe">
                   <Button variant="outline" icon={MessageCircle} onClick={() => toast.info("Email ouvert")}>
                       Email
                   </Button>
@@ -399,7 +648,8 @@ export const CustomersPage = () => {
                       Voir détails complets
                   </Button>
               </div>
-          </div>
+            </div>
+          </>
       )}
     </div>
   );
