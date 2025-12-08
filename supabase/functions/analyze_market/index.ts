@@ -43,38 +43,37 @@ Deno.serve(async (req: Request) => {
     ).join('\n');
 
     const prompt = `
-        Agis comme un expert en stratégie d'entreprise et analyse de marché locale.
+        Tu es un consultant expert en stratégie d'entreprise spécialisé dans le secteur : "${sector || 'Commerce Local'}".
         
         CONTEXTE:
-        Secteur: ${sector || 'Non spécifié'}
+        Secteur d'activité: ${sector}
         Localisation: ${location || 'Locale'}
         
         DONNÉES CONCURRENTS (Top 10):
         ${competitorsList}
         
         TACHE:
-        Génère une analyse de marché structurée au format JSON STRICT basé sur ces données.
+        Génère une analyse de marché SWOT (Forces, Faiblesses, Opportunités, Menaces) et des tendances, EXTRÊMEMENT SPÉCIFIQUE à ce métier.
+        Ne donne pas de conseils génériques. Utilise le vocabulaire technique du métier (ex: si Restaurant -> parle de carte, service, produits frais; si Hotel -> literie, accueil, petit-déjeuner; si Plombier -> réactivité, devis).
         
         FORMAT ATTENDU (JSON uniquement, pas de markdown):
         {
-            "trends": ["Tendance 1 (ex: Montée des prix)", "Tendance 2", "Tendance 3"],
+            "trends": ["Tendance métier 1", "Tendance métier 2", "Tendance métier 3"],
             "swot": {
-                "strengths": ["Force globale du marché"],
-                "weaknesses": ["Faiblesse globale des concurrents"],
-                "opportunities": ["Opportunité pour un nouvel entrant"],
-                "threats": ["Menace externe"]
+                "strengths": ["Force observée chez les concurrents ou standard du marché"],
+                "weaknesses": ["Faiblesse récurrente des concurrents (Opportunité pour nous)"],
+                "opportunities": ["Axe de différenciation spécifique au secteur"],
+                "threats": ["Menace externe (régulation, économie, nouveaux entrants)"]
             },
             "competitors_detailed": [
                 {
                     "name": "Nom du concurrent",
                     "last_month_growth": "Estimation (ex: +5%)",
                     "sentiment_trend": "Positif/Négatif/Neutre",
-                    "top_complaint": "Leur point faible majeur déduit"
+                    "top_complaint": "Leur point faible majeur déduit des notes/secteur"
                 }
             ]
         }
-        
-        Sois réaliste, incisif et professionnel. Déduis les plaintes probables si elles ne sont pas explicites (ex: note basse = service ou prix).
     `;
 
     // 4. Generate

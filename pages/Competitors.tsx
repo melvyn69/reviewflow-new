@@ -18,15 +18,111 @@ import {
     Download,
     Lightbulb,
     Shield,
-    Lock,
     RefreshCw,
     ArrowRight,
     History,
     FileText,
     Play,
-    Menu
+    Zap
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
+
+// --- SONAR RADAR COMPONENT ---
+const SonarRadar = ({ competitors, industry }: { competitors: any[], industry: string }) => {
+    // Calculate aggregate metrics for the 4 axes
+    const avgRating = competitors.length ? competitors.reduce((acc, c) => acc + (c.rating || 0), 0) / competitors.length : 0;
+    const avgVolume = competitors.length ? competitors.reduce((acc, c) => acc + (c.review_count || 0), 0) / competitors.length : 0;
+    
+    // Normalize metrics 0-100 for the chart
+    const axes = [
+        { label: 'Note Moyenne', value: (avgRating / 5) * 100, angle: 0 },
+        { label: 'Volume Avis', value: Math.min((avgVolume / 500) * 100, 100), angle: 90 },
+        { label: 'Fréquence', value: Math.min((avgVolume / 100) * 80, 95), angle: 180 }, // Simulated based on volume
+        { label: 'Réactivité', value: 65, angle: 270 } // Simulated/Static for now
+    ];
+
+    const radius = 120;
+    const center = 150;
+
+    const getCoordinates = (value: number, angle: number) => {
+        const rad = (angle - 90) * (Math.PI / 180);
+        return {
+            x: center + (radius * (value / 100)) * Math.cos(rad),
+            y: center + (radius * (value / 100)) * Math.sin(rad)
+        };
+    };
+
+    const polygonPoints = axes.map(axis => {
+        const coords = getCoordinates(axis.value, axis.angle);
+        return `${coords.x},${coords.y}`;
+    }).join(' ');
+
+    return (
+        <div className="relative w-full h-[400px] bg-black rounded-xl overflow-hidden shadow-2xl border border-emerald-900/50 flex flex-col items-center justify-center font-mono">
+            {/* Grid Overlay */}
+            <div className="absolute inset-0" style={{ 
+                backgroundImage: 'linear-gradient(rgba(0, 255, 0, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 0, 0.1) 1px, transparent 1px)', 
+                backgroundSize: '20px 20px',
+                opacity: 0.2
+            }}></div>
+
+            {/* Radar Scan Animation */}
+            <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-500/30"></div>
+            <div className="absolute top-1/2 left-1/2 w-[250px] h-[250px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-500/30"></div>
+            <div className="absolute top-1/2 left-1/2 w-[100px] h-[100px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-500/30"></div>
+            
+            {/* The Sweeping Line */}
+            <div className="absolute top-1/2 left-1/2 w-[300px] h-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none origin-center animate-[spin_4s_linear_infinite]"
+                 style={{ background: 'conic-gradient(from 0deg, transparent 0deg, transparent 300deg, rgba(16, 185, 129, 0.4) 360deg)' }}>
+            </div>
+
+            {/* SVG Chart */}
+            <svg width="300" height="300" className="relative z-10 filter drop-shadow-[0_0_8px_rgba(16,185,129,0.8)]">
+                {/* Axes Lines */}
+                {axes.map((axis, i) => {
+                    const end = getCoordinates(100, axis.angle);
+                    return (
+                        <g key={i}>
+                            <line x1={center} y1={center} x2={end.x} y2={end.y} stroke="rgba(16, 185, 129, 0.3)" strokeWidth="1" />
+                            <text x={end.x} y={end.y} 
+                                  dx={axis.angle === 90 ? 10 : axis.angle === 270 ? -80 : -40} 
+                                  dy={axis.angle === 0 ? -10 : axis.angle === 180 ? 20 : 5}
+                                  fill="#10b981" fontSize="10" fontWeight="bold" textAnchor="start">
+                                {axis.label.toUpperCase()}
+                            </text>
+                        </g>
+                    );
+                })}
+
+                {/* Data Polygon */}
+                <polygon points={polygonPoints} fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" strokeWidth="2" />
+                
+                {/* Data Points */}
+                {axes.map((axis, i) => {
+                    const coords = getCoordinates(axis.value, axis.angle);
+                    return <circle key={i} cx={coords.x} cy={coords.y} r="3" fill="#ecfdf5" className="animate-pulse" />;
+                })}
+            </svg>
+
+            {/* Info Overlay */}
+            <div className="absolute top-4 left-4 text-emerald-500 text-xs">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    LIVE MONITORING
+                </div>
+                <div className="font-bold opacity-80 uppercase tracking-widest">{industry}</div>
+            </div>
+            
+            <div className="absolute bottom-4 right-4 text-emerald-600 text-[10px] font-mono">
+                TARGETS: {competitors.length} <br/>
+                ZONE: ACTIF
+            </div>
+        </div>
+    );
+};
 
 export const CompetitorsPage = () => {
     const [trackedCompetitors, setTrackedCompetitors] = useState<Competitor[]>([]);
@@ -40,11 +136,9 @@ export const CompetitorsPage = () => {
     
     // Scan settings
     const [scanRadius, setScanRadius] = useState(5);
-    const [scanSector, setScanSector] = useState('');
     const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'found' | 'error'>('idle');
     
     // Insights / Report settings
-    const [sectorInput, setSectorInput] = useState('');
     const [locationInput, setLocationInput] = useState('');
     const [reportHistory, setReportHistory] = useState<MarketReport[]>([]);
     const [selectedReport, setSelectedReport] = useState<MarketReport | null>(null);
@@ -94,6 +188,7 @@ export const CompetitorsPage = () => {
     };
 
     const handleScan = async () => {
+        if (!org) return;
         setLoading(true);
         setLocationStatus('locating');
         setScannedResults([]);
@@ -111,7 +206,9 @@ export const CompetitorsPage = () => {
             setLocationStatus('found');
 
             // 2. Call the Real Edge Function via API
-            const results = await api.competitors.autoDiscover(scanRadius, scanSector, latitude, longitude);
+            // Use org industry automatically
+            const industryKeyword = org.industry || 'Commerce';
+            const results = await api.competitors.autoDiscover(scanRadius, industryKeyword, latitude, longitude);
             
             setScannedResults(results || []);
             setActiveTab('scan');
@@ -158,21 +255,22 @@ export const CompetitorsPage = () => {
     };
 
     const runAnalysis = async () => {
-        if (!sectorInput || !locationInput) {
-            toast.error("Veuillez remplir le secteur et la zone.");
+        if (!locationInput) {
+            toast.error("Veuillez définir la zone géographique.");
             return;
         }
         
         setLoadingInsights(true);
         setMarketData(null); // Clear previous view
         try {
-            const data = await api.competitors.getDeepAnalysis(sectorInput, locationInput, trackedCompetitors);
+            const industry = org?.industry || 'Commerce';
+            const data = await api.competitors.getDeepAnalysis(industry, locationInput, trackedCompetitors);
             setMarketData(data);
             
             // Save to history
             const newReport: Omit<MarketReport, 'id'> = {
                 created_at: new Date().toISOString(),
-                sector: sectorInput,
+                sector: industry,
                 location: locationInput,
                 trends: data.trends,
                 swot: data.swot,
@@ -290,14 +388,11 @@ export const CompetitorsPage = () => {
                                 <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Nouvelle Analyse</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-700 mb-1">Secteur d'activité</label>
-                                    <Input 
-                                        placeholder="ex: Restaurant Italien" 
-                                        value={sectorInput} 
-                                        onChange={e => setSectorInput(e.target.value)} 
-                                        className="bg-slate-50"
-                                    />
+                                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                                    <label className="block text-xs font-bold text-indigo-800 uppercase mb-1">Secteur détecté</label>
+                                    <div className="font-medium text-indigo-900 flex items-center gap-2">
+                                        <Zap className="h-4 w-4" /> {org.industry || 'Non défini'}
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-700 mb-1">Zone Géographique</label>
@@ -344,9 +439,9 @@ export const CompetitorsPage = () => {
                         {loadingInsights ? (
                             <div className="h-full flex flex-col items-center justify-center p-8 md:p-12 bg-white rounded-xl border border-slate-200 min-h-[400px]">
                                 <Loader2 className="h-12 w-12 text-indigo-600 animate-spin mb-4" />
-                                <h3 className="text-xl font-bold text-slate-900 text-center">Analyse de marché en cours...</h3>
+                                <h3 className="text-xl font-bold text-slate-900 text-center">Analyse stratégique sectorielle...</h3>
                                 <p className="text-slate-500 mt-2 max-w-md text-center text-sm">
-                                    L'IA explore les données des concurrents, identifie les tendances et génère votre matrice SWOT.
+                                    L'IA compare vos performances avec les standards du secteur {org.industry} pour la zone ciblée.
                                 </p>
                             </div>
                         ) : marketData ? (
@@ -359,7 +454,7 @@ export const CompetitorsPage = () => {
                                             Rapport généré le {selectedReport ? new Date(selectedReport.created_at).toLocaleDateString() : new Date().toLocaleDateString()}
                                         </div>
                                         <h2 className="text-xl md:text-2xl font-bold text-slate-900">
-                                            Analyse: {sectorInput || selectedReport?.sector} - {locationInput || selectedReport?.location}
+                                            Analyse: {selectedReport?.sector || org.industry} - {locationInput || selectedReport?.location}
                                         </h2>
                                     </div>
                                     <Button variant="outline" size="sm" icon={Download}>PDF</Button>
@@ -496,22 +591,27 @@ export const CompetitorsPage = () => {
             {/* TAB: SCAN (RADAR) */}
             {activeTab === 'scan' && (
                 <div className="space-y-6 animate-in fade-in">
-                    <Card className="bg-slate-900 text-white border-none shadow-xl">
+                    
+                    {/* Sonar Visualization Area */}
+                    <SonarRadar competitors={scannedResults} industry={org.industry || 'Général'} />
+
+                    <Card className="bg-white border-slate-200 shadow-sm mt-6">
+                        <CardHeader className="bg-slate-50 border-b border-slate-200">
+                            <CardTitle className="text-sm uppercase font-bold text-slate-500">Paramètres du Scan</CardTitle>
+                        </CardHeader>
                         <CardContent className="p-6 md:p-8">
                             <div className="flex flex-col lg:flex-row gap-6 items-end">
                                 <div className="flex-1 w-full">
-                                    <label className="block text-sm font-medium text-slate-400 mb-2">Secteur d'activité</label>
-                                    <Input 
-                                        placeholder="Mot-clé (ex: Burger, Plombier...)" 
-                                        className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                                        value={scanSector}
-                                        onChange={e => setScanSector(e.target.value)}
-                                    />
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">Secteur cible</label>
+                                    <div className="p-3 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-medium cursor-not-allowed flex items-center gap-2">
+                                        <Target className="h-4 w-4" /> {org.industry || 'Non défini (Configurer dans Paramètres)'}
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">Basé sur vos paramètres d'établissement.</p>
                                 </div>
                                 <div className="w-full lg:w-48">
-                                    <label className="block text-sm font-medium text-slate-400 mb-2">Rayon de recherche</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">Rayon de recherche</label>
                                     <select 
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg text-white px-3 py-2.5 focus:ring-2 focus:ring-indigo-500"
+                                        className="w-full bg-white border border-slate-200 rounded-lg text-slate-900 px-3 py-2.5 focus:ring-2 focus:ring-indigo-500"
                                         value={scanRadius}
                                         onChange={e => setScanRadius(parseInt(e.target.value))}
                                     >
@@ -523,7 +623,7 @@ export const CompetitorsPage = () => {
                                 </div>
                                 <Button 
                                     size="lg" 
-                                    className="w-full lg:w-auto bg-indigo-600 hover:bg-indigo-500 border-none shadow-lg shadow-indigo-900/50"
+                                    className="w-full lg:w-auto bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-200"
                                     onClick={handleScan}
                                     isLoading={loading}
                                     disabled={locationStatus === 'locating'}
