@@ -214,8 +214,16 @@ export const api = {
     },
     reviews: {
         list: async (filters: any): Promise<Review[]> => {
+            const showArchived = filters.archived === true;
+
             if (isDemoMode()) {
                 let res = mockReviews;
+                if (!showArchived) {
+                    res = res.filter(r => !r.archived);
+                } else {
+                    res = res.filter(r => r.archived);
+                }
+
                 if (filters.status) res = res.filter(r => r.status === filters.status);
                 if (filters.rating) res = res.filter(r => r.rating === parseInt(filters.rating.toString().replace(' ★', '')));
                 return res;
@@ -224,6 +232,14 @@ export const api = {
             const org = await api.organization.get();
             let query = supabase.from('reviews').select('*').in('location_id', org?.locations.map(l => l.id) || []);
             
+            // Handle archived state filter
+            if (showArchived) {
+                query = query.eq('archived', true);
+            } else {
+                // By default, only show non-archived reviews or where archived is null
+                query = query.or('archived.is.null,archived.eq.false');
+            }
+
             if (filters.status) query = query.eq('status', filters.status);
             if (filters.source) query = query.eq('source', filters.source.toLowerCase());
             if (filters.rating) {
@@ -283,6 +299,20 @@ export const api = {
                 });
             }
         },
+        archive: async (reviewId: string) => {
+            if (isDemoMode()) {
+                mockReviews = mockReviews.map(r => r.id === reviewId ? { ...r, archived: true } : r);
+                return;
+            }
+            await supabase!.from('reviews').update({ archived: true }).eq('id', reviewId);
+        },
+        unarchive: async (reviewId: string) => {
+            if (isDemoMode()) {
+                mockReviews = mockReviews.map(r => r.id === reviewId ? { ...r, archived: false } : r);
+                return;
+            }
+            await supabase!.from('reviews').update({ archived: false }).eq('id', reviewId);
+        },
         getTimeline: (review: Review): ReviewTimelineEvent[] => {
             const events: ReviewTimelineEvent[] = [
                 { id: '1', type: 'review_created', actor_name: review.author_name, date: review.received_at, content: `A laissé un avis ${review.rating}★` }
@@ -309,6 +339,8 @@ export const api = {
     analytics: {
         getOverview: async (period = '30j'): Promise<AnalyticsSummary> => {
             if (isDemoMode()) return DEMO_STATS;
+            // In a real scenario, this should invoke a Supabase RPC or function that filters out archived reviews.
+            // For now we return the mock or basic implementation.
             return DEMO_STATS; 
         }
     },

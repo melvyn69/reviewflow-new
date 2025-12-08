@@ -260,6 +260,7 @@ export interface Review {
     external_id?: string;
     staff_attributed_to?: string;
     assigned_to?: string;
+    archived?: boolean;
 }
 
 export interface ReviewTimelineEvent {

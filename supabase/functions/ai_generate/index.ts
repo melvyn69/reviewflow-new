@@ -38,20 +38,33 @@ Deno.serve(async (req: Request) => {
 
     // 3. Construct Prompt based on Task
     if (task === 'generate_reply') {
-        const { review, tone, length } = context;
+        const { review, tone, length, businessName, city, category } = context;
+        
+        // Logique conditionnelle basée sur la note
+        const isPositive = review.rating >= 4;
+        const isNegative = review.rating <= 3;
+
         prompt = `
-            Rôle: Tu es le propriétaire d'un établissement répondant à un avis client.
-            Tâche: Rédige une réponse à cet avis.
+            Rôle : Tu es le gérant de "${businessName || 'notre établissement'}", situé à ${city || 'votre ville'} (${category || 'Commerce'}).
             
-            Avis Client (${review.rating}/5) de ${review.author_name}:
-            "${review.body}"
+            Tâche : Répondre à cet avis client.
             
-            Consignes:
-            - Ton: ${tone || 'Professionnel'}
-            - Longueur: ${length === 'short' ? 'Courte (1-2 phrases)' : length === 'long' ? 'Détaillée (3-4 phrases)' : 'Moyenne'}
-            - Langue: Français
-            - Ne pas mettre de guillemets autour de la réponse.
-            - Sois poli, empathique et constructif.
+            DÉTAILS DE L'AVIS :
+            - Note : ${review.rating}/5
+            - Auteur : ${review.author_name}
+            - Commentaire : "${review.body}"
+            
+            OBJECTIFS & STYLE (CRUCIAL) :
+            1. **SEO Local** : Mentionne naturellement le nom de l'établissement ("${businessName}") et la ville ("${city}") ou le type de service dans la réponse. Cela doit couler de source, ne pas faire "robot".
+            2. **Ton** : ${tone || 'Professionnel mais chaleureux'}. Utilise un français courant, naturel, pas de formules pompeuses ("Nous sommes honorés de..."). Sois direct et humain.
+            3. **Longueur** : ${length === 'short' ? 'Très court (1-2 phrases)' : 'Court (2-3 phrases max)'}. Pas de pavés.
+            4. **Format** : Pas de guillemets, pas de "Bonjour [Nom]" au début (sauf si nécessaire), va droit au but.
+
+            LOGIQUE DE RÉPONSE :
+            ${isPositive ? 
+                `-> C'est un BON avis. Remercie chaleureusement (sans en faire trop). Rebondis sur un point positif mentionné (le "point fort") pour le valoriser.` : 
+                `-> C'est un avis MITIGÉ ou NÉGATIF. Sois empathique et orienté solution. Présente des excuses sincères si nécessaire (sans s'aplatir). Invite à repasser ou à contacter le support si le problème est précis. Ne sois JAMAIS agressif ou défensif.`
+            }
         `;
     } 
     else if (task === 'social_post') {
@@ -75,13 +88,31 @@ Deno.serve(async (req: Request) => {
             - DO NOT wrap the output in quotes.
         `;
     }
+    else if (task === 'enrich_customer') {
+        prompt = `
+            Analyse le profil de ce client basé sur ses données :
+            ID: ${context.customerId}
+            
+            Tâche : Génère un profil psychologique court (1 phrase) et une "Next Best Action" (suggestion commerciale).
+            Format JSON attendu : { "profile": "...", "suggestion": "..." }
+        `;
+    }
     else {
         throw new Error('Unknown task')
     }
 
     // 4. Generate
     const result = await model.generateContent(prompt)
-    const text = result.response.text()
+    let text = result.response.text()
+
+    // Nettoyage basique JSON si nécessaire
+    if (task === 'enrich_customer') {
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return new Response(
+            JSON.stringify({ insight: JSON.parse(text) }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+    }
 
     return new Response(
       JSON.stringify({ text }),

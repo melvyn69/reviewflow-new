@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Review, ReviewStatus, InternalNote, SavedReply, Location, ReviewTimelineEvent } from '../types';
+import { Review, ReviewStatus, InternalNote, SavedReply, Location, ReviewTimelineEvent, Organization } from '../types';
 import { Card, CardContent, Skeleton, useToast, Button, Badge } from '../components/ui';
 import { SocialShareModal } from '../components/SocialShareModal';
 import { InboxFocusMode } from '../components/InboxFocusMode';
@@ -31,7 +32,8 @@ import {
   Tag,
   Activity,
   Plus,
-  X
+  X,
+  Undo
 } from 'lucide-react';
 import { useNavigate, useLocation as useRouterLocation } from '../components/ui';
 
@@ -212,6 +214,7 @@ const ArrowUpIcon = ({ className }: { className?: string }) => (
 export const InboxPage = () => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [org, setOrg] = useState<Organization | null>(null);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -230,6 +233,7 @@ export const InboxPage = () => {
   const [sourceFilter, setSourceFilter] = useState('Tout');
   const [ratingFilter, setRatingFilter] = useState('Tout');
   const [locationFilter, setLocationFilter] = useState('Tout');
+  const [archiveFilter, setArchiveFilter] = useState<'active' | 'archived'>('active');
 
   const [activeTab, setActiveTab] = useState<'reply' | 'activity'>('reply');
   const [replyText, setReplyText] = useState('');
@@ -267,9 +271,10 @@ export const InboxPage = () => {
 
   useEffect(() => {
     const init = async () => {
-        const org = await api.organization.get();
-        if (org && org.locations) {
-            setLocations(org.locations);
+        const orgData = await api.organization.get();
+        setOrg(orgData);
+        if (orgData && orgData.locations) {
+            setLocations(orgData.locations);
         }
         if (targetReviewId) {
             setStatusFilter('Tout');
@@ -286,7 +291,7 @@ export const InboxPage = () => {
     setHasMore(true);
     loadReviews(true);
     loadTemplates();
-  }, [statusFilter, sourceFilter, ratingFilter, locationFilter, searchQuery]);
+  }, [statusFilter, sourceFilter, ratingFilter, locationFilter, archiveFilter, searchQuery]);
 
   // Real-time subscription
   useEffect(() => {
@@ -326,7 +331,8 @@ export const InboxPage = () => {
     const filters: any = {
         page: currentPage,
         limit: LIMIT,
-        search: searchQuery
+        search: searchQuery,
+        archived: archiveFilter === 'archived'
     };
     if (statusFilter !== 'Tout') filters.status = statusFilter;
     if (sourceFilter !== 'Tout') filters.source = sourceFilter;
@@ -387,6 +393,7 @@ export const InboxPage = () => {
       setSourceFilter('Tout');
       setRatingFilter('Tout');
       setLocationFilter('Tout');
+      setArchiveFilter('active');
       navigate('/inbox'); 
   };
 
@@ -397,9 +404,15 @@ export const InboxPage = () => {
     setReplyText("");
     
     try {
+        // Retrieve context data from location list
+        const locationData = locations.find(l => l.id === selectedReview.location_id);
+        
         const draftText = await api.ai.generateReply(selectedReview, {
             tone: aiTone,
-            length: aiLength
+            length: aiLength,
+            businessName: locationData?.name || "",
+            city: locationData?.city || "",
+            category: "Commerce" // Optional: could be fetched from org industry
         });
         setReplyText(draftText);
     } catch (error: any) {
@@ -515,7 +528,19 @@ export const InboxPage = () => {
 
   const handleArchive = async () => {
       if (!selectedReview) return;
-      toast.success("Avis archivé (Simulation)");
+      await api.reviews.archive(selectedReview.id);
+      toast.success("Avis archivé");
+      setReviews(prev => prev.filter(r => r.id !== selectedReview.id));
+      setSelectedReview(null);
+      setShowActionsMenu(false);
+  };
+
+  const handleUnarchive = async () => {
+      if (!selectedReview) return;
+      await api.reviews.unarchive(selectedReview.id);
+      toast.success("Avis désarchivé");
+      setReviews(prev => prev.filter(r => r.id !== selectedReview.id));
+      setSelectedReview(null);
       setShowActionsMenu(false);
   };
 
@@ -531,7 +556,18 @@ export const InboxPage = () => {
       setShowActionsMenu(false);
   };
 
+  const handleShareClick = () => {
+      const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'enterprise';
+      if (!isPro) {
+          toast.info("Le partage social est une fonctionnalité Premium. Passez au plan Growth pour débloquer.");
+          setTimeout(() => navigate('/billing'), 1500);
+          return;
+      }
+      setShowShareModal(true);
+  };
+
   const pendingCount = reviews.filter(r => r.status === 'pending').length;
+  const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'enterprise';
 
   return (
     <div className="flex h-[calc(100vh-8rem)] -m-4 md:-m-8 overflow-hidden bg-white">
@@ -554,7 +590,7 @@ export const InboxPage = () => {
                 <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{reviews.length}{hasMore ? '+' : ''}</span>
             </h1>
             
-            {pendingCount > 0 && (
+            {pendingCount > 0 && archiveFilter !== 'archived' && (
                 <Button 
                     className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 animate-pulse"
                     size="sm"
@@ -602,7 +638,16 @@ export const InboxPage = () => {
                 onChange={setRatingFilter} 
                 options={['5 ★', '4 ★', '3 ★', '2 ★', '1 ★']} 
              />
-             {(statusFilter !== 'Tout' || sourceFilter !== 'Tout' || ratingFilter !== 'Tout' || locationFilter !== 'Tout' || searchQuery) && (
+             <FilterSelect
+                label="Vue"
+                value={archiveFilter}
+                onChange={(v) => setArchiveFilter(v as any)}
+                options={[
+                    { label: 'Actifs', value: 'active' },
+                    { label: 'Archivés', value: 'archived' }
+                ]}
+             />
+             {(statusFilter !== 'Tout' || sourceFilter !== 'Tout' || ratingFilter !== 'Tout' || locationFilter !== 'Tout' || archiveFilter !== 'active' || searchQuery) && (
                  <Button variant="ghost" size="xs" onClick={handleResetFilters} className="text-slate-400 hover:text-red-500 ml-auto shrink-0">Réinit.</Button>
              )}
           </div>
@@ -613,8 +658,8 @@ export const InboxPage = () => {
             <InboxSkeleton />
           ) : reviews.length === 0 ? (
               <div className="p-8 text-center text-slate-400">
-                  <div className="mb-2">📭</div>
-                  Aucun avis ne correspond à vos filtres.
+                  <div className="mb-2">{archiveFilter === 'archived' ? '🗄️' : '📭'}</div>
+                  {archiveFilter === 'archived' ? 'Aucun avis archivé.' : 'Aucun avis ne correspond à vos filtres.'}
               </div>
           ) : (
             <>
@@ -687,14 +732,28 @@ export const InboxPage = () => {
               <h2 className="font-semibold text-slate-800">Détails de l'avis</h2>
             </div>
             <div className="flex gap-2 relative">
-               <Button variant="outline" size="sm" icon={Share2} onClick={() => setShowShareModal(true)}>Partager</Button>
+               <Button 
+                   variant="outline" 
+                   size="sm" 
+                   onClick={handleShareClick}
+                   className={!isPro ? "opacity-75" : ""}
+               >
+                   <Share2 className="h-4 w-4 mr-2" />
+                   Partager {!isPro && <Lock className="ml-1 h-3 w-3 inline" />}
+               </Button>
                <Button variant="outline" size="sm" icon={MoreHorizontal} onClick={() => setShowActionsMenu(!showActionsMenu)}>Actions</Button>
                
                {showActionsMenu && (
                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                       <button onClick={handleArchive} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                           <Archive className="h-4 w-4" /> Archiver
-                       </button>
+                       {archiveFilter === 'archived' ? (
+                           <button onClick={handleUnarchive} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                               <Undo className="h-4 w-4" /> Désarchiver
+                           </button>
+                       ) : (
+                           <button onClick={handleArchive} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                               <Archive className="h-4 w-4" /> Archiver
+                           </button>
+                       )}
                        <button onClick={handleFlag} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-50">
                            <Flag className="h-4 w-4" /> Signaler à Google
                        </button>

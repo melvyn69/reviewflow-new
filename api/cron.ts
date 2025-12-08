@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 
@@ -33,9 +34,12 @@ export default async function handler(request: any, response: any) {
         location_id,
         location:locations (
           id,
+          name,
+          city,
           organization:organizations (
             id,
             name,
+            industry,
             brand,
             workflows
           )
@@ -58,29 +62,37 @@ export default async function handler(request: any, response: any) {
 
     for (const review of reviews) {
       let org = null;
+      let loc = null;
+      
       if (review.location) {
+        loc = review.location;
         const orgData = review.location.organization;
         org = Array.isArray(orgData) ? orgData[0] : orgData;
       }
 
       const brand = org?.brand || { tone: 'professionnel', language_style: 'formal' };
-      const context = brand.knowledge_base ? `\n[INFORMATIONS CLÉS ENTREPRISE]:\n${brand.knowledge_base}\nUtilise ces informations pour répondre aux questions spécifiques.` : '';
+      
+      // Logique conditionnelle basée sur la note
+      const isPositive = review.rating >= 4;
 
       const prompt = `
-        Rôle: Tu es le service client pour "${org?.name || 'notre entreprise'}" (${org?.industry || 'commerce'}).
-        Ton: ${brand.tone}.
-        Style: ${brand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}.
-        ${context}
+        Rôle : Tu es le service client pour "${org?.name || loc?.name || 'notre entreprise'}" (${org?.industry || 'commerce'}) situé à ${loc?.city || 'votre ville'}.
+        
+        Tâche : Rédige une réponse à cet avis Google.
+        
+        Avis Client (${review.rating}/5) de ${review.author_name || 'Client'} :
+        "${review.text}"
 
-        Tâche: Rédige une réponse à cet avis client Google.
-        Note: ${review.rating}/5
-        Auteur: ${review.author_name || 'Client'}
-        Avis: "${review.text}"
+        OBJECTIFS & STYLE :
+        1. **SEO Local** : Mentionne naturellement "${loc?.name || org?.name}" et la ville "${loc?.city}" si possible.
+        2. **Ton** : ${brand.tone}. Français naturel, fluide, chaleureux. Pas de phrases robotiques comme "Nous prenons note".
+        3. **Format** : Pas de guillemets. Court (2-3 phrases).
 
-        Contraintes:
-        - Réponse courte (2-4 phrases).
-        - Ton positif, poli, et professionnel.
-        - Pas de guillemets.
+        LOGIQUE :
+        ${isPositive ? 
+            "C'est un bon avis : Remercie et valorise le compliment." : 
+            "C'est un avis mitigé/négatif : Sois empathique, excuse-toi sincèrement, et propose une ouverture (contact direct)."
+        }
       `;
 
       try {
