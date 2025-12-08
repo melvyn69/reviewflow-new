@@ -1,12 +1,11 @@
 
-
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Offer, Coupon, Customer, CampaignLog } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, useToast, Badge, Select, Toggle } from '../components/ui';
-import { Gift, Plus, Scan, CheckCircle2, XCircle, Trash2, Tag, Loader2, Send, Users, BarChart3, PieChart, Palette, Mail, Smartphone, RefreshCw, DollarSign, MessageSquare, Zap, X, AlertTriangle, Link as LinkIcon, Wand2, Edit3, UserCheck, Search, ArrowRight, History, Calendar, ExternalLink } from 'lucide-react';
+import { Gift, Plus, Scan, CheckCircle2, XCircle, Trash2, Tag, Loader2, Send, Users, BarChart3, PieChart, Palette, Mail, Smartphone, RefreshCw, DollarSign, MessageSquare, Zap, X, AlertTriangle, Link as LinkIcon, Wand2, Edit3, UserCheck, Search, ArrowRight, History, Calendar, ExternalLink, QrCode, Camera, Flashlight, Clock, Check, AlertOctagon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
 
 // Quote Modal Component
 const QuoteModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => Promise<void> }) => {
@@ -67,10 +66,32 @@ const QuoteModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (dat
     );
 };
 
+const getOfferStatus = (offer: Offer) => {
+    if (!offer.active) return 'paused';
+    const now = new Date();
+    // If dates are present, check them
+    if (offer.validity_start && new Date(offer.validity_start) > now) return 'upcoming';
+    if (offer.validity_end && new Date(offer.validity_end) < now) return 'expired';
+    return 'active';
+};
+
+const OfferStatusBadge = ({ status }: { status: string }) => {
+    switch (status) {
+        case 'active': return <Badge variant="success" className="gap-1"><Zap className="h-3 w-3" /> Active</Badge>;
+        case 'upcoming': return <Badge variant="neutral" className="bg-blue-50 text-blue-700 border-blue-200 gap-1"><Clock className="h-3 w-3" /> À venir</Badge>;
+        case 'expired': return <Badge variant="neutral" className="opacity-70 gap-1"><History className="h-3 w-3" /> Expirée</Badge>;
+        default: return <Badge variant="neutral">Pause</Badge>;
+    }
+};
+
 export const OffersPage = () => {
     const [offers, setOffers] = useState<Offer[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'manage' | 'campaigns' | 'analytics' | 'scan'>('manage');
+    const [offerToLaunch, setOfferToLaunch] = useState<Offer | null>(null);
+    
+    // Filter State
+    const [statusFilter, setStatusFilter] = useState<'active' | 'upcoming' | 'expired'>('active');
     
     const toast = useToast();
 
@@ -95,8 +116,20 @@ export const OffersPage = () => {
         }
     };
 
+    const handleLaunchCampaign = (offer: Offer) => {
+        setOfferToLaunch(offer);
+        setActiveTab('campaigns');
+    };
+
+    // Filter Logic
+    const filteredOffers = offers.filter(o => {
+        const status = getOfferStatus(o);
+        if (statusFilter === 'active') return status === 'active' || status === 'paused';
+        return status === statusFilter;
+    });
+
     return (
-        <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
+        <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 pb-20 px-4 sm:px-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -105,28 +138,28 @@ export const OffersPage = () => {
                     </h1>
                     <p className="text-slate-500">Créez, diffusez et analysez vos campagnes promotionnelles.</p>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
+                <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto max-w-full no-scrollbar">
                     <button 
                         onClick={() => setActiveTab('manage')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'manage' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'manage' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         Catalogue
                     </button>
                     <button 
                         onClick={() => setActiveTab('campaigns')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'campaigns' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'campaigns' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         Campagnes
                     </button>
                     <button 
                         onClick={() => setActiveTab('analytics')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         Performances
                     </button>
                     <button 
                         onClick={() => setActiveTab('scan')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'scan' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'scan' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         Scanner
                     </button>
@@ -135,48 +168,106 @@ export const OffersPage = () => {
 
             {/* CATALOGUE TAB */}
             {activeTab === 'manage' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 space-y-4">
-                        {offers.length === 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <div className="xl:col-span-2 space-y-6">
+                        
+                        {/* Status Filters */}
+                        <div className="flex gap-2 border-b border-slate-200 pb-1">
+                            {[
+                                { id: 'active', label: 'Actives' },
+                                { id: 'upcoming', label: 'À venir' },
+                                { id: 'expired', label: 'Expirées' }
+                            ].map((f) => (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setStatusFilter(f.id as any)}
+                                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${statusFilter === f.id ? 'border-pink-600 text-pink-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {filteredOffers.length === 0 ? (
                             <div className="p-12 text-center bg-slate-50 rounded-xl border-dashed border-slate-300">
                                 <Gift className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                                <h3 className="text-lg font-medium text-slate-900">Aucune offre active</h3>
-                                <p className="text-slate-500 mb-6">Créez votre première offre pour fidéliser vos clients.</p>
+                                <h3 className="text-lg font-medium text-slate-900">Aucune offre {statusFilter === 'active' ? 'active' : statusFilter === 'upcoming' ? 'à venir' : 'expirée'}</h3>
+                                <p className="text-slate-500 mb-6">Modifiez vos filtres ou créez une nouvelle offre.</p>
                             </div>
                         ) : (
-                            offers.map(offer => (
-                                <div key={offer.id} className="bg-white p-6 rounded-xl border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-sm hover:shadow-md transition-shadow gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-14 w-14 bg-pink-50 text-pink-600 rounded-2xl flex items-center justify-center text-2xl shrink-0">
-                                            {offer.style?.icon === 'coffee' ? '☕️' : offer.style?.icon === 'percent' ? '%' : '🎁'}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900 text-lg">{offer.title}</h4>
-                                            <p className="text-sm text-slate-500">{offer.description}</p>
-                                            <div className="flex gap-2 mt-2">
-                                                <Badge variant="neutral" className="text-[10px]">Code: {offer.code_prefix}...</Badge>
-                                                <Badge variant="neutral" className="text-[10px]">Exp: {offer.expiry_days}j</Badge>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end">
-                                        <div className="text-center">
-                                            <div className="text-lg font-bold text-slate-900">{offer.stats.distributed}</div>
-                                            <div className="text-[10px] uppercase text-slate-400 font-bold">Envoyés</div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="text-lg font-bold text-green-600">{offer.stats.redeemed}</div>
-                                            <div className="text-[10px] uppercase text-slate-400 font-bold">Utilisés</div>
-                                        </div>
-                                        <Badge variant={offer.active ? 'success' : 'neutral'}>{offer.active ? 'Active' : 'Pause'}</Badge>
-                                    </div>
-                                </div>
-                            ))
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {filteredOffers.map(offer => {
+                                    const status = getOfferStatus(offer);
+                                    const usageRate = offer.stats.distributed > 0 
+                                        ? Math.round((offer.stats.redeemed / offer.stats.distributed) * 100) 
+                                        : 0;
+                                    
+                                    return (
+                                        <Card key={offer.id} className="hover:shadow-md transition-shadow group flex flex-col h-full border border-slate-200">
+                                            <CardContent className="p-5 flex-1 flex flex-col">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center text-xl shrink-0 ${offer.style?.icon === 'percent' ? 'bg-amber-100 text-amber-600' : offer.style?.icon === 'coffee' ? 'bg-blue-100 text-blue-600' : 'bg-pink-100 text-pink-600'}`}>
+                                                        {offer.style?.icon === 'coffee' ? '☕️' : offer.style?.icon === 'percent' ? '%' : '🎁'}
+                                                    </div>
+                                                    <OfferStatusBadge status={status} />
+                                                </div>
+                                                
+                                                <div className="mb-2">
+                                                    <h4 className="font-bold text-slate-900 truncate">{offer.title}</h4>
+                                                    <p className="text-sm text-slate-500 line-clamp-2 min-h-[2.5rem]">{offer.description}</p>
+                                                </div>
+                                                
+                                                {/* Mini Stats */}
+                                                <div className="bg-slate-50 rounded-lg p-3 grid grid-cols-2 gap-2 text-center mb-4 border border-slate-100">
+                                                    <div>
+                                                        <div className="text-[10px] text-slate-400 uppercase tracking-wide">Validations</div>
+                                                        <div className="font-bold text-slate-900">{offer.stats.redeemed}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[10px] text-slate-400 uppercase tracking-wide">Taux Util.</div>
+                                                        <div className={`font-bold ${usageRate > 20 ? 'text-green-600' : 'text-slate-900'}`}>{usageRate}%</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-2 mb-2 text-[10px] text-slate-500">
+                                                    {offer.validity_end ? (
+                                                        <span className="flex items-center gap-1">
+                                                            <Calendar className="h-3 w-3" />
+                                                            Fin: {new Date(offer.validity_end).toLocaleDateString()}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1">
+                                                            <Clock className="h-3 w-3" />
+                                                            {offer.expiry_days}j
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="mt-auto border-t border-slate-100 pt-3 flex justify-between items-center">
+                                                    <div className="text-xs text-slate-400">
+                                                        Code: <span className="font-mono text-slate-600">{offer.code_prefix}</span>
+                                                    </div>
+                                                    <Button 
+                                                        size="xs" 
+                                                        variant="ghost" 
+                                                        className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                                                        onClick={() => handleLaunchCampaign(offer)}
+                                                        disabled={status === 'expired'}
+                                                        icon={Send}
+                                                    >
+                                                        Diffuser
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
                         )}
                     </div>
                     
                     {/* Create Form */}
-                    <div>
+                    <div className="w-full">
                         <CreateOfferForm onCreate={handleCreateOffer} />
                     </div>
                 </div>
@@ -185,7 +276,11 @@ export const OffersPage = () => {
             {/* CAMPAIGNS TAB */}
             {activeTab === 'campaigns' && (
                 <div className="max-w-6xl mx-auto">
-                    <CampaignManager offers={offers} onCampaignSent={loadOffers} />
+                    <CampaignManager 
+                        offers={offers} 
+                        onCampaignSent={loadOffers} 
+                        preSelectedOffer={offerToLaunch} 
+                    />
                 </div>
             )}
 
@@ -193,17 +288,30 @@ export const OffersPage = () => {
             {activeTab === 'analytics' && (
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="text-sm font-medium text-slate-500 mb-1">Chiffre d'Affaires Généré</div>
-                                <div className="text-3xl font-bold text-slate-900">
-                                    {offers.reduce((acc, o) => acc + (o.stats.revenue_generated || 0), 0)}€
-                                </div>
-                                <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                                    <DollarSign className="h-3 w-3" /> ROI estimé
-                                </div>
-                            </CardContent>
-                        </Card>
+                        {/* REVENUE ESTIMATION - Hide if not data available */}
+                        {offers.some(o => o.stats.revenue_generated && o.stats.revenue_generated > 0) ? (
+                            <Card>
+                                <CardContent className="p-6">
+                                    <div className="text-sm font-medium text-slate-500 mb-1">Chiffre d'Affaires Estimé</div>
+                                    <div className="text-3xl font-bold text-slate-900">
+                                        {offers.reduce((acc, o) => acc + (o.stats.revenue_generated || 0), 0)}€
+                                    </div>
+                                    <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                        <DollarSign className="h-3 w-3" /> Basé sur les retours enregistrés
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card className="bg-slate-50 border-dashed border-slate-300">
+                                <CardContent className="p-6 text-center text-slate-400">
+                                    <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                    <div className="text-sm font-medium">Tracking CA</div>
+                                    <div className="text-xs mt-1">Données insuffisantes pour estimer le revenu.</div>
+                                    {/* TODO: Implement real revenue tracking based on POS integration in V2 */}
+                                </CardContent>
+                            </Card>
+                        )}
+
                         <Card>
                             <CardContent className="p-6">
                                 <div className="text-sm font-medium text-slate-500 mb-1">Taux de Conversion Global</div>
@@ -233,7 +341,7 @@ export const OffersPage = () => {
                         <CardContent className="h-80">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={offers}>
-                                    <XAxis dataKey="title" fontSize={12} stroke="#888888" />
+                                    <XAxis dataKey="title" fontSize={12} stroke="#888888" tickFormatter={(v) => v.length > 10 ? v.substring(0,10)+'...' : v} />
                                     <YAxis fontSize={12} stroke="#888888" />
                                     <Tooltip />
                                     <Bar dataKey="stats.distributed" name="Distribués" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
@@ -260,75 +368,186 @@ export const OffersPage = () => {
 const CreateOfferForm = ({ onCreate }: { onCreate: (o: any) => void }) => {
     const [title, setTitle] = useState('');
     const [desc, setDesc] = useState('');
-    const [trigger, setTrigger] = useState('5');
-    const [icon, setIcon] = useState('gift');
+    const [offerType, setOfferType] = useState<'discount' | 'gift' | 'loyalty'>('discount');
+    
+    // Updated Logic: Dates or Days
+    const [validityMode, setValidityMode] = useState<'dates' | 'duration'>('dates');
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState('');
+    const [durationDays, setDurationDays] = useState('30');
+
+    const [channel, setChannel] = useState('email');
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async () => {
         if (!title) return;
         setLoading(true);
-        await onCreate({
+        
+        // Icon mapping based on type
+        const iconMap = {
+            discount: 'percent',
+            gift: 'gift',
+            loyalty: 'star'
+        };
+
+        const payload: any = {
             title,
             description: desc,
             code_prefix: title.substring(0, 3).toUpperCase(),
-            trigger_rating: parseInt(trigger),
+            trigger_rating: 0, // Manual trigger default
             active: true,
-            expiry_days: 30,
-            style: { color: '#ec4899', icon }
-        });
+            target_segment: 'all', // Default, refined in campaign
+            preferred_channel: channel,
+            style: { 
+                color: offerType === 'discount' ? '#f59e0b' : offerType === 'gift' ? '#ec4899' : '#4f46e5', 
+                icon: iconMap[offerType] 
+            },
+            stats: { distributed: 0, redeemed: 0 }
+        };
+
+        if (validityMode === 'dates') {
+            payload.validity_start = new Date(startDate).toISOString();
+            if (endDate) payload.validity_end = new Date(endDate).toISOString();
+        } else {
+            payload.expiry_days = parseInt(durationDays);
+        }
+        
+        await onCreate(payload);
+        
+        // Reset form
         setTitle('');
         setDesc('');
+        setEndDate('');
         setLoading(false);
     };
 
     return (
-        <Card className="sticky top-6">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+        <Card className="sticky top-6 border-indigo-100 shadow-lg">
+            <CardHeader className="bg-indigo-50/50 border-b border-indigo-50 py-4">
+                <CardTitle className="flex items-center gap-2 text-base">
                     <Plus className="h-5 w-5 text-indigo-600" /> Nouvelle Offre
                 </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6 pt-6">
+                
+                {/* 1. What */}
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Titre de l'offre</label>
-                    <Input placeholder="ex: Café Offert" value={title} onChange={e => setTitle(e.target.value)} />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Détails</label>
-                    <Input placeholder="ex: Pour tout repas > 15€" value={desc} onChange={e => setDesc(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">Déclencheur</label>
-                        <Select value={trigger} onChange={e => setTrigger(e.target.value)}>
-                            <option value="5">5 Étoiles</option>
-                            <option value="4">4 Étoiles +</option>
-                            <option value="0">Manuel</option>
-                        </Select>
+                    <div className="flex items-center gap-2 mb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[10px]">1</span>
+                        Quoi ?
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">Icône</label>
-                        <div className="flex gap-2">
-                            {['gift', 'coffee', 'percent'].map(i => (
-                                <button 
-                                    key={i} 
-                                    onClick={() => setIcon(i)}
-                                    className={`p-2 rounded border ${icon === i ? 'bg-pink-50 border-pink-500 text-pink-600' : 'bg-white border-slate-200'}`}
-                                >
-                                    {i === 'gift' ? '🎁' : i === 'coffee' ? '☕️' : '%'}
-                                </button>
-                            ))}
+                    <div className="space-y-3">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Titre de l'offre</label>
+                            <Input placeholder="ex: Café Offert" value={title} onChange={e => setTitle(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Description courte</label>
+                            <Input placeholder="ex: Valable pour tout repas le midi" value={desc} onChange={e => setDesc(e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Type d'offre</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {[
+                                    { id: 'discount', label: 'Réduction', icon: 'percent' },
+                                    { id: 'gift', label: 'Cadeau', icon: 'gift' },
+                                    { id: 'loyalty', label: 'Fidélité', icon: 'star' }
+                                ].map(t => (
+                                    <button 
+                                        key={t.id} 
+                                        onClick={() => setOfferType(t.id as any)}
+                                        className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs transition-all ${offerType === t.id ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                                    >
+                                        <div className={`text-lg mb-1 ${offerType === t.id ? 'opacity-100' : 'opacity-50'}`}>
+                                            {t.id === 'discount' ? '%' : t.id === 'gift' ? '🎁' : '⭐'}
+                                        </div>
+                                        {t.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
-                <Button className="w-full mt-2" onClick={handleSubmit} isLoading={loading} disabled={!title}>Créer</Button>
+
+                {/* 2. When */}
+                <div>
+                    <div className="flex items-center gap-2 mb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[10px]">2</span>
+                        Quand ?
+                    </div>
+                    <div className="space-y-3">
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button 
+                                onClick={() => setValidityMode('dates')} 
+                                className={`flex-1 py-1.5 text-xs font-medium rounded ${validityMode === 'dates' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
+                            >
+                                Dates Fixes
+                            </button>
+                            <button 
+                                onClick={() => setValidityMode('duration')} 
+                                className={`flex-1 py-1.5 text-xs font-medium rounded ${validityMode === 'duration' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
+                            >
+                                Durée (après envoi)
+                            </button>
+                        </div>
+
+                        {validityMode === 'dates' ? (
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-[10px] text-slate-500 mb-1">Début</label>
+                                    <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-xs" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] text-slate-500 mb-1">Fin</label>
+                                    <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-xs" />
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="block text-[10px] text-slate-500 mb-1">Validité (Jours)</label>
+                                <Select value={durationDays} onChange={e => setDurationDays(e.target.value)}>
+                                    <option value="7">7 jours</option>
+                                    <option value="14">14 jours</option>
+                                    <option value="30">30 jours</option>
+                                    <option value="90">3 mois</option>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* 3. How */}
+                <div>
+                    <div className="flex items-center gap-2 mb-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[10px]">3</span>
+                        Comment ?
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Canal Principal</label>
+                        <div className="flex gap-2">
+                            <button onClick={() => setChannel('email')} className={`flex-1 py-2 text-xs border rounded flex items-center justify-center gap-1 ${channel === 'email' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white'}`}>
+                                <Mail className="h-3 w-3" /> Email
+                            </button>
+                            <button onClick={() => setChannel('sms')} className={`flex-1 py-2 text-xs border rounded flex items-center justify-center gap-1 ${channel === 'sms' ? 'bg-purple-50 border-purple-500 text-purple-700' : 'bg-white'}`}>
+                                <Smartphone className="h-3 w-3" /> SMS
+                            </button>
+                            <button onClick={() => setChannel('qr')} className={`flex-1 py-2 text-xs border rounded flex items-center justify-center gap-1 ${channel === 'qr' ? 'bg-slate-50 border-slate-500 text-slate-700' : 'bg-white'}`}>
+                                <QrCode className="h-3 w-3" /> QR
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <Button className="w-full bg-indigo-600 hover:bg-indigo-700 shadow-lg" onClick={handleSubmit} isLoading={loading} disabled={!title}>
+                    Créer l'offre
+                </Button>
             </CardContent>
         </Card>
     );
 };
 
 // Campaign Manager with Wizard & History
-const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampaignSent: () => void }) => {
+const CampaignManager = ({ offers, onCampaignSent, preSelectedOffer }: { offers: Offer[], onCampaignSent: () => void, preSelectedOffer?: Offer | null }) => {
     // Steps: 'edit' -> 'review' -> 'success'
     const [step, setStep] = useState<'edit' | 'review' | 'success'>('edit');
     const [selectedOfferId, setSelectedOfferId] = useState<string>('');
@@ -372,10 +591,26 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
         fetchHistory();
     }, []);
 
+    // Handle Pre-selection
+    useEffect(() => {
+        if (preSelectedOffer) {
+            setSelectedOfferId(preSelectedOffer.id);
+            if (preSelectedOffer.target_segment) setSelectedSegment(preSelectedOffer.target_segment);
+            if (preSelectedOffer.preferred_channel && preSelectedOffer.preferred_channel !== 'qr') setChannel(preSelectedOffer.preferred_channel);
+        }
+    }, [preSelectedOffer]);
+
     // Link generation
     useEffect(() => {
         if (selectedOffer) {
             prepareLink();
+            // If user selects an offer manually, try to adapt segment/channel if set on offer
+            if (!preSelectedOffer && selectedOffer.target_segment) {
+                setSelectedSegment(selectedOffer.target_segment);
+            }
+            if (!preSelectedOffer && selectedOffer.preferred_channel && selectedOffer.preferred_channel !== 'qr') {
+                setChannel(selectedOffer.preferred_channel);
+            }
         }
     }, [selectedOffer]);
 
@@ -392,6 +627,17 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
                 break;
             case 'new':
                 filtered = customers.filter(c => c.stage === 'new');
+                break;
+            case 'inactive':
+                // Assuming inactive > 90 days
+                const limit = new Date();
+                limit.setDate(limit.getDate() - 90);
+                filtered = customers.filter(c => new Date(c.last_interaction) < limit);
+                break;
+            case 'manual':
+                // Placeholder logic: In a real app, this would enable a file upload or text area to paste emails
+                // For now, we simulate an empty list that needs to be filled
+                filtered = [];
                 break;
             default:
                 filtered = customers;
@@ -468,7 +714,8 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
             toast.error("Veuillez compléter le message.");
             return;
         }
-        if (targetAudience.length === 0) {
+        // If manual segment, audience might be 0 until import, here we skip check if manual for demo
+        if (selectedSegment !== 'manual' && targetAudience.length === 0) {
             toast.error("L'audience est vide.");
             return;
         }
@@ -479,6 +726,7 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
         setSending(true);
         try {
             // Map audience to recipient objects
+            // If Manual, we would parse the input list here. For now, use targetAudience mock.
             const recipientsList = targetAudience.map(c => ({
                 email: c.email || '',
                 name: c.name,
@@ -487,15 +735,8 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
                 businessName: 'Notre Établissement'
             })).filter(r => (channel === 'email' ? !!r.email : !!r.phone));
 
-            if (recipientsList.length === 0) {
-                toast.error(`Aucun contact avec ${channel === 'email' ? 'email' : 'téléphone'} dans ce segment.`);
-                setSending(false);
-                return;
-            }
-
-            const segmentLabel = selectedSegment === 'all' ? 'Tous les clients' : selectedSegment === 'vip' ? 'VIP' : selectedSegment === 'risk' ? 'À reconquérir' : 'Nouveaux';
-
-            const result = await api.campaigns.send(channel, recipientsList, subject, body, segmentLabel, generatedLink);
+            // Logic allows sending to 0 for manual/test cases
+            const result = await api.campaigns.send(channel, recipientsList, subject, body, selectedSegment, generatedLink);
             setLastCampaignResult(result);
             
             // Refresh history immediately
@@ -553,14 +794,22 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
                                     <option value="vip">Ambassadeurs (VIP &gt; 4.5★)</option>
                                     <option value="risk">À reconquérir (Risque)</option>
                                     <option value="new">Nouveaux Clients (30j)</option>
+                                    <option value="inactive">Inactifs (&gt; 90j)</option>
+                                    <option value="manual">Liste Manuelle (Import)</option>
                                 </Select>
                                 
-                                <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-lg p-3 flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-sm text-indigo-900">
-                                        <UserCheck className="h-4 w-4" />
-                                        <span className="font-bold">{targetAudience.length} contacts</span> sélectionnés
+                                {selectedSegment === 'manual' ? (
+                                    <div className="mt-2">
+                                        <textarea className="w-full p-2 text-xs border rounded" placeholder="Collez les emails ici (un par ligne) [Simulation]..." disabled />
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-lg p-3 flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-sm text-indigo-900">
+                                            <UserCheck className="h-4 w-4" />
+                                            <span className="font-bold">{targetAudience.length} contacts</span> sélectionnés
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -888,13 +1137,55 @@ const CouponScanner = () => {
     const [code, setCode] = useState('');
     const [result, setResult] = useState<any>(null);
     const [scanning, setScanning] = useState(false);
+    const [cameraMode, setCameraMode] = useState(false);
+    const scannerRef = useRef<Html5QrcodeScanner | null>(null);
     const toast = useToast();
 
-    const handleScan = async () => {
-        if (!code) return;
+    // Clean up scanner on unmount or mode switch
+    useEffect(() => {
+        return () => {
+            if (scannerRef.current) {
+                scannerRef.current.clear().catch(console.error);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (cameraMode) {
+            startScanner();
+        } else {
+            if (scannerRef.current) {
+                scannerRef.current.clear().catch(console.error);
+                scannerRef.current = null;
+            }
+        }
+    }, [cameraMode]);
+
+    const startScanner = () => {
+        const scanner = new Html5QrcodeScanner(
+            "reader", 
+            { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 }, 
+            false
+        );
+        
+        scanner.render(onScanSuccess, onScanFailure);
+        scannerRef.current = scanner;
+    };
+
+    const onScanSuccess = (decodedText: string, decodedResult: any) => {
+        setCode(decodedText);
+        setCameraMode(false); 
+        verifyCode(decodedText);
+    };
+
+    const onScanFailure = (error: any) => {
+        // Scanning in progress, noise is expected
+    };
+
+    const verifyCode = async (c: string) => {
         setScanning(true);
         try {
-            const res = await api.offers.validate(code);
+            const res = await api.offers.validate(c);
             setResult(res);
         } catch (e) {
             setResult({ valid: false, reason: "Erreur technique" });
@@ -903,12 +1194,19 @@ const CouponScanner = () => {
         }
     };
 
+    const handleScan = async () => {
+        if (!code) return;
+        await verifyCode(code);
+    };
+
     const handleRedeem = async () => {
         setScanning(true);
         try {
             await api.offers.redeem(code);
             toast.success("Validé avec succès !");
-            setResult(null);
+            
+            // Show consolidated success state
+            setResult({ ...result, redeemed_now: true });
             setCode('');
         } catch (e) {
             toast.error("Erreur lors de la validation");
@@ -925,42 +1223,90 @@ const CouponScanner = () => {
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-                <div className="space-y-2">
-                    <label className="text-sm font-bold text-slate-700">Code Client</label>
-                    <Input 
-                        placeholder="ex: GIFT-X892" 
-                        className="text-center text-2xl tracking-widest font-mono uppercase h-16"
-                        value={code}
-                        onChange={e => setCode(e.target.value.toUpperCase())}
-                    />
-                </div>
                 
-                <Button 
-                    size="lg" 
-                    className="w-full" 
-                    onClick={handleScan} 
-                    isLoading={scanning}
-                    disabled={!code}
-                >
-                    Vérifier
-                </Button>
+                {cameraMode ? (
+                    <div className="space-y-4">
+                        <div id="reader" className="w-full overflow-hidden rounded-lg border border-slate-200"></div>
+                        <Button variant="outline" className="w-full" onClick={() => setCameraMode(false)}>Fermer la caméra</Button>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        <div className="flex justify-center mb-4">
+                            <Button 
+                                variant="secondary" 
+                                className="rounded-full w-20 h-20 shadow-md border-indigo-100 bg-indigo-50 text-indigo-600 hover:bg-indigo-100" 
+                                onClick={() => { setCameraMode(true); setResult(null); }}
+                                title="Ouvrir la caméra"
+                            >
+                                <Camera className="h-10 w-10" />
+                            </Button>
+                        </div>
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-slate-200"></div>
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-white px-2 text-slate-500">Ou saisir le code</span>
+                            </div>
+                        </div>
+                        <label className="text-sm font-bold text-slate-700 mt-2 block">Code Client</label>
+                        <Input 
+                            placeholder="ex: GIFT-X892" 
+                            className="text-center text-2xl tracking-widest font-mono uppercase h-16"
+                            value={code}
+                            onChange={e => setCode(e.target.value.toUpperCase())}
+                        />
+                        <Button 
+                            size="lg" 
+                            className="w-full mt-2" 
+                            onClick={handleScan} 
+                            isLoading={scanning}
+                            disabled={!code}
+                        >
+                            Vérifier manuellement
+                        </Button>
+                    </div>
+                )}
 
                 {result && (
                     <div className={`p-6 rounded-xl border-2 flex flex-col items-center text-center gap-2 animate-in zoom-in-95 ${result.valid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                         {result.valid ? (
                             <>
-                                <CheckCircle2 className="h-16 w-16 text-green-600 mb-2" />
-                                <h3 className="font-bold text-green-800 text-2xl">Valide !</h3>
-                                <p className="text-green-700 font-medium text-lg">{result.discount}</p>
-                                <Button className="w-full mt-4 bg-green-600 hover:bg-green-700 border-none h-12 text-lg" onClick={handleRedeem}>
-                                    Consommer le coupon
-                                </Button>
+                                <CheckCircle2 className="h-20 w-20 text-green-600 mb-2" />
+                                <h3 className="font-bold text-green-800 text-3xl">Offre Valide !</h3>
+                                <p className="text-green-700 font-medium text-xl mt-1">{result.discount}</p>
+                                
+                                <div className="bg-white/60 p-4 rounded-lg text-sm text-slate-600 mt-4 w-full">
+                                    <div className="flex justify-between border-b border-slate-200 pb-2 mb-2">
+                                        <span className="font-bold">Offre:</span>
+                                        <span>{result.coupon?.offer_title}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-slate-200 pb-2 mb-2">
+                                        <span className="font-bold">Client:</span>
+                                        <span>{result.coupon?.customer_email || 'Anonyme'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="font-bold">Date:</span>
+                                        <span>{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
+                                    </div>
+                                </div>
+
+                                {!result.redeemed_now ? (
+                                    <Button className="w-full mt-4 bg-green-600 hover:bg-green-700 border-none h-14 text-lg shadow-lg" onClick={handleRedeem}>
+                                        Confirmer l'utilisation
+                                    </Button>
+                                ) : (
+                                    <div className="mt-4 w-full bg-green-100 text-green-800 py-3 rounded-lg font-bold border border-green-200">
+                                        Coupon consommé ✅
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <>
-                                <XCircle className="h-16 w-16 text-red-600 mb-2" />
-                                <h3 className="font-bold text-red-800 text-2xl">Invalide</h3>
-                                <p className="text-red-700 text-lg">{result.reason}</p>
+                                <AlertOctagon className="h-20 w-20 text-red-600 mb-2" />
+                                <h3 className="font-bold text-red-800 text-3xl">Invalide</h3>
+                                <p className="text-red-700 text-lg mt-1 font-medium">{result.reason}</p>
+                                <p className="text-sm text-red-600/70 mt-2">Vérifiez le code ou la date d'expiration.</p>
                             </>
                         )}
                     </div>

@@ -155,7 +155,12 @@ export interface Offer {
     code_prefix: string;
     trigger_rating: number;
     active: boolean;
-    expiry_days: number;
+    expiry_days?: number; // Legacy, prefer validity dates
+    // New fields for Campaign Logic
+    validity_start?: string; // ISO Date
+    validity_end?: string; // ISO Date
+    target_segment?: 'all' | 'vip' | 'risk' | 'new' | 'inactive' | 'manual' | string;
+    preferred_channel?: 'email' | 'sms' | 'qr';
     style?: {
         color: string;
         icon: string;
