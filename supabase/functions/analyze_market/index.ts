@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/genai'
 
@@ -30,17 +29,16 @@ Deno.serve(async (req: Request) => {
     // 2. Parse Input
     const { competitors, sector, location } = await req.json()
 
-    if (!competitors || competitors.length === 0) {
-        throw new Error("Aucun concurrent fourni pour l'analyse.");
-    }
+    // Note: We allow analysis even with empty competitors list to get general market trends for the sector/location
+    const hasCompetitors = competitors && competitors.length > 0;
 
     const ai = new GoogleGenerativeAI({ apiKey: geminiKey })
     const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' })
 
     // 3. Construct Prompt
-    const competitorsList = competitors.slice(0, 10).map((c: any) => 
-        `- ${c.name} (${c.rating}★, ${c.review_count} avis): ${c.strengths.join(', ')} / ${c.weaknesses.join(', ')}`
-    ).join('\n');
+    const competitorsList = hasCompetitors 
+        ? competitors.slice(0, 10).map((c: any) => `- ${c.name} (${c.rating}★, ${c.review_count} avis): ${c.strengths?.join(', ')} / ${c.weaknesses?.join(', ')}`).join('\n')
+        : "Aucun concurrent direct identifié pour le moment. Baser l'analyse sur les standards du secteur.";
 
     const prompt = `
         Tu es un consultant expert en stratégie d'entreprise spécialisé dans le secteur : "${sector || 'Commerce Local'}".
@@ -53,11 +51,16 @@ Deno.serve(async (req: Request) => {
         ${competitorsList}
         
         TACHE:
-        Génère une analyse de marché SWOT (Forces, Faiblesses, Opportunités, Menaces) et des tendances, EXTRÊMEMENT SPÉCIFIQUE à ce métier.
-        Ne donne pas de conseils génériques. Utilise le vocabulaire technique du métier (ex: si Restaurant -> parle de carte, service, produits frais; si Hotel -> literie, accueil, petit-déjeuner; si Plombier -> réactivité, devis).
+        Réalise un audit stratégique complet et personnalisé.
+        
+        1. ANALYSE DU MARCHÉ: Résume la dynamique actuelle de ce secteur dans cette zone (ou en général si zone floue). Pression concurrentielle, maturité, attentes clients.
+        2. TENDANCES: Ce qui fonctionne actuellement pour ce métier.
+        3. SWOT: Matrice des Forces/Faiblesses/Opportunités/Menaces basées sur les concurrents fournis et le secteur.
+        4. STRATÉGIE RECOMMANDÉE: 3 à 5 actions concrètes pour gagner des parts de marché.
         
         FORMAT ATTENDU (JSON uniquement, pas de markdown):
         {
+            "market_analysis": "Paragraphe de synthèse sur l'état du marché, l'intensité concurrentielle et le niveau d'exigence client observé.",
             "trends": ["Tendance métier 1", "Tendance métier 2", "Tendance métier 3"],
             "swot": {
                 "strengths": ["Force observée chez les concurrents ou standard du marché"],
@@ -65,9 +68,14 @@ Deno.serve(async (req: Request) => {
                 "opportunities": ["Axe de différenciation spécifique au secteur"],
                 "threats": ["Menace externe (régulation, économie, nouveaux entrants)"]
             },
+            "strategic_recommendations": [
+                "Action 1 : Titre - Explication courte",
+                "Action 2 : Titre - Explication courte",
+                "Action 3 : Titre - Explication courte"
+            ],
             "competitors_detailed": [
                 {
-                    "name": "Nom du concurrent",
+                    "name": "Nom du concurrent (si liste fournie)",
                     "last_month_growth": "Estimation (ex: +5%)",
                     "sentiment_trend": "Positif/Négatif/Neutre",
                     "top_complaint": "Leur point faible majeur déduit des notes/secteur"

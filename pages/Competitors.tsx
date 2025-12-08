@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Competitor, Organization, MarketReport } from '../types';
@@ -24,7 +23,9 @@ import {
     FileText,
     Play,
     Zap,
-    ExternalLink
+    ExternalLink,
+    Rocket,
+    Globe
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 import jsPDF from 'jspdf';
@@ -280,7 +281,7 @@ export const CompetitorsPage = () => {
                 trends: data.trends,
                 swot: data.swot,
                 competitors_detailed: data.competitors_detailed,
-                data: data // Store full payload
+                data: data // Store full payload including recommendations
             };
             
             await api.competitors.saveReport(newReport);
@@ -321,12 +322,11 @@ export const CompetitorsPage = () => {
             const imgProps = doc.getImageProperties(imgData);
             const pdfHeight = (imgProps.height * pageWidth) / imgProps.width;
 
-            // If height is greater than page height, we might need multiple pages or scaling
-            // For simplicity in this version, we scale to fit or split if super long.
-            // Here we just add the image to the first page.
+            // Simple integration: just add the long image. 
+            // In a real production app, we would split into pages if too long.
             doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pdfHeight);
 
-            doc.save(`Rapport_Concurrentiel_${selectedReport?.sector || 'Analyse'}.pdf`);
+            doc.save(`Rapport_Strategique_${selectedReport?.sector || 'Analyse'}.pdf`);
             toast.success("PDF téléchargé !");
         } catch (e) {
             console.error(e);
@@ -421,7 +421,7 @@ export const CompetitorsPage = () => {
                 </div>
             </div>
 
-            {/* TAB: INSIGHTS (SWOT) */}
+            {/* TAB: INSIGHTS (SWOT & STRATEGY) */}
             {activeTab === 'insights' && (
                 <div className="grid grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
                     {/* Left Panel: Configuration */}
@@ -436,6 +436,7 @@ export const CompetitorsPage = () => {
                                     <div className="font-medium text-indigo-900 flex items-center gap-2">
                                         <Zap className="h-4 w-4" /> {org.industry || 'Non défini'}
                                     </div>
+                                    <p className="text-[10px] text-indigo-700 mt-1">L'IA analysera le marché en fonction de ce secteur.</p>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-700 mb-1">Zone Géographique</label>
@@ -447,7 +448,7 @@ export const CompetitorsPage = () => {
                                     />
                                 </div>
                                 <Button className="w-full" onClick={runAnalysis} isLoading={loadingInsights} icon={Play}>
-                                    Lancer l'IA
+                                    Lancer l'Audit IA
                                 </Button>
                             </CardContent>
                         </Card>
@@ -482,7 +483,7 @@ export const CompetitorsPage = () => {
                         {loadingInsights ? (
                             <div className="h-full flex flex-col items-center justify-center p-8 md:p-12 bg-white rounded-xl border border-slate-200 min-h-[400px]">
                                 <Loader2 className="h-12 w-12 text-indigo-600 animate-spin mb-4" />
-                                <h3 className="text-xl font-bold text-slate-900 text-center">Analyse stratégique sectorielle...</h3>
+                                <h3 className="text-xl font-bold text-slate-900 text-center">Analyse stratégique en cours...</h3>
                                 <p className="text-slate-500 mt-2 max-w-md text-center text-sm">
                                     L'IA compare vos performances avec les standards du secteur {org.industry} pour la zone ciblée.
                                 </p>
@@ -497,13 +498,25 @@ export const CompetitorsPage = () => {
                                             Rapport généré le {selectedReport ? new Date(selectedReport.created_at).toLocaleDateString() : new Date().toLocaleDateString()}
                                         </div>
                                         <h2 className="text-xl md:text-2xl font-bold text-slate-900">
-                                            Analyse: {selectedReport?.sector || org.industry} - {locationInput || selectedReport?.location}
+                                            Audit: {selectedReport?.sector || org.industry} - {locationInput || selectedReport?.location}
                                         </h2>
                                     </div>
                                     <Button variant="outline" size="sm" icon={Download} onClick={handleDownloadPDF} isLoading={generatingPdf}>
                                         Export PDF
                                     </Button>
                                 </div>
+
+                                {/* Market Analysis Context */}
+                                {marketData.market_analysis && (
+                                    <div className="bg-gradient-to-r from-slate-50 to-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                                        <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                            <Globe className="h-5 w-5 text-indigo-600" /> Contexte Marché
+                                        </h3>
+                                        <p className="text-slate-600 text-sm leading-relaxed">
+                                            {marketData.market_analysis}
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Trends & SWOT */}
                                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -596,6 +609,24 @@ export const CompetitorsPage = () => {
                                     </div>
                                 </div>
 
+                                {/* Strategic Recommendations */}
+                                {marketData.strategic_recommendations && (
+                                    <div className="bg-indigo-600 text-white rounded-xl p-6 shadow-lg">
+                                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                            <Rocket className="h-6 w-6 text-yellow-400" />
+                                            Plan d'Action Recommandé
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {marketData.strategic_recommendations.map((rec: string, i: number) => (
+                                                <div key={i} className="bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/20">
+                                                    <div className="font-bold text-yellow-400 text-xl mb-2">0{i + 1}</div>
+                                                    <p className="text-sm leading-relaxed font-medium">{rec}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <h3 className="text-lg font-bold text-slate-900 mt-8 mb-4">Détail par Concurrent</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {marketData.competitors_detailed?.map((comp: any, i: number) => (
@@ -651,7 +682,7 @@ export const CompetitorsPage = () => {
                                     <div className="p-3 bg-slate-100 border border-slate-200 rounded-lg text-slate-600 font-medium cursor-not-allowed flex items-center gap-2">
                                         <Target className="h-4 w-4" /> {org.industry || 'Non défini (Configurer dans Paramètres)'}
                                     </div>
-                                    <p className="text-[10px] text-slate-400 mt-1">Basé sur vos paramètres d'établissement.</p>
+                                    <p className="text-xs text-slate-400 mt-1">Basé sur vos paramètres d'établissement.</p>
                                 </div>
                                 <div className="w-full lg:w-48">
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Rayon de recherche</label>
@@ -825,14 +856,22 @@ export const CompetitorsPage = () => {
                     </div>
                 </div>
 
-                <div className="mb-8">
-                    <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-indigo-600 pl-3">Radar Stratégique</h2>
-                    {/* Render static version of radar for PDF */}
-                    <SonarRadar competitors={scannedResults.length ? scannedResults : trackedCompetitors} industry={org.industry || ''} className="h-[300px] border-none shadow-none" />
-                </div>
-
                 {marketData && (
                     <>
+                        {/* Market Analysis Section in PDF */}
+                        {marketData.market_analysis && (
+                            <div className="mb-8 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <h3 className="font-bold text-slate-800 mb-2 uppercase text-xs">Contexte Marché</h3>
+                                <p className="text-sm text-slate-700 leading-relaxed">{marketData.market_analysis}</p>
+                            </div>
+                        )}
+
+                        <div className="mb-8">
+                            <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-indigo-600 pl-3">Radar Stratégique</h2>
+                            {/* Render static version of radar for PDF */}
+                            <SonarRadar competitors={scannedResults.length ? scannedResults : trackedCompetitors} industry={org.industry || ''} className="h-[300px] border-none shadow-none" />
+                        </div>
+
                         <div className="mb-8">
                             <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-yellow-500 pl-3">Tendances du Marché</h2>
                             <ul className="list-disc pl-5 space-y-2">
@@ -856,6 +895,20 @@ export const CompetitorsPage = () => {
                                 </ul>
                             </div>
                         </div>
+
+                        {/* Strategy Section in PDF */}
+                        {marketData.strategic_recommendations && (
+                            <div className="mb-8 border border-slate-200 rounded-xl p-4">
+                                <h2 className="text-lg font-bold text-slate-900 mb-4 border-l-4 border-indigo-600 pl-3">Stratégie Recommandée</h2>
+                                <ul className="space-y-3">
+                                    {marketData.strategic_recommendations.map((rec: string, i: number) => (
+                                        <li key={i} className="flex gap-2 text-sm text-slate-700">
+                                            <span className="font-bold text-indigo-600">{i + 1}.</span> {rec}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </>
                 )}
                 
