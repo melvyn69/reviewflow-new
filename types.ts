@@ -1,5 +1,3 @@
-
-
 export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
@@ -69,6 +67,10 @@ export interface BrandSettings {
     use_emojis: boolean;
     language_style: 'formal' | 'casual';
     signature: string;
+    // Visual Identity
+    primary_color?: string;
+    secondary_color?: string;
+    logo_url?: string;
 }
 
 export interface NotificationSettings {
