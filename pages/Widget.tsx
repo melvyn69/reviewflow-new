@@ -48,6 +48,21 @@ export const WidgetPage = () => {
         }
     };
 
+    // Format helpers
+    const formatDate = (isoString: string) => {
+        return new Date(isoString).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+    };
+
+    const getAverageRating = () => {
+        if (!reviews.length) return "0,0";
+        const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+        return (sum / reviews.length).toFixed(1).replace('.', ',');
+    };
+
     if (loading) return <div className="flex justify-center p-4"><Loader2 className="animate-spin h-6 w-6" style={{ color: primaryColor }} /></div>;
 
     if (reviews.length === 0) return (
@@ -64,7 +79,7 @@ export const WidgetPage = () => {
     const cardClass = `p-6 shadow-sm transition-all duration-500 ${bgClass} ${borderClass}`;
 
     if (type === 'badge') {
-        const avg = (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1);
+        const avg = getAverageRating();
         return (
             <div className={`inline-flex items-center gap-3 px-4 py-2 shadow-sm ${bgClass} ${borderClass}`} style={{ borderRadius: '9999px' }}>
                 <div className="flex gap-0.5" style={{ color: '#fbbf24' }}>
@@ -90,7 +105,7 @@ export const WidgetPage = () => {
                                 </div>
                                 <div>
                                     <div className="font-bold text-sm">{review.author_name}</div>
-                                    {showDate && <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{new Date(review.received_at).toLocaleDateString()}</div>}
+                                    {showDate && <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{formatDate(review.received_at)}</div>}
                                 </div>
                             </div>
                             <div className="flex text-amber-400">
@@ -141,7 +156,7 @@ export const WidgetPage = () => {
                 <div className="flex justify-between items-end mt-4">
                     {showDate && (
                         <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                            {new Date(currentReview.received_at).toLocaleDateString()}
+                            {formatDate(currentReview.received_at)}
                         </span>
                     )}
                     <div className="flex justify-center gap-1.5 ml-auto">

@@ -242,6 +242,8 @@ export interface Organization {
     ai_usage_count?: number;
     stripe_customer_id?: string;
     workflows?: WorkflowRule[];
+    google_access_token?: string;
+    google_refresh_token?: string;
 }
 
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';
