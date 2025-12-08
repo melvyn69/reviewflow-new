@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Review, Organization, SocialPost } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Badge, ProLock } from '../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Badge, ProLock, Select, Toggle } from '../components/ui';
 import { 
     Share2, 
     Instagram, 
@@ -17,7 +17,8 @@ import {
     Calendar,
     Clock,
     Trash2,
-    Plus
+    Plus,
+    Hash
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 
@@ -51,6 +52,10 @@ export const SocialPage = () => {
     const [format, setFormat] = useState('square');
     const [showBrand, setShowBrand] = useState(true);
     const [customColor, setCustomColor] = useState('#4f46e5');
+    
+    // AI Settings
+    const [socialTone, setSocialTone] = useState('enthusiastic');
+    const [useHashtags, setUseHashtags] = useState(true);
     
     // Schedule Modal
     const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -124,7 +129,7 @@ export const SocialPage = () => {
         if (!selectedReview) return;
         setGeneratingCaption(true);
         try {
-            const text = await api.ai.generateSocialPost(selectedReview, 'instagram');
+            const text = await api.ai.generateSocialPost(selectedReview, 'instagram', { tone: socialTone, hashtags: useHashtags });
             setCaption(text);
         } catch (e) {
             toast.error("Erreur IA");
@@ -372,22 +377,40 @@ export const SocialPage = () => {
 
                                 <div className="space-y-4 flex flex-col justify-between">
                                     <div>
-                                        <div className="flex justify-between items-center mb-2">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
                                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
-                                                <Type className="h-4 w-4" /> Légende
+                                                <Type className="h-4 w-4" /> Légende IA
                                             </label>
-                                            <button 
-                                                onClick={handleGenerateCaption} 
-                                                disabled={generatingCaption}
-                                                className="text-xs text-indigo-600 font-bold hover:underline flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded"
-                                            >
-                                                <Sparkles className="h-3 w-3" />
-                                                {generatingCaption ? '...' : 'IA'}
-                                            </button>
+                                            
+                                            <div className="flex items-center gap-2">
+                                                <Select value={socialTone} onChange={e => setSocialTone(e.target.value)} className="h-7 text-xs w-32">
+                                                    <option value="enthusiastic">Enthousiaste</option>
+                                                    <option value="professionnel">Professionnel</option>
+                                                    <option value="humoristique">Humour</option>
+                                                    <option value="corporate">Corporate</option>
+                                                </Select>
+                                                
+                                                <button 
+                                                    onClick={() => setUseHashtags(!useHashtags)}
+                                                    className={`p-1.5 rounded text-xs border ${useHashtags ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400'}`}
+                                                    title="Inclure des hashtags"
+                                                >
+                                                    <Hash className="h-3 w-3" />
+                                                </button>
+
+                                                <button 
+                                                    onClick={handleGenerateCaption} 
+                                                    disabled={generatingCaption}
+                                                    className="text-xs text-white font-bold flex items-center gap-1 bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95"
+                                                >
+                                                    <Sparkles className="h-3 w-3" />
+                                                    {generatingCaption ? '...' : 'Générer'}
+                                                </button>
+                                            </div>
                                         </div>
                                         <textarea 
-                                            className="w-full h-20 p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 resize-none bg-slate-50"
-                                            placeholder="Légende du post..."
+                                            className="w-full h-24 p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 resize-none bg-slate-50 leading-relaxed"
+                                            placeholder="Générez une légende virale..."
                                             value={caption}
                                             onChange={e => setCaption(e.target.value)}
                                         />

@@ -572,27 +572,49 @@ export const api = {
               throw new Error("Erreur de génération IA. Vérifiez votre clé API ou réessayez.");
           }
       },
-      generateSocialPost: async (review: Review, platform: string) => {
+      generateSocialPost: async (review: Review, platform: string, options?: { tone?: string, hashtags?: boolean }) => {
           if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. #Reviewflow #CustomerLove";
           
           const ai = getAIClient();
+          const tone = options?.tone || 'enthousiaste';
+          const includeHashtags = options?.hashtags !== false; // Default true
+
+          let toneInstruction = "";
+          switch (tone) {
+              case 'humoristique': toneInstruction = "Humoristique, spirituel, avec des jeux de mots. Utilise l'autodérision si approprié."; break;
+              case 'corporate': toneInstruction = "Institutionnel, formel, axé sur les valeurs de l'entreprise et la réussite."; break;
+              case 'professionnel': toneInstruction = "Sérieux, poli, orienté service client et expertise."; break;
+              default: toneInstruction = "Enthousiaste, viral, énergique, utilisation abondante d'emojis."; break;
+          }
+
           const prompt = `
-            Act as a world-class Social Media Manager.
-            Platform: ${platform} (Instagram, LinkedIn, or Facebook).
-            Context: We received a glowing 5-star review from a customer.
-            Task: Write a captivating, platform-native caption to go with an image of this review.
+            Tu es un Social Media Manager Expert spécialisé dans la croissance organique virale.
             
-            Review Details:
-            - Author: ${review.author_name}
-            - Text: "${review.body}"
-            - Rating: ${review.rating}/5
+            CONTEXTE:
+            Nous avons reçu un excellent avis client (5 étoiles) et nous voulons le partager sur ${platform}.
             
-            Guidelines:
-            - Language: French (Français)
-            - Tone: Enthusiastic, grateful, and professional.
-            - Include 3-5 relevant emojis.
-            - Include 3-5 relevant hashtags at the end.
-            - DO NOT wrap the output in quotes.
+            DÉTAILS DE L'AVIS:
+            - Auteur: ${review.author_name}
+            - Contenu: "${review.body}"
+            - Note: ${review.rating}/5
+            
+            TACHE:
+            Rédige une légende (caption) pour Instagram/Facebook optimisée pour l'algorithme.
+            
+            RÈGLES DE TONALITÉ (STRICT):
+            - Ton imposé: ${toneInstruction}
+            
+            STRUCTURE REQUISE:
+            1. ACCROCHE (Hook): Une première ligne qui stop le scroll (court et percutant).
+            2. CORPS: Remercier le client et mettre en valeur un point clé de son avis. Raconter une mini-histoire.
+            3. APPEL À L'ACTION (CTA): Une question ou une invitation claire pour l'audience.
+            ${includeHashtags ? '4. HASHTAGS: Ajoute un bloc de 15-20 hashtags pertinents (mélange de très populaires et de niche) à la fin.' : '4. HASHTAGS: NE PAS METTRE DE HASHTAGS.'}
+            
+            FORMATTAGE:
+            - Langue: Français.
+            - Utilise des sauts de ligne pour aérer le texte.
+            - Utilise des emojis pertinents.
+            - NE PAS mettre de guillemets autour du texte généré.
           `;
 
           try {
