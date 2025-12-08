@@ -245,6 +245,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
 
           {!isReset && (
               <div className="mt-6 text-center">
+                <div className="text-xs text-slate-400 bg-slate-50 p-2 rounded border border-slate-100 mb-4 cursor-pointer hover:bg-slate-100" onClick={() => { setEmail('admin@admin.com'); setPassword('password'); }}>
+                    <div className="font-bold mb-1">Mode Développeur</div>
+                    Utilisez: <strong>admin@admin.com</strong> / <strong>password</strong>
+                </div>
+
                 <p className="text-sm text-slate-600">
                 {isLogin ? "Pas de compte ? " : "Déjà inscrit ? "}
                 <button 
@@ -255,7 +260,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                 </button>
                 </p>
                 
-                {/* Demo Login Button - Hidden on mobile if screen is too small to avoid clutter, or kept small */}
+                {/* Demo Login Button */}
                 <div className="mt-6 pt-6 border-t border-slate-100">
                     <button 
                         onClick={handleDemoLogin}

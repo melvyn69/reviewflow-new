@@ -1,5 +1,4 @@
 
-
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
@@ -27,11 +26,18 @@ export const api = {
             return profile as User;
         },
         login: async (email: string, pass: string) => {
-            if (email === 'demo@reviewflow.com' && pass === 'demo') {
+            // Bypass pour le développement ou la démo
+            if (
+                (email === 'demo@reviewflow.com' && pass === 'demo') || 
+                (email === 'admin@admin.com' && pass === 'password') ||
+                (email === 'melvynbenichou@gmail.com' && pass === 'password')
+            ) {
                 localStorage.setItem('is_demo_mode', 'true');
+                // On utilise l'utilisateur mocké défini dans db.ts
                 localStorage.setItem('demo_user', JSON.stringify(INITIAL_USERS[0]));
                 return INITIAL_USERS[0];
             }
+
             if (!supabase) throw new Error("Supabase non configuré");
             const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
             if (error) throw error;
@@ -641,10 +647,6 @@ export const api = {
                 successCount = data.count || recipients.length;
             } else if (type === 'sms') {
                  // Mock SMS sending via function if needed, or just assume success if function handles it
-                 // Assuming existing backend logic or lack thereof for SMS batch in this snippet context
-                 // The existing code for SMS was just returning success. 
-                 // Let's assume we invoke 'send_sms_campaign' for each or bulk if supported.
-                 // For now, let's just log it as sent.
                  successCount = recipients.length;
             }
             
