@@ -364,13 +364,14 @@ export const Select: React.FC<SelectHTMLAttributes<HTMLSelectElement>> = ({ clas
   </select>
 );
 
-export const Toggle: React.FC<{ checked: boolean; onChange: (checked: boolean) => void }> = ({ checked, onChange }) => (
+export const Toggle: React.FC<{ checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }> = ({ checked, onChange, disabled }) => (
   <button
     type="button"
-    className={`${checked ? 'bg-indigo-600' : 'bg-slate-200'} relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2`}
+    className={`${checked ? 'bg-indigo-600' : 'bg-slate-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2`}
     role="switch"
     aria-checked={checked}
-    onClick={() => onChange(!checked)}
+    onClick={() => !disabled && onChange(!checked)}
+    disabled={disabled}
   >
     <span
       aria-hidden="true"

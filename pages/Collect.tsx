@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle, useNavigate } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Linkedin, Star } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Linkedin, Star, Lock, Hammer, Globe, Code } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
@@ -19,6 +19,92 @@ const isValidUrl = (string: string) => {
     }
 };
 
+const ProControl = ({ children, label, isPro, onClick }: any) => (
+    <div className={`relative ${!isPro ? 'opacity-60' : ''}`}>
+        <label className="block text-xs font-bold text-slate-500 mb-1.5 flex justify-between items-center">
+            {label}
+            {!isPro && <Badge variant="neutral" className="h-4 px-1 flex items-center gap-0.5 bg-slate-100 text-slate-500 border-slate-200 cursor-pointer" onClick={onClick}><Lock className="h-2 w-2" /> PRO</Badge>}
+        </label>
+        <div className="relative">
+            {children}
+            {!isPro && <div className="absolute inset-0 z-10 cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }} title="Fonctionnalité PRO"></div>}
+        </div>
+    </div>
+);
+
+const IntegrationModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => Promise<void> }) => {
+    const [data, setData] = useState({
+        website: '',
+        cms: 'wordpress',
+        email: '',
+        notes: ''
+    });
+    const [sending, setSending] = useState(false);
+
+    const handleSubmit = async () => {
+        if (!data.website || !data.email) return;
+        setSending(true);
+        await onSubmit(data);
+        setSending(false);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <Card className="w-full max-w-md shadow-xl">
+                <CardHeader className="border-b border-slate-100 flex flex-row items-center justify-between pb-4">
+                    <CardTitle className="flex items-center gap-2"><Hammer className="h-5 w-5 text-indigo-600"/> Demande d'Intégration</CardTitle>
+                    <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-4">
+                    <p className="text-sm text-slate-600">
+                        Notre équipe technique peut installer le widget sur votre site pour vous. Remplissez ce formulaire et nous vous contacterons.
+                    </p>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Site Web</label>
+                        <Input 
+                            placeholder="https://monsite.com" 
+                            value={data.website} 
+                            onChange={e => setData({...data, website: e.target.value})} 
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">CMS / Plateforme</label>
+                        <Select value={data.cms} onChange={e => setData({...data, cms: e.target.value})}>
+                            <option value="wordpress">WordPress / WooCommerce</option>
+                            <option value="shopify">Shopify</option>
+                            <option value="wix">Wix</option>
+                            <option value="squarespace">Squarespace</option>
+                            <option value="webflow">Webflow</option>
+                            <option value="custom">Code sur mesure / Autre</option>
+                        </Select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Email de contact</label>
+                        <Input 
+                            type="email"
+                            placeholder="tech@entreprise.com" 
+                            value={data.email} 
+                            onChange={e => setData({...data, email: e.target.value})} 
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Instructions particulières</label>
+                        <textarea 
+                            className="w-full p-3 border border-slate-200 rounded-lg text-sm min-h-[80px]"
+                            placeholder="Ex: Mettre le widget dans le footer sur toutes les pages..."
+                            value={data.notes}
+                            onChange={e => setData({...data, notes: e.target.value})}
+                        />
+                    </div>
+                    <div className="flex justify-end pt-2">
+                        <Button onClick={handleSubmit} isLoading={sending} disabled={!data.website || !data.email}>Envoyer la demande</Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
 export const CollectPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
@@ -29,6 +115,7 @@ export const CollectPage = () => {
   const [content, setContent] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   
   // QR & Supports Customization (Initialized from Org Settings)
   const [qrColor, setQrColor] = useState('#4f46e5'); // Primary Brand Color
@@ -46,6 +133,8 @@ export const CollectPage = () => {
   const [widgetShowDate, setWidgetShowDate] = useState(true);
   const [widgetShowBorder, setWidgetShowBorder] = useState(true);
   const [widgetBorderRadius, setWidgetBorderRadius] = useState(12);
+  
+  const [showIntegrationModal, setShowIntegrationModal] = useState(false);
   
   const toast = useToast();
   const navigate = useNavigate();
@@ -72,7 +161,10 @@ export const CollectPage = () => {
             }
             
             // Auto-load Brand Identity
-            if (data.brand?.primary_color) setQrColor(data.brand.primary_color);
+            if (data.brand?.primary_color) {
+                setQrColor(data.brand.primary_color);
+                setWidgetPrimaryColor(data.brand.primary_color);
+            }
             if (data.brand?.secondary_color) setSecondaryColor(data.brand.secondary_color);
             if (data.brand?.logo_url) setLogoUrl(data.brand.logo_url);
 
@@ -95,7 +187,45 @@ export const CollectPage = () => {
   };
 
   const selectedLocation = org?.locations.find(l => l.id === selectedLocationId);
+  const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'enterprise';
   
+  const handleProFeatureClick = () => {
+      if (!isPro) {
+          toast.info("Cette fonctionnalité est réservée aux membres PRO.");
+          if(confirm("Passer au plan PRO pour débloquer la personnalisation avancée ?")) {
+              navigate('/billing');
+          }
+      }
+  };
+
+  const handleSyncReviews = async () => {
+      if (!selectedLocation?.external_reference) return toast.error("Établissement non lié à Google.");
+      setSyncing(true);
+      try {
+          await api.google.syncReviewsForLocation(selectedLocation.id, selectedLocation.external_reference);
+          toast.success("Avis synchronisés !");
+          // Refresh iframe by forcing a re-render is usually automatic if key changes, 
+          // but here we just synced DB. The iframe fetches on mount. 
+          // A simple way to refresh the iframe is to toggle a key or let user know.
+          const iframe = document.getElementById('widget-preview-iframe') as HTMLIFrameElement;
+          if (iframe) iframe.src = iframe.src; 
+      } catch (e) {
+          toast.error("Erreur de synchronisation.");
+      } finally {
+          setSyncing(false);
+      }
+  };
+
+  const handleIntegrationRequest = async (data: any) => {
+      try {
+          await api.widgets.requestIntegration(data);
+          toast.success("Demande reçue ! Nous vous recontacterons bientôt.");
+          setShowIntegrationModal(false);
+      } catch (e) {
+          toast.error("Erreur lors de l'envoi.");
+      }
+  };
+
   // URL Construction logic
   let reviewLink = selectedLocation 
     ? `${window.location.origin}/#/feedback/${selectedLocation.id}` 
@@ -287,9 +417,7 @@ export const CollectPage = () => {
       toast.success("Code copié !");
   };
 
-  // --- RENDER HELPERS ---
-  
-  // This component renders the content that will be captured for PDF/Preview
+  // --- RENDER HELPERS --- (Existing PrintableAsset code omitted for brevity as it is unchanged)
   const PrintableAsset = () => {
       if (supportType === 'raw') {
           return (
@@ -317,29 +445,22 @@ export const CollectPage = () => {
       if (supportType === 'poster') {
           return (
               <div className="w-[350px] aspect-[1/1.414] bg-white flex flex-col items-center text-center relative shadow-2xl overflow-hidden">
-                  {/* Decorative Header */}
                   <div className="w-full h-4 bg-transparent" style={{ backgroundColor: qrColor }}></div>
-                  
                   <div className="flex-1 flex flex-col justify-center items-center w-full space-y-6 px-8 pt-8">
                       {logoUrl && <img src={logoUrl} className="h-16 w-auto object-contain mb-2" />}
-                      
                       <h2 className="text-3xl font-black uppercase tracking-tight leading-none" style={{ color: secondaryColor }}>
                           Votre avis<br/>compte !
                       </h2>
-                      
                       <p className="text-sm font-medium text-slate-500 px-2 leading-relaxed">
                           Aidez-nous à nous améliorer en scannant ce code. Cela ne prend que 30 secondes.
                       </p>
-                      
                       <div className="p-6 bg-white rounded-2xl shadow-xl border-2" style={{ borderColor: qrColor }}>
                           <QRCodeSVG value={reviewLink} size={160} fgColor={secondaryColor} level="H" />
                       </div>
-                      
                       <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest px-4 py-2 rounded-full text-white" style={{ backgroundColor: qrColor }}>
                           <Smartphone className="h-4 w-4" /> Scannez-moi
                       </div>
                   </div>
-                  
                   <div className="w-full py-6 mt-auto bg-slate-50 border-t border-slate-100 flex flex-col items-center">
                       <p className="font-bold text-slate-900 text-lg">{selectedLocation?.name}</p>
                       <div className="flex gap-1 mt-1">
@@ -365,18 +486,12 @@ export const CollectPage = () => {
       if (supportType === 'card') {
           return (
               <div className="w-[340px] h-[200px] bg-white rounded-xl shadow-2xl flex overflow-hidden relative">
-                  {/* Left Side (Brand) */}
                   <div className="w-1/2 p-6 flex flex-col justify-center bg-slate-50 relative">
                       <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: qrColor }}></div>
-                      {logoUrl ? (
-                          <img src={logoUrl} className="w-12 h-12 object-contain mb-3" />
-                      ) : (
-                          <div className="w-10 h-10 rounded bg-slate-200 mb-3"></div>
-                      )}
+                      {logoUrl ? <img src={logoUrl} className="w-12 h-12 object-contain mb-3" /> : <div className="w-10 h-10 rounded bg-slate-200 mb-3"></div>}
                       <h3 className="font-bold text-slate-900 text-sm leading-tight mb-1">{selectedLocation?.name}</h3>
                       <p className="text-[10px] text-slate-500 leading-tight">Merci de votre confiance.</p>
                   </div>
-                  {/* Right Side (QR) */}
                   <div className="w-1/2 flex items-center justify-center bg-white p-4 relative">
                       <div className="absolute top-0 right-0 w-0 h-0 border-t-[40px] border-l-[40px] border-t-[transparent] border-l-[transparent]" style={{ borderTopColor: secondaryColor }}></div>
                       <QRCodeSVG value={reviewLink} size={100} fgColor={secondaryColor} level="Q" />
@@ -394,6 +509,7 @@ export const CollectPage = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-4 sm:px-6 pb-24">
+      {showIntegrationModal && <IntegrationModal onClose={() => setShowIntegrationModal(false)} onSubmit={handleIntegrationRequest} />}
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -434,7 +550,7 @@ export const CollectPage = () => {
       {/* CONTENT: QR & PRINT */}
       {activeTab === 'qr' && (
           <div className="space-y-8">
-              {/* EDUCATIONAL BANNER */}
+              {/* Existing QR Code Content (Unchanged) */}
               <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-6 shadow-sm">
                   <h3 className="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
                       <Lightbulb className="h-5 w-5 text-amber-500" />
@@ -468,7 +584,6 @@ export const CollectPage = () => {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                   {/* LEFT: CONTROLS */}
                   <div className="lg:col-span-4 space-y-6">
-                      {/* WARNING IF NO FUNNEL CONFIGURED */}
                       {!isFunnelConfigured && (
                           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 animate-pulse">
                               <div className="flex items-start gap-3">
@@ -478,12 +593,7 @@ export const CollectPage = () => {
                                       <p className="text-xs text-amber-700 mt-1 mb-3">
                                           Le lien de redirection Google est manquant ou invalide. Le QR code ne pourra pas rediriger les clients satisfaits.
                                       </p>
-                                      <Button 
-                                        size="sm" 
-                                        className="bg-amber-600 hover:bg-amber-700 border-none text-white w-full"
-                                        icon={Settings}
-                                        onClick={() => navigate('/settings?tab=locations')}
-                                      >
+                                      <Button size="sm" className="bg-amber-600 hover:bg-amber-700 border-none text-white w-full" icon={Settings} onClick={() => navigate('/settings?tab=locations')}>
                                           Configurer mon Funnel
                                       </Button>
                                   </div>
@@ -498,8 +608,6 @@ export const CollectPage = () => {
                               </CardTitle>
                           </CardHeader>
                           <CardContent className="space-y-6">
-                              
-                              {/* Type Selector */}
                               <div>
                                   <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wide">Format du support</label>
                                   <div className="grid grid-cols-2 gap-2">
@@ -518,7 +626,6 @@ export const CollectPage = () => {
                                   </div>
                               </div>
 
-                              {/* Branding */}
                               <div className="space-y-4 pt-4 border-t border-slate-100">
                                   <div className="flex items-center gap-2 mb-2">
                                       <Palette className="h-4 w-4 text-slate-500" />
@@ -555,7 +662,6 @@ export const CollectPage = () => {
                                   </div>
                               </div>
 
-                              {/* Quick Actions */}
                               <div className="pt-4 border-t border-slate-100">
                                   <Button variant="outline" className="w-full mb-2" icon={Copy} onClick={handleCopyLink}>Copier le lien public</Button>
                               </div>
@@ -585,10 +691,7 @@ export const CollectPage = () => {
                           </CardHeader>
                           
                           <CardContent className="flex-1 flex flex-col items-center justify-center p-8 min-h-[500px] relative overflow-auto">
-                              {/* Pattern Background */}
                               <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-                              
-                              {/* Render Container */}
                               <div className="relative z-10 transition-all duration-500 transform hover:scale-[1.02]">
                                   {!isFunnelConfigured ? (
                                       <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl shadow-sm border border-slate-200 text-center opacity-70">
@@ -602,47 +705,29 @@ export const CollectPage = () => {
                                       </div>
                                   )}
                               </div>
-
                               <p className="mt-8 text-xs text-slate-400 uppercase tracking-widest font-mono">
                                   {supportType === 'poster' ? 'Format A5 (148 x 210 mm)' : supportType === 'sticker' ? 'Format 10x10 cm' : supportType === 'card' ? 'Format 85 x 55 mm' : 'Format QR Standard'}
                               </p>
                           </CardContent>
 
-                          {/* DOWNLOAD ACTIONS FOOTER */}
                           <div className="p-6 bg-white border-t border-slate-200">
                               <h4 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide flex items-center gap-2">
                                   <Download className="h-4 w-4" /> Téléchargements
                               </h4>
                               <div className="flex flex-wrap gap-3">
-                                  {/* QR Raw Actions */}
                                   <Button variant="outline" size="sm" onClick={() => handleDownloadQR('png')} disabled={!isFunnelConfigured}>
                                       QR Code (PNG)
                                   </Button>
                                   <Button variant="outline" size="sm" onClick={() => handleDownloadQR('svg')} disabled={!isFunnelConfigured}>
                                       QR Code (SVG)
                                   </Button>
-
                                   <div className="w-px bg-slate-200 mx-2 hidden sm:block"></div>
-
-                                  {/* Support Actions */}
                                   {supportType !== 'raw' && (
                                       <>
-                                          <Button 
-                                              variant="secondary" 
-                                              size="sm"
-                                              onClick={() => handleDownloadSupportImage()} 
-                                              icon={ImageIcon}
-                                              disabled={!isFunnelConfigured}
-                                          >
+                                          <Button variant="secondary" size="sm" onClick={() => handleDownloadSupportImage()} icon={ImageIcon} disabled={!isFunnelConfigured}>
                                               Image {supportType === 'sticker' ? 'Sticker' : 'Visuel'} (Web/Mobile)
                                           </Button>
-                                          <Button 
-                                              size="sm"
-                                              onClick={handleDownloadPDF} 
-                                              icon={Printer} 
-                                              disabled={!isFunnelConfigured}
-                                              className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg"
-                                          >
+                                          <Button size="sm" onClick={handleDownloadPDF} icon={Printer} disabled={!isFunnelConfigured} className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg">
                                               PDF Impression (HD)
                                           </Button>
                                       </>
@@ -659,7 +744,7 @@ export const CollectPage = () => {
           </div>
       )}
 
-      {/* OTHER TABS (Campaigns, Widgets, Social) - Preserved Layout */}
+      {/* OTHER TABS (Campaigns, Widgets, Social) */}
       {activeTab === 'campaigns' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
               <div className="lg:col-span-2 space-y-6">
@@ -674,28 +759,9 @@ export const CollectPage = () => {
                                   <Mail className="h-6 w-6" /> <span className="font-bold">Email</span>
                               </button>
                           </div>
-                          
-                          <Input 
-                            placeholder={campaignType === 'sms' ? '+33 6 12 34 56 78' : 'client@exemple.com'} 
-                            value={recipient} 
-                            onChange={(e) => setRecipient(e.target.value)} 
-                          />
-                          
-                          {campaignType === 'email' && (
-                              <Input 
-                                placeholder="Objet de l'email"
-                                value={subject}
-                                onChange={e => setSubject(e.target.value)}
-                              />
-                          )}
-
-                          <textarea 
-                            className="w-full p-3 border border-slate-200 rounded-lg text-sm h-32"
-                            placeholder="Votre message..."
-                            value={content}
-                            onChange={e => setContent(e.target.value)}
-                          />
-
+                          <Input placeholder={campaignType === 'sms' ? '+33 6 12 34 56 78' : 'client@exemple.com'} value={recipient} onChange={(e) => setRecipient(e.target.value)} />
+                          {campaignType === 'email' && <Input placeholder="Objet de l'email" value={subject} onChange={e => setSubject(e.target.value)} />}
+                          <textarea className="w-full p-3 border border-slate-200 rounded-lg text-sm h-32" placeholder="Votre message..." value={content} onChange={e => setContent(e.target.value)} />
                           <div className="flex justify-end"><Button icon={Send} onClick={handleSendCampaign} isLoading={isSending} disabled={!recipient || !content}>Envoyer</Button></div>
                       </CardContent>
                   </Card>
@@ -703,40 +769,104 @@ export const CollectPage = () => {
           </div>
       )}
 
-      {/* WIDGETS TAB - Preserved */}
+      {/* WIDGETS TAB - Enhanced with Pro Features */}
       {activeTab === 'widgets' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
               <div className="space-y-6">
                   <Card>
                       <CardHeader><CardTitle>Style Widget</CardTitle></CardHeader>
-                      <CardContent className="space-y-4">
-                          <div className="grid grid-cols-3 gap-2">
-                              {['carousel', 'list', 'badge'].map((t) => (
-                                  <div key={t} onClick={() => setWidgetType(t as any)} className={`p-2 border rounded cursor-pointer text-center capitalize ${widgetType === t ? 'bg-indigo-50 border-indigo-600' : ''}`}>{t}</div>
-                              ))}
+                      <CardContent className="space-y-6">
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wide">Type d'affichage</label>
+                              <div className="grid grid-cols-3 gap-2">
+                                  {['carousel', 'list', 'badge'].map((t) => (
+                                      <div key={t} onClick={() => setWidgetType(t as any)} className={`p-2 border rounded cursor-pointer text-center capitalize text-sm transition-all ${widgetType === t ? 'bg-indigo-50 border-indigo-600 text-indigo-700' : 'hover:bg-slate-50'}`}>{t}</div>
+                                  ))}
+                              </div>
                           </div>
-                          <Toggle checked={widgetTheme === 'dark'} onChange={v => setWidgetTheme(v ? 'dark' : 'light')} /> <span className="text-sm">Mode Sombre</span>
+                          
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-wide">Thème</label>
+                              <div className="flex items-center gap-3">
+                                  <Toggle checked={widgetTheme === 'dark'} onChange={v => setWidgetTheme(v ? 'dark' : 'light')} /> <span className="text-sm font-medium">Mode Sombre</span>
+                              </div>
+                          </div>
+
+                          <div className="pt-4 border-t border-slate-100 space-y-4">
+                              <ProControl label="Couleur Principale" isPro={isPro} onClick={handleProFeatureClick}>
+                                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1 bg-white">
+                                      <input type="color" value={widgetPrimaryColor} onChange={e => setWidgetPrimaryColor(e.target.value)} className="h-8 w-full rounded border-none cursor-pointer p-0" disabled={!isPro} />
+                                  </div>
+                              </ProControl>
+
+                              <ProControl label="Arrondi (Radius)" isPro={isPro} onClick={handleProFeatureClick}>
+                                  <input type="range" min="0" max="30" value={widgetBorderRadius} onChange={e => setWidgetBorderRadius(parseInt(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" disabled={!isPro} />
+                                  <div className="text-xs text-right text-slate-400 mt-1">{widgetBorderRadius}px</div>
+                              </ProControl>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                  <ProControl label="Afficher Bordure" isPro={isPro} onClick={handleProFeatureClick}>
+                                      <div className="flex items-center"><Toggle checked={widgetShowBorder} onChange={setWidgetShowBorder} disabled={!isPro} /></div>
+                                  </ProControl>
+                                  <ProControl label="Afficher Date" isPro={isPro} onClick={handleProFeatureClick}>
+                                      <div className="flex items-center"><Toggle checked={widgetShowDate} onChange={setWidgetShowDate} disabled={!isPro} /></div>
+                                  </ProControl>
+                              </div>
+                          </div>
                       </CardContent>
                   </Card>
                   <Card>
-                      <CardHeader><CardTitle>Code</CardTitle></CardHeader>
+                      <CardHeader><CardTitle>Code d'intégration</CardTitle></CardHeader>
                       <CardContent>
-                          <div className="bg-slate-900 rounded p-3 text-xs text-green-400 font-mono overflow-x-auto">
+                          <div className="bg-slate-900 rounded p-3 text-xs text-green-400 font-mono overflow-x-auto relative group">
                               {`<iframe src="${getWidgetUrl()}" width="100%" height="400" frameborder="0"></iframe>`}
                           </div>
-                          <Button size="sm" variant="ghost" className="mt-2 w-full" onClick={handleCopyWidgetCode}>Copier Code</Button>
+                          <Button size="sm" variant="ghost" className="mt-2 w-full" onClick={handleCopyWidgetCode} icon={Copy}>Copier Code</Button>
                       </CardContent>
                   </Card>
+                  
+                  {/* Integration Request Box */}
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 shadow-sm">
+                      <div className="flex items-start gap-3">
+                          <div className="bg-white p-2 rounded-lg text-indigo-600 shadow-sm"><Hammer className="h-5 w-5"/></div>
+                          <div>
+                              <h4 className="font-bold text-indigo-900 text-sm">Besoin d'aide pour l'intégration ?</h4>
+                              <p className="text-xs text-indigo-700 mt-1 mb-3 leading-relaxed">
+                                  Notre équipe technique peut installer le widget sur votre site (Wordpress, Wix, Shopify...).
+                              </p>
+                              <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white w-full border-none shadow-md" onClick={() => setShowIntegrationModal(true)}>
+                                  Demander l'installation
+                              </Button>
+                          </div>
+                      </div>
+                  </div>
               </div>
+              
               <div className="lg:col-span-2">
-                  <Card className="h-full bg-slate-50 flex items-center justify-center p-8">
-                      <iframe src={getWidgetUrl()} width="100%" height="400" className="border-none shadow-xl rounded-xl bg-white" />
+                  <Card className="h-full bg-slate-50 flex flex-col p-8 relative">
+                      <div className="absolute top-4 right-4 z-10">
+                          <Button size="xs" variant="secondary" onClick={handleSyncReviews} isLoading={syncing} icon={RefreshCw} className="bg-white shadow-sm hover:bg-slate-50">
+                              Actualiser les avis
+                          </Button>
+                      </div>
+                      <div className="flex-1 flex items-center justify-center">
+                          <iframe 
+                            id="widget-preview-iframe"
+                            src={getWidgetUrl()} 
+                            width="100%" 
+                            height="400" 
+                            className="border-none shadow-xl rounded-xl bg-white transition-all duration-300" 
+                          />
+                      </div>
+                      <div className="text-center mt-4 text-xs text-slate-400 flex items-center justify-center gap-1">
+                          <Eye className="h-3 w-3" /> Aperçu en temps réel
+                      </div>
                   </Card>
               </div>
           </div>
       )}
 
-      {/* SOCIAL TAB - Preserved */}
+      {/* SOCIAL TAB (Unchanged) */}
       {activeTab === 'social' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
               <Card>
