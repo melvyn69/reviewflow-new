@@ -314,6 +314,8 @@ export interface Competitor {
     sentiment_trend?: string;
     last_month_growth?: string;
     top_complaint?: string;
+    url?: string;
+    distance?: string;
 }
 
 export interface MarketReport {
