@@ -19,7 +19,9 @@ import {
     Trash2,
     Plus,
     Hash,
-    CheckCircle2
+    CheckCircle2,
+    MessageSquare,
+    ArrowRight
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useLocation, useNavigate } from '../components/ui'; // From ui.tsx
@@ -344,6 +346,20 @@ export const SocialPage = () => {
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
                             {loading && <div className="p-4 text-center text-slate-400 text-sm">Chargement...</div>}
+                            
+                            {!loading && reviews.length === 0 && (
+                                <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+                                    <div className="bg-slate-100 p-3 rounded-full mb-3">
+                                        <Star className="h-6 w-6 text-slate-300" />
+                                    </div>
+                                    <p className="text-sm font-medium text-slate-900 mb-1">Aucun avis 5★</p>
+                                    <p className="text-xs text-slate-500 mb-4">Collectez plus d'avis pour les transformer en posts.</p>
+                                    <Button variant="outline" size="xs" onClick={() => navigate('/collect')}>
+                                        Lancer une collecte
+                                    </Button>
+                                </div>
+                            )}
+
                             {reviews.map(review => (
                                 <div 
                                     key={review.id}
@@ -368,50 +384,60 @@ export const SocialPage = () => {
                             ref={containerRef} 
                             className="bg-slate-200/50 rounded-xl border border-slate-200 flex items-center justify-center p-4 overflow-hidden relative min-h-[400px] lg:flex-1 w-full"
                         >
-                            {/* THE CANVAS TO CAPTURE */}
-                            <div 
-                                ref={canvasRef}
-                                style={{ 
-                                    width: currentFormat.width, 
-                                    height: currentFormat.height,
-                                    transform: `scale(${scale})`, 
-                                    transformOrigin: 'center center',
-                                    fontSize: '2rem' // Base font size for HD canvas
-                                }}
-                                className={`flex flex-col items-center justify-center p-16 relative shadow-2xl transition-all duration-500 shrink-0 ${getTemplateClass(template)}`}
-                            >
-                                <div className="absolute top-12 right-12 flex gap-2">
-                                    {[1,2,3,4,5].map(i => (
-                                        <Star key={i} className={`h-12 w-12 ${template === 'dark' || template === 'gradient' ? 'text-yellow-400 fill-yellow-400' : 'text-amber-400 fill-amber-400'}`} />
-                                    ))}
-                                </div>
-
-                                <div className="flex-1 flex items-center justify-center w-full">
-                                    <p className={`text-center font-serif leading-relaxed italic ${reviewTextSize(selectedReview?.body?.length || 0)}`}>
-                                        "{selectedReview?.body}"
-                                    </p>
-                                </div>
-
-                                <div className="flex items-center gap-6 mt-12 w-full border-t border-current pt-8 opacity-90">
-                                    <div className={`h-24 w-24 rounded-full flex items-center justify-center text-4xl font-bold ${template === 'dark' ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
-                                        {selectedReview?.author_name.charAt(0)}
+                            {!selectedReview ? (
+                                <div className="text-center text-slate-400 flex flex-col items-center animate-in fade-in zoom-in-95">
+                                    <div className="bg-white p-4 rounded-full shadow-sm mb-4">
+                                        <MessageSquare className="h-8 w-8 text-indigo-300" />
                                     </div>
-                                    <div>
-                                        <div className="font-bold text-3xl">{selectedReview?.author_name}</div>
-                                        <div className="opacity-80 text-xl mt-1">Client Vérifié</div>
+                                    <h3 className="font-bold text-slate-600 text-lg">Sélectionnez un avis</h3>
+                                    <p className="text-sm">Choisissez un avis dans la liste de gauche pour générer un visuel.</p>
+                                </div>
+                            ) : (
+                                /* THE CANVAS TO CAPTURE */
+                                <div 
+                                    ref={canvasRef}
+                                    style={{ 
+                                        width: currentFormat.width, 
+                                        height: currentFormat.height,
+                                        transform: `scale(${scale})`, 
+                                        transformOrigin: 'center center',
+                                        fontSize: '2rem' // Base font size for HD canvas
+                                    }}
+                                    className={`flex flex-col items-center justify-center p-16 relative shadow-2xl transition-all duration-500 shrink-0 ${getTemplateClass(template)}`}
+                                >
+                                    <div className="absolute top-12 right-12 flex gap-2">
+                                        {[1,2,3,4,5].map(i => (
+                                            <Star key={i} className={`h-12 w-12 ${template === 'dark' || template === 'gradient' ? 'text-yellow-400 fill-yellow-400' : 'text-amber-400 fill-amber-400'}`} />
+                                        ))}
                                     </div>
-                                    {showBrand && (
-                                        <div className="ml-auto flex items-center gap-3 opacity-60">
-                                            <div className="h-12 w-1.5 px-2" style={{ backgroundColor: customColor }}></div>
-                                            <span className="font-bold tracking-widest uppercase text-lg">Reviewflow</span>
+
+                                    <div className="flex-1 flex items-center justify-center w-full">
+                                        <p className={`text-center font-serif leading-relaxed italic ${reviewTextSize(selectedReview?.body?.length || 0)}`}>
+                                            "{selectedReview?.body}"
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-6 mt-12 w-full border-t border-current pt-8 opacity-90">
+                                        <div className={`h-24 w-24 rounded-full flex items-center justify-center text-4xl font-bold ${template === 'dark' ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
+                                            {selectedReview?.author_name.charAt(0)}
                                         </div>
-                                    )}
+                                        <div>
+                                            <div className="font-bold text-3xl">{selectedReview?.author_name}</div>
+                                            <div className="opacity-80 text-xl mt-1">Client Vérifié</div>
+                                        </div>
+                                        {showBrand && (
+                                            <div className="ml-auto flex items-center gap-3 opacity-60">
+                                                <div className="h-12 w-1.5 px-2" style={{ backgroundColor: customColor }}></div>
+                                                <span className="font-bold tracking-widest uppercase text-lg">Reviewflow</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* CONTROLS CARD */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm shrink-0">
+                        <div className={`bg-white rounded-xl border border-slate-200 shadow-sm shrink-0 transition-opacity duration-300 ${!selectedReview ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                             <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-4">
                                     {/* Style & Format Selectors */}
@@ -526,9 +552,17 @@ export const SocialPage = () => {
                         </CardHeader>
                         <CardContent>
                             {posts.length === 0 ? (
-                                <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50">
-                                    <Calendar className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-                                    <p className="text-slate-500">Aucun post planifié.</p>
+                                <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl animate-in fade-in zoom-in-95">
+                                    <div className="bg-white p-4 rounded-full shadow-sm mb-4">
+                                        <Calendar className="h-8 w-8 text-indigo-500" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-900 mb-1">Votre planning est vide</h3>
+                                    <p className="text-slate-500 mb-6 max-w-xs mx-auto text-sm leading-relaxed">
+                                        La régularité est la clé de la croissance. Planifiez votre prochain post dès maintenant.
+                                    </p>
+                                    <Button onClick={() => setActiveTab('create')} icon={Plus} className="shadow-lg shadow-indigo-200">
+                                        Créer mon premier post
+                                    </Button>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
