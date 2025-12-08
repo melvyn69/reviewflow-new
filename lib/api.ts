@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, 
@@ -522,6 +523,14 @@ export const api = {
             if (error) throw error;
             return data.text;
         },
+        generateSms: async (context: any) => {
+            if (isDemoMode()) return `Bonjour ! Profitez de ${context.offerTitle} avec le code ${context.offerCode}. A bientôt !`;
+            const { data, error } = await supabase!.functions.invoke('ai_generate', {
+                body: { task: 'generate_sms', context }
+            });
+            if (error) throw error;
+            return data.text;
+        },
         runCustomTask: async (payload: any) => {
             const { data, error } = await supabase!.functions.invoke('ai_generate', {
                 body: { ...payload }
@@ -658,7 +667,31 @@ export const api = {
                 await supabase!.functions.invoke('send_campaign_emails', {
                     body: { emails: [recipient], subject, html: content }
                 });
+            } else if (type === 'sms') {
+                const org = await api.organization.get();
+                if (!org?.twilio_settings?.account_sid) {
+                    throw new Error("Twilio non configuré dans les paramètres");
+                }
+                await supabase!.functions.invoke('send_sms_campaign', {
+                    body: { 
+                        to: recipient, 
+                        body: content 
+                    }
+                });
             }
+        },
+        requestQuote: async (data: any) => {
+            if (isDemoMode()) return;
+            const org = await api.organization.get();
+            const { error } = await supabase!.from('campaign_requests').insert({
+                organization_id: org?.id,
+                contact_name: data.name,
+                contact_email: data.email,
+                needs_description: data.needs,
+                estimated_volume: data.volume,
+                created_at: new Date().toISOString()
+            });
+            if (error) throw error;
         }
     },
     public: {

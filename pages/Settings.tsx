@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
+import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig, TwilioSettings } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation, ProLock } from '../components/ui';
 import { 
     Building2, 
@@ -47,7 +47,8 @@ import {
     CreditCard, 
     AlertTriangle,
     ArrowRight,
-    Server
+    Server,
+    Smartphone
 } from 'lucide-react';
 
 // --- ICONS FOR BRANDS ---
@@ -61,7 +62,6 @@ const GoogleIcon = () => (
 );
 const TripAdvisorIcon = () => <div className="font-serif font-bold text-green-600 text-lg tracking-tighter">TA</div>;
 
-// ... [Keep IntegrationCard, LocationModal, GoogleMappingModal, InviteModal as is] ...
 const IntegrationCard = ({ icon: Icon, title, description, connected, onConnect, comingSoon = false, type = "source" }: any) => (
     <div className={`p-5 rounded-xl border transition-all duration-300 ${connected ? 'border-green-200 bg-green-50/30' : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm'}`}>
         <div className="flex justify-between items-start mb-3">
@@ -86,7 +86,9 @@ const IntegrationCard = ({ icon: Icon, title, description, connected, onConnect,
     </div>
 );
 
+// ... (LocationModal, GoogleMappingModal, InviteModal remain unchanged) ...
 const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Location | null, onClose: () => void, onSave: (data: any) => Promise<void>, onUpload?: (file: File, id: string) => Promise<void> }) => {
+    // ... [existing implementation]
     const [formData, setFormData] = useState({
         name: location?.name || '',
         address: location?.address || '',
@@ -107,7 +109,6 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
     const [tab, setTab] = useState<'info' | 'profile'>('info');
     const toast = useToast();
 
-    // Reset form when location prop changes (useful if reused)
     useEffect(() => {
         setFormData({
             name: location?.name || '',
@@ -129,7 +130,6 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Manual Validation to prevent silent failures across tabs
         if (!formData.name || !formData.city) {
             setTab('info');
             toast.error("Le nom et la ville sont obligatoires.");
@@ -139,10 +139,9 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
         setSaving(true);
         try {
             await onSave(formData);
-            onClose(); // Only close on success
+            onClose();
         } catch (error: any) {
             console.error("Save Error", error);
-            // Error is handled by toast in parent, but we keep modal open
         } finally {
             setSaving(false);
         }
@@ -170,7 +169,6 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                 </div>
 
                 <div className="p-6 overflow-y-auto flex-1">
-                    {/* noValidate disables default HTML5 validation (which blocks submit if hidden fields are invalid) */}
                     <form id="loc-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
                         {tab === 'info' && (
                             <>
@@ -302,6 +300,7 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
 };
 
 const GoogleMappingModal = ({ locations, onClose, onSave }: { locations: Location[], onClose: () => void, onSave: (mappings: Record<string, string>) => Promise<void> }) => {
+    // ... [existing implementation]
     const [googleLocations, setGoogleLocations] = useState<any[]>([]);
     const [mappings, setMappings] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
@@ -408,6 +407,7 @@ const GoogleMappingModal = ({ locations, onClose, onSave }: { locations: Locatio
 };
 
 const InviteModal = ({ onClose, onInvite }: { onClose: () => void, onInvite: (email: string, role: string) => Promise<void> }) => {
+    // ... [existing implementation]
     const [email, setEmail] = useState('');
     const [role, setRole] = useState('editor');
     const [loading, setLoading] = useState(false);
@@ -508,6 +508,13 @@ export const SettingsPage = () => {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [keyName, setKeyName] = useState('');
 
+  // Twilio Settings
+  const [twilioSettings, setTwilioSettings] = useState<TwilioSettings>({
+      account_sid: '',
+      auth_token: '',
+      phone_number: ''
+  });
+
   // Test email state
   const [testingEmail, setTestingEmail] = useState(false);
 
@@ -574,6 +581,9 @@ export const SettingsPage = () => {
             if (orgData.notification_settings) {
                 setNotifSettings(orgData.notification_settings);
             }
+            if (orgData.twilio_settings) {
+                setTwilioSettings(orgData.twilio_settings);
+            }
         }
       } catch (e) {
           console.error(e);
@@ -583,6 +593,7 @@ export const SettingsPage = () => {
       }
   };
 
+  // ... [Other handlers remain unchanged] ...
   const handleUpdateProfile = async () => {
       try {
           await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined, role: userRole as User['role'] });
@@ -665,6 +676,12 @@ export const SettingsPage = () => {
       if (!org) return;
       await api.organization.update({ notification_settings: notifSettings });
       toast.success("Préférences de notification enregistrées");
+  };
+
+  const handleSaveTwilio = async () => {
+      if (!org) return;
+      await api.organization.update({ twilio_settings: twilioSettings });
+      toast.success("Paramètres Twilio enregistrés");
   };
 
   const handleTestEmail = async () => {
@@ -791,12 +808,7 @@ export const SettingsPage = () => {
           const count = await api.locations.importFromGoogle();
           if (count > 0) {
               toast.success(`${count} établissements importés avec succès !`);
-              // Force reload to get the new location IDs
               await loadData();
-              // After reloading data, org state is updated, so we can trigger sync if needed
-              // However, since loadData is async and state updates might lag, 
-              // it's safer to tell the user to wait or rely on background cron.
-              // For UX, we just say "Import successful".
           } else {
               toast.info("Aucun nouvel établissement trouvé ou erreur de token. (Reconnectez Google si nécessaire)");
           }
@@ -844,7 +856,6 @@ export const SettingsPage = () => {
 
   const handleSimulateStripe = async () => {
       try {
-          // Effectively update the org plan via mock API or real endpoint if backend exists
           await api.organization.simulatePlanChange('pro');
           await loadData();
           toast.success("Webhook Stripe simulé : Abonnement activé (PRO) !");
@@ -855,7 +866,6 @@ export const SettingsPage = () => {
 
   if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
-  // Empty state for new users
   if (!org && !loading) {
       return (
         <div className="max-w-5xl mx-auto space-y-8 p-12 text-center animate-in fade-in">
@@ -874,7 +884,7 @@ export const SettingsPage = () => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Paramètres</h1>
@@ -899,8 +909,10 @@ export const SettingsPage = () => {
         </div>
 
         <div className="p-6 md:p-8">
+            {/* ... [Profile, Organization, Locations tabs remain unchanged] ... */}
             {activeTab === 'profile' && (
                 <div className="max-w-xl space-y-6">
+                    {/* ... Same content as original ... */}
                     <div className="flex items-center gap-4 mb-6">
                         <div className="h-16 w-16 bg-indigo-100 rounded-full flex items-center justify-center text-2xl font-bold text-indigo-600">
                             {userName.charAt(0)}
@@ -927,7 +939,6 @@ export const SettingsPage = () => {
                         <Button onClick={handleUpdateProfile}>Enregistrer le profil</Button>
                     </div>
 
-                    {/* Danger Zone */}
                     <div className="mt-12 pt-8 border-t border-red-100">
                         <h4 className="text-red-700 font-bold text-sm uppercase tracking-wide mb-4 flex items-center gap-2">
                             <AlertTriangle className="h-4 w-4" /> Zone de Danger
@@ -948,6 +959,7 @@ export const SettingsPage = () => {
 
             {activeTab === 'organization' && (
                 <div className="max-w-xl space-y-6">
+                    {/* ... Same content as original ... */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4">
                         <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
                             <Search className="h-4 w-4" /> Recherche Auto (SIRET)
@@ -1007,6 +1019,7 @@ export const SettingsPage = () => {
 
             {activeTab === 'locations' && (
                 <div className="space-y-6">
+                    {/* ... Same content as original ... */}
                     <div className="flex justify-between items-center">
                         <h3 className="font-bold text-lg">Vos Établissements</h3>
                         <div className="flex gap-2">
@@ -1089,11 +1102,52 @@ export const SettingsPage = () => {
                             comingSoon
                         />
                     </div>
+
+                    <div className="pt-6 border-t border-slate-100">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                            <Smartphone className="h-5 w-5 text-indigo-600" /> Twilio (SMS)
+                        </h3>
+                        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                            <p className="text-sm text-slate-600 mb-4">Configurez Twilio pour envoyer des campagnes SMS à vos clients.</p>
+                            <div className="grid grid-cols-1 gap-4 max-w-lg">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Account SID</label>
+                                    <Input 
+                                        type="text" 
+                                        placeholder="ACxxxxxxxx..." 
+                                        value={twilioSettings.account_sid} 
+                                        onChange={e => setTwilioSettings({...twilioSettings, account_sid: e.target.value})} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Auth Token</label>
+                                    <Input 
+                                        type="password" 
+                                        placeholder="xxxxxxxx..." 
+                                        value={twilioSettings.auth_token} 
+                                        onChange={e => setTwilioSettings({...twilioSettings, auth_token: e.target.value})} 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Numéro d'expédition (From)</label>
+                                    <Input 
+                                        type="text" 
+                                        placeholder="+1234567890" 
+                                        value={twilioSettings.phone_number} 
+                                        onChange={e => setTwilioSettings({...twilioSettings, phone_number: e.target.value})} 
+                                    />
+                                </div>
+                                <Button onClick={handleSaveTwilio}>Enregistrer configuration Twilio</Button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
+            {/* ... [Brand, Notifications, Team, Developer tabs remain unchanged] ... */}
             {activeTab === 'brand' && (
                 <div className="max-w-2xl space-y-6">
+                    {/* ... Same content as original ... */}
                     <div className="bg-gradient-to-r from-indigo-50 to-violet-50 p-6 rounded-xl border border-indigo-100">
                         <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">
                             <Sparkles className="h-5 w-5" /> Brand Voice IA
@@ -1155,6 +1209,7 @@ export const SettingsPage = () => {
 
             {activeTab === 'notifications' && (
                 <div className="max-w-xl space-y-6">
+                    {/* ... Same content as original ... */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
                             <div>
@@ -1196,6 +1251,7 @@ export const SettingsPage = () => {
 
             {activeTab === 'team' && (
                 <div className="space-y-6">
+                    {/* ... Same content as original ... */}
                     <div className="flex justify-between items-center">
                         <h3 className="font-bold text-lg">Membres de l'équipe</h3>
                         <Button icon={UserPlus} onClick={() => setShowInviteModal(true)}>Inviter</Button>
@@ -1227,7 +1283,7 @@ export const SettingsPage = () => {
 
             {activeTab === 'developer' && (
                 <div className="space-y-8">
-                    {/* PAYWALL - Enterprise Only */}
+                    {/* ... Same content as original ... */}
                     {(org?.subscription_plan === 'free' || org?.subscription_plan === 'starter') ? (
                         <ProLock 
                             title="Débloquez l'API & Webhooks" 
@@ -1311,6 +1367,7 @@ export const SettingsPage = () => {
             {/* --- SYSTEM HEALTH TAB --- */}
             {activeTab === 'system' && (
                 <div className="max-w-2xl space-y-6">
+                    {/* ... Same content as original ... */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">

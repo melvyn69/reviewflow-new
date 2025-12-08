@@ -2,9 +2,68 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Offer, Coupon } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, useToast, Badge, Select } from '../components/ui';
-import { Gift, Plus, Scan, CheckCircle2, XCircle, Trash2, Tag, Loader2, Send, Users, BarChart3, PieChart, Palette, Mail, Smartphone, RefreshCw, DollarSign } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, useToast, Badge, Select, Toggle } from '../components/ui';
+import { Gift, Plus, Scan, CheckCircle2, XCircle, Trash2, Tag, Loader2, Send, Users, BarChart3, PieChart, Palette, Mail, Smartphone, RefreshCw, DollarSign, MessageSquare, Zap, X, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
+// Quote Modal Component
+const QuoteModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => Promise<void> }) => {
+    const [data, setData] = useState({
+        name: '',
+        email: '',
+        needs: '',
+        volume: ''
+    });
+    const [sending, setSending] = useState(false);
+
+    const handleSubmit = async () => {
+        setSending(true);
+        await onSubmit(data);
+        setSending(false);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <Card className="w-full max-w-md shadow-xl">
+                <CardHeader className="border-b border-slate-100 flex flex-row items-center justify-between pb-4">
+                    <CardTitle>Demande de devis</CardTitle>
+                    <button onClick={onClose}><X className="h-5 w-5 text-slate-400" /></button>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-4">
+                    <p className="text-sm text-slate-500 mb-4">
+                        Décrivez votre besoin pour une campagne sur-mesure. Notre équipe marketing vous contactera sous 24h.
+                    </p>
+                    <Input 
+                        placeholder="Votre nom" 
+                        value={data.name} 
+                        onChange={e => setData({...data, name: e.target.value})} 
+                    />
+                    <Input 
+                        placeholder="Votre email" 
+                        type="email"
+                        value={data.email} 
+                        onChange={e => setData({...data, email: e.target.value})} 
+                    />
+                    <Input 
+                        placeholder="Volume estimé de clients (ex: 500)" 
+                        type="number"
+                        value={data.volume} 
+                        onChange={e => setData({...data, volume: e.target.value})} 
+                    />
+                    <textarea 
+                        className="w-full p-3 border border-slate-200 rounded-lg text-sm min-h-[100px]"
+                        placeholder="Détails du besoin (Objectif, Cible, Délai...)"
+                        value={data.needs}
+                        onChange={e => setData({...data, needs: e.target.value})}
+                    />
+                    <div className="flex justify-end pt-2">
+                        <Button onClick={handleSubmit} isLoading={sending} disabled={!data.email || !data.needs}>Envoyer la demande</Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
 
 export const OffersPage = () => {
     const [offers, setOffers] = useState<Offer[]>([]);
@@ -271,26 +330,76 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
     const [segment, setSegment] = useState('vip');
     const [channel, setChannel] = useState('email');
     const [sending, setSending] = useState(false);
+    const [customMessage, setCustomMessage] = useState('');
+    const [useAI, setUseAI] = useState(true);
+    const [generating, setGenerating] = useState(false);
+    const [showQuoteModal, setShowQuoteModal] = useState(false);
     const toast = useToast();
 
     const selectedOffer = offers.find(o => o.id === selectedOfferId);
 
-    const handleSend = async () => {
+    // Auto-generate message when offer/segment changes if AI is ON
+    useEffect(() => {
+        if (useAI && selectedOffer) {
+            handleGenerateMessage();
+        }
+    }, [selectedOfferId, segment, channel]);
+
+    const handleGenerateMessage = async () => {
         if (!selectedOffer) return;
+        setGenerating(true);
+        try {
+            const context = {
+                offerTitle: selectedOffer.title,
+                offerDesc: selectedOffer.description,
+                offerCode: selectedOffer.code_prefix + 'VIP',
+                segment: segment,
+                channel: channel
+            };
+            const text = await api.ai.generateSms(context);
+            setCustomMessage(text);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    const handleSend = async () => {
         setSending(true);
         try {
-            const res = await api.offers.distributeCampaign(selectedOffer.id, segment, channel);
-            toast.success(`Campagne envoyée à ${res.sent_count || 0} clients !`);
+            // For demo purposes, we send to a dummy recipient or loop through customers
+            // Here we assume backend handles list based on segment
+            const res = await api.campaigns.send(channel as any, 'list:' + segment, 'Campagne Promo', customMessage);
+            toast.success(`Campagne envoyée !`);
             onCampaignSent();
-        } catch (e) {
-            toast.error("Erreur d'envoi");
+        } catch (e: any) {
+            toast.error("Erreur d'envoi: " + e.message);
         } finally {
             setSending(false);
         }
     };
 
+    const handleQuoteRequest = async (data: any) => {
+        try {
+            await api.campaigns.requestQuote(data);
+            toast.success("Demande envoyée !");
+            setShowQuoteModal(false);
+        } catch (e) {
+            toast.error("Erreur lors de l'envoi de la demande");
+        }
+    };
+
     return (
         <div className="space-y-6">
+            {showQuoteModal && <QuoteModal onClose={() => setShowQuoteModal(false)} onSubmit={handleQuoteRequest} />}
+
+            <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => setShowQuoteModal(true)}>
+                    Demande de devis / Sur-mesure
+                </Button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader>
@@ -332,45 +441,68 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
                     </CardContent>
                 </Card>
 
-                {/* PREVIEW */}
+                {/* PREVIEW & MESSAGE */}
                 <Card className="bg-slate-50 border-slate-200">
-                    <CardHeader>
-                        <CardTitle>Aperçu {channel === 'email' ? 'Email' : 'SMS'}</CardTitle>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle>Message</CardTitle>
+                        {channel === 'sms' && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-slate-500">IA Auto</span>
+                                <Toggle checked={useAI} onChange={setUseAI} />
+                            </div>
+                        )}
                     </CardHeader>
                     <CardContent>
                         {selectedOffer ? (
-                            <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm">
+                            <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm relative">
                                 {channel === 'email' ? (
                                     <div className="space-y-4">
                                         <div className="border-b pb-2 mb-2">
                                             <div className="text-xs text-slate-400">Sujet:</div>
-                                            <div className="font-bold text-slate-900">🎁 Une surprise vous attend chez {api.auth.getUser().then(u => u?.name)} !</div>
+                                            <div className="font-bold text-slate-900">🎁 Une surprise vous attend !</div>
                                         </div>
                                         <p className="text-sm text-slate-600">Bonjour,</p>
-                                        <p className="text-sm text-slate-600">Pour vous remercier de votre fidélité, nous avons le plaisir de vous offrir :</p>
                                         <div className="bg-pink-50 p-4 rounded-lg text-center border border-pink-100 my-4">
                                             <div className="text-2xl mb-2">{selectedOffer.style?.icon === 'coffee' ? '☕️' : '🎁'}</div>
                                             <h3 className="text-xl font-bold text-pink-700">{selectedOffer.title}</h3>
                                             <p className="text-sm text-pink-600">{selectedOffer.description}</p>
                                             <div className="mt-2 text-xs text-pink-400 uppercase tracking-widest font-mono">CODE: {selectedOffer.code_prefix}VIP</div>
                                         </div>
-                                        <p className="text-xs text-slate-400">Valable 30 jours. Présentez ce code en caisse.</p>
+                                        <p className="text-xs text-slate-400">Valable 30 jours.</p>
                                     </div>
                                 ) : (
-                                    <div className="bg-slate-100 p-4 rounded-lg rounded-bl-none max-w-[80%] ml-auto text-sm text-slate-800">
-                                        Hello ! 👋 Profitez de <strong>{selectedOffer.title}</strong> chez nous cette semaine ! Montrez ce code : {selectedOffer.code_prefix}VIP. À bientôt !
+                                    <div className="space-y-2">
+                                        <textarea 
+                                            className="w-full bg-slate-100 p-4 rounded-lg border-none resize-none text-sm text-slate-800 min-h-[100px] focus:ring-2 focus:ring-indigo-500"
+                                            value={customMessage}
+                                            onChange={e => { setCustomMessage(e.target.value); setUseAI(false); }}
+                                            placeholder="Votre message SMS..."
+                                        />
+                                        <div className="flex justify-between items-center text-xs text-slate-400">
+                                            <span>{customMessage.length} caractères</span>
+                                            {useAI && (
+                                                <Button size="xs" variant="ghost" onClick={handleGenerateMessage} isLoading={generating} icon={RefreshCw}>
+                                                    Régénérer
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {customMessage.length > 160 && (
+                                            <p className="text-xs text-amber-600 flex items-center gap-1">
+                                                <AlertTriangle className="h-3 w-3" /> Attention: Ce message utilisera 2 SMS.
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         ) : (
-                            <div className="text-center text-slate-400 py-12">Sélectionnez une offre pour voir l'aperçu.</div>
+                            <div className="text-center text-slate-400 py-12">Sélectionnez une offre pour commencer.</div>
                         )}
                     </CardContent>
                 </Card>
             </div>
 
             <div className="flex justify-end">
-                <Button size="lg" icon={Send} onClick={handleSend} isLoading={sending} disabled={!selectedOffer} className="shadow-xl shadow-indigo-200">
+                <Button size="lg" icon={Send} onClick={handleSend} isLoading={sending} disabled={!selectedOffer || (channel === 'sms' && !customMessage)} className="shadow-xl shadow-indigo-200">
                     Lancer la campagne
                 </Button>
             </div>

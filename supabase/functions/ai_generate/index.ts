@@ -3,6 +3,8 @@
 
 
 
+
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/genai'
 
@@ -121,6 +123,28 @@ Deno.serve(async (req: Request) => {
             - Fais référence à sa performance actuelle.
             - Maximum 2 phrases.
             - Pas de généralités, du concret.
+        `;
+    }
+    else if (task === 'generate_sms') {
+        const { offerTitle, offerDesc, offerCode, segment, channel } = context;
+        
+        prompt = `
+            Rôle: Expert Marketing Direct.
+            Tâche: Rédiger un message SMS (max 160 caractères) pour une campagne promotionnelle.
+            
+            Contexte:
+            - Offre: "${offerTitle}" (${offerDesc})
+            - Code Promo: ${offerCode}
+            - Cible: ${segment === 'vip' ? 'Clients très fidèles' : segment === 'risk' ? 'Clients inactifs depuis longtemps' : 'Tous clients'}
+            
+            Contraintes:
+            - Langue: Français.
+            - Très court, percutant, urgent.
+            - Inclure un emoji pertinent.
+            - Inclure le code promo clairement.
+            - Pas de bla-bla.
+            
+            Exemple de ton attendu: "🎁 Surprise ! Profitez de -20% ce weekend avec le code PROMO20. A très vite !"
         `;
     }
     else {

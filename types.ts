@@ -1,3 +1,4 @@
+
 export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
@@ -79,6 +80,12 @@ export interface NotificationSettings {
     weekly_digest: boolean;
     digest_day: string;
     marketing_emails: boolean;
+}
+
+export interface TwilioSettings {
+    account_sid: string;
+    auth_token: string;
+    phone_number: string;
 }
 
 export interface ApiKey {
@@ -201,6 +208,7 @@ export interface Organization {
     };
     brand?: BrandSettings;
     notification_settings?: NotificationSettings;
+    twilio_settings?: TwilioSettings;
     api_keys?: ApiKey[];
     webhooks?: WebhookConfig[];
     saved_replies?: SavedReply[];
