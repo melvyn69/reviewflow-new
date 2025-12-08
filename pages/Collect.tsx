@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Organization, Review } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
+import { toPng } from 'html-to-image';
 
 export const CollectPage = () => {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -20,6 +21,7 @@ export const CollectPage = () => {
   const [qrColor, setQrColor] = useState('#000000');
   const [qrBgColor, setQrBgColor] = useState('#ffffff');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoSize, setLogoSize] = useState(40);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('all');
   
   // Widget Customization State
@@ -31,6 +33,7 @@ export const CollectPage = () => {
   const [widgetBorderRadius, setWidgetBorderRadius] = useState(12);
   
   const toast = useToast();
+  const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -120,8 +123,7 @@ export const CollectPage = () => {
       }
   };
 
-  const handleDownloadQr = () => {
-    toast.success("Téléchargement lancé (SVG)");
+  const handleDownloadSVG = () => {
     const svg = document.getElementById("qr-code-svg");
     if (svg) {
         const svgData = new XMLSerializer().serializeToString(svg);
@@ -129,11 +131,32 @@ export const CollectPage = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = "qrcode.svg";
+        link.download = `qrcode-${selectedLocation?.name}.svg`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        toast.success("QR Code (SVG) téléchargé");
     }
+  };
+
+  const handleDownloadPNG = async () => {
+      if (!qrRef.current) return;
+      try {
+          toast.info("Génération du PNG...");
+          const dataUrl = await toPng(qrRef.current, { 
+              cacheBust: true, 
+              backgroundColor: qrBgColor,
+              pixelRatio: 4 // High quality
+          });
+          const link = document.createElement('a');
+          link.download = `qrcode-${selectedLocation?.name}.png`;
+          link.href = dataUrl;
+          link.click();
+          toast.success("QR Code (PNG) téléchargé");
+      } catch (err) {
+          console.error(err);
+          toast.error("Erreur lors de la génération PNG");
+      }
   };
 
   const handleSendCampaign = async () => {
@@ -180,7 +203,7 @@ export const CollectPage = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 px-4 sm:px-6 pb-24">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Acquisition & Diffusion</h1>
@@ -198,7 +221,7 @@ export const CollectPage = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 mb-6 overflow-x-auto">
+      <div className="flex border-b border-slate-200 mb-6 overflow-x-auto no-scrollbar">
         <button
             onClick={() => setActiveTab('qr')}
             className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === 'qr' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -227,20 +250,97 @@ export const CollectPage = () => {
 
       {activeTab === 'qr' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in">
-              <Card>
+              <Card className="order-2 lg:order-1">
                   <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                          <QrCode className="h-5 w-5 text-indigo-600" />
-                          Générateur QR Code Pro
+                          <Sliders className="h-5 w-5 text-indigo-600" />
+                          Personnalisation
                       </CardTitle>
                   </CardHeader>
-                  <CardContent className="flex flex-col items-center">
-                      <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm mb-6 w-full flex justify-center items-center min-h-[300px] relative transition-colors duration-300">
-                          <div className="bg-white p-4 rounded-xl shadow-lg">
+                  <CardContent className="space-y-6">
+                      
+                      {/* Staff Selection */}
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
+                              <Users className="h-3 w-3" /> Attribution (Gamification)
+                          </label>
+                          <Select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)}>
+                              <option value="all">Établissement (Générique)</option>
+                              {org.staff_members?.map(m => (
+                                  <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
+                              ))}
+                          </Select>
+                          <p className="text-[10px] text-slate-400 mt-1">L'avis sera attribué à cet employé dans le classement d'équipe.</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Palette className="h-3 w-3"/> Couleur QR</label>
+                              <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 focus-within:ring-2 ring-indigo-500/20">
+                                  <input type="color" value={qrColor} onChange={e => setQrColor(e.target.value)} className="h-8 w-full rounded border-none cursor-pointer p-0 bg-transparent" />
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Layout className="h-3 w-3"/> Arrière-plan</label>
+                              <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 focus-within:ring-2 ring-indigo-500/20">
+                                  <input type="color" value={qrBgColor} onChange={e => setQrBgColor(e.target.value)} className="h-8 w-full rounded border-none cursor-pointer p-0 bg-transparent" />
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
+                              <ImageIcon className="h-3 w-3"/> Logo Central
+                          </label>
+                          <div className="flex items-center gap-3">
+                              <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 text-sm text-slate-600 transition-colors border-dashed">
+                                  <UploadCloud className="h-4 w-4" />
+                                  <span>Choisir une image</span>
+                                  <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                              </label>
+                              {logoUrl && (
+                                  <div className="flex items-center gap-2">
+                                      <input 
+                                        type="range" min="20" max="60" 
+                                        value={logoSize} 
+                                        onChange={e => setLogoSize(parseInt(e.target.value))}
+                                        className="w-20"
+                                        title="Taille du logo"
+                                      />
+                                      <button onClick={() => setLogoUrl(null)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                          <X className="h-4 w-4" />
+                                      </button>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
+                          <Button variant="outline" className="w-full" icon={Copy} onClick={handleCopyLink}>Copier le lien public</Button>
+                          <div className="grid grid-cols-2 gap-3">
+                              <Button variant="secondary" onClick={handleDownloadSVG}>SVG (Vecteur)</Button>
+                              <Button variant="primary" onClick={handleDownloadPNG}>PNG (Image)</Button>
+                          </div>
+                      </div>
+                  </CardContent>
+              </Card>
+
+              <Card className="order-1 lg:order-2 flex flex-col justify-center">
+                  <CardHeader>
+                      <CardTitle className="text-center">Aperçu en direct</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center justify-center py-8">
+                      <div className="relative group">
+                          {/* Container with dynamic background color for PNG capture */}
+                          <div 
+                            ref={qrRef}
+                            className="p-8 rounded-3xl shadow-xl transition-all duration-300"
+                            style={{ backgroundColor: qrBgColor }}
+                          >
                               <QRCodeSVG 
                                 id="qr-code-svg"
                                 value={reviewLink} 
-                                size={200}
+                                size={250}
                                 fgColor={qrColor}
                                 bgColor={qrBgColor}
                                 level="H"
@@ -248,109 +348,57 @@ export const CollectPage = () => {
                                     src: logoUrl,
                                     x: undefined,
                                     y: undefined,
-                                    height: 40,
-                                    width: 40,
+                                    height: logoSize,
+                                    width: logoSize,
                                     excavate: true,
                                 } : undefined}
                               />
                           </div>
-                      </div>
-                      
-                      <div className="w-full space-y-4 mb-6">
-                          
-                          {/* Staff Selection */}
-                          <div>
-                              <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
-                                  <Users className="h-3 w-3" /> Pour qui est ce QR Code ?
-                              </label>
-                              <Select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)}>
-                                  <option value="all">Établissement (Générique)</option>
-                                  {org.staff_members?.map(m => (
-                                      <option key={m.id} value={m.id}>{m.name} ({m.role})</option>
-                                  ))}
-                              </Select>
-                              <p className="text-[10px] text-slate-400 mt-1">Sélectionner un employé permet d'attribuer l'avis pour le challenge d'équipe.</p>
+                          <div className="absolute -bottom-12 left-0 right-0 text-center opacity-50 text-xs text-slate-400 font-mono">
+                              {selectedLocation?.name}
                           </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                  <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Palette className="h-3 w-3"/> Couleur QR</label>
-                                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 focus-within:ring-2 ring-indigo-500/20">
-                                      <input type="color" value={qrColor} onChange={e => setQrColor(e.target.value)} className="h-6 w-6 rounded border-none cursor-pointer p-0 bg-transparent" />
-                                      <span className="text-xs font-mono text-slate-600">{qrColor}</span>
-                                  </div>
-                              </div>
-                              <div>
-                                  <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Layout className="h-3 w-3"/> Couleur Fond</label>
-                                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-1.5 focus-within:ring-2 ring-indigo-500/20">
-                                      <input type="color" value={qrBgColor} onChange={e => setQrBgColor(e.target.value)} className="h-6 w-6 rounded border-none cursor-pointer p-0 bg-transparent" />
-                                      <span className="text-xs font-mono text-slate-600">{qrBgColor}</span>
-                                  </div>
-                              </div>
-                          </div>
-                          
-                          <div>
-                              <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
-                                  <ImageIcon className="h-3 w-3"/> Logo Central (Optionnel)
-                              </label>
-                              <div className="flex items-center gap-3">
-                                  <label className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 text-sm text-slate-600 transition-colors">
-                                      <UploadCloud className="h-4 w-4" />
-                                      <span>Choisir une image</span>
-                                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                                  </label>
-                                  {logoUrl && (
-                                      <button onClick={() => setLogoUrl(null)} className="text-xs text-red-500 hover:underline">Supprimer</button>
-                                  )}
-                              </div>
-                          </div>
-                      </div>
-
-                      <div className="flex gap-3 w-full">
-                          <Button variant="outline" className="flex-1" icon={Copy} onClick={handleCopyLink}>Copier le lien</Button>
-                          <Button variant="primary" className="flex-1 shadow-lg shadow-indigo-100" icon={Download} onClick={handleDownloadQr}>Télécharger SVG</Button>
                       </div>
                   </CardContent>
               </Card>
 
-              <Card>
+              <Card className="order-3 lg:col-span-2">
                   <CardHeader>
-                      <CardTitle>Supports Imprimables</CardTitle>
+                      <CardTitle>Supports Prêts à Imprimer</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                      <p className="text-sm text-slate-500 mb-2">Des visuels prêts à l'emploi pour votre établissement.</p>
-                      
-                      <div className="p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
-                          <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
-                              <Printer className="h-6 w-6" />
+                  <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="p-4 border border-slate-200 rounded-xl flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+                              <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
+                                  <Printer className="h-6 w-6" />
+                              </div>
+                              <div className="flex-1">
+                                  <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">Affiche Comptoir A4</h4>
+                                  <p className="text-xs text-slate-500">Idéal pour la caisse.</p>
+                              </div>
+                              <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
                           </div>
-                          <div className="flex-1">
-                              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Affiche Comptoir A4</h4>
-                              <p className="text-xs text-slate-500">Idéal pour la réception ou la caisse.</p>
-                          </div>
-                          <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
-                      </div>
 
-                      <div className="p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
-                          <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
-                              <Layout className="h-6 w-6" />
+                          <div className="p-4 border border-slate-200 rounded-xl flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+                              <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
+                                  <Layout className="h-6 w-6" />
+                              </div>
+                              <div className="flex-1">
+                                  <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">Sticker Vitrine</h4>
+                                  <p className="text-xs text-slate-500">Rond 15cm.</p>
+                              </div>
+                              <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
                           </div>
-                          <div className="flex-1">
-                              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Sticker Vitrine</h4>
-                              <p className="text-xs text-slate-500">Format rond 15cm pour votre porte d'entrée.</p>
+                          
+                          <div className="p-4 border border-slate-200 rounded-xl flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
+                              <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
+                                  <Smartphone className="h-6 w-6" />
+                              </div>
+                              <div className="flex-1">
+                                  <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">Carte de Visite</h4>
+                                  <p className="text-xs text-slate-500">Format standard.</p>
+                              </div>
+                              <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
                           </div>
-                          <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
-                      </div>
-                      
-                      <div className="p-4 border border-slate-200 rounded-lg flex items-center gap-4 hover:bg-slate-50 transition-colors cursor-pointer group">
-                          <div className="h-12 w-12 bg-white text-indigo-600 border border-slate-200 rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
-                              <Smartphone className="h-6 w-6" />
-                          </div>
-                          <div className="flex-1">
-                              <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">Carte de Visite</h4>
-                              <p className="text-xs text-slate-500">À glisser dans les sacs de commande.</p>
-                          </div>
-                          <Button size="xs" variant="ghost" icon={Download}>PDF</Button>
                       </div>
                   </CardContent>
               </Card>
