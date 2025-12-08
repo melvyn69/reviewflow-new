@@ -1,5 +1,7 @@
 
 
+
+
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, 
@@ -520,6 +522,27 @@ export const api = {
         },
         previewBrandVoice: async (settings: BrandSettings, sampleReview: any) => {
             return api.ai.generateReply(sampleReview, { tone: settings.tone });
+        },
+        generateManagerAdvice: async (member: StaffMember, rank: number, type: 'volume' | 'quality') => {
+            if (isDemoMode()) {
+                if (type === 'volume') return `Pour booster ${member.name}, proposez-lui un mini-challenge : 5 avis collectés cette semaine = une récompense immédiate !`;
+                return `${member.name} a une bonne note (${member.average_rating}/5). Encouragez-le à demander aux clients satisfaits de mentionner son prénom dans l'avis.`;
+            }
+            const { data, error } = await supabase!.functions.invoke('ai_generate', {
+                body: { 
+                    task: 'generate_manager_advice', 
+                    context: { 
+                        name: member.name, 
+                        role: member.role, 
+                        reviewCount: member.reviews_count, 
+                        avgRating: member.average_rating, 
+                        rank, 
+                        type 
+                    } 
+                }
+            });
+            if (error) throw error;
+            return data.text;
         }
     },
     social: {

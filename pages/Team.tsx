@@ -4,7 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { StaffMember } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast } from '../components/ui';
-import { Trophy, Users, Plus, Star, Award, TrendingUp, UserPlus, Trash2, Medal, Gift, Mail } from 'lucide-react';
+import { Trophy, Users, Plus, Star, Award, TrendingUp, UserPlus, Trash2, Medal, Gift, Mail, Lightbulb, RefreshCw } from 'lucide-react';
+
+const ROLES = [
+    "Serveur", "Cuisinier", "Manager", "Réception", 
+    "Responsable de salle", "Community Manager", 
+    "Responsable SAV", "Vendeur", "Hôte(sse)", "Barman", "Autre"
+];
 
 const getGenderedAvatar = (name: string, currentAvatar?: string) => {
     if (currentAvatar && currentAvatar.length > 0) return currentAvatar;
@@ -99,10 +105,17 @@ const Podium = ({ winners }: { winners: StaffMember[] }) => {
 export const TeamPage = () => {
     const [staff, setStaff] = useState<StaffMember[]>([]);
     const [newStaffName, setNewStaffName] = useState('');
-    const [newStaffRole, setNewStaffRole] = useState('Serveur');
+    const [newStaffRole, setNewStaffRole] = useState(ROLES[0]);
     const [newStaffEmail, setNewStaffEmail] = useState('');
     const [loading, setLoading] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
+    
+    // Manager Advice State
+    const [adviceMemberId, setAdviceMemberId] = useState('');
+    const [adviceType, setAdviceType] = useState<'volume' | 'quality'>('volume');
+    const [adviceText, setAdviceText] = useState('');
+    const [isAdviceLoading, setIsAdviceLoading] = useState(false);
+
     const toast = useToast();
 
     useEffect(() => {
@@ -113,6 +126,10 @@ export const TeamPage = () => {
         setLoading(true);
         const org = await api.organization.get();
         setStaff(org?.staff_members || []);
+        if (org?.staff_members && org.staff_members.length > 0) {
+            // Default to first member
+            setAdviceMemberId(org.staff_members[0].id);
+        }
         setLoading(false);
     };
 
@@ -144,7 +161,33 @@ export const TeamPage = () => {
             window.location.href = `mailto:${member.email}?subject=Félicitations !&body=Bonjour ${member.name}, bravo pour ton excellent travail ce mois-ci ! Continue comme ça.`;
             toast.success(`Client mail ouvert pour ${member.name}`);
         } else {
-            toast.error("Aucun email renseigné pour ce collaborateur.");
+            // Internal modal logic simulated here
+            if (confirm(`Aucun email pour ${member.name}. Voulez-vous copier un message de félicitations ?`)) {
+                navigator.clipboard.writeText(`Bravo ${member.name} pour ton excellent travail ce mois-ci !`);
+                toast.success("Message copié dans le presse-papier");
+            }
+        }
+    };
+
+    const handleGenerateAdvice = async () => {
+        if (!adviceMemberId) return;
+        setIsAdviceLoading(true);
+        setAdviceText('');
+        
+        try {
+            const member = staff.find(s => s.id === adviceMemberId);
+            if (!member) return;
+            
+            // Calculate rank
+            const sorted = [...staff].sort((a, b) => b.reviews_count - a.reviews_count);
+            const rank = sorted.findIndex(s => s.id === member.id) + 1;
+
+            const text = await api.ai.generateManagerAdvice(member, rank, adviceType);
+            setAdviceText(text);
+        } catch (e) {
+            toast.error("Erreur lors de la génération du conseil");
+        } finally {
+            setIsAdviceLoading(false);
         }
     };
 
@@ -163,29 +206,61 @@ export const TeamPage = () => {
                 </div>
             </div>
 
-            {/* ASTUCE MANAGER */}
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-6 text-white shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-4">
+            {/* ASTUCE MANAGER AI */}
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl p-6 text-white shadow-lg">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
                     <div className="h-12 w-12 bg-white/20 rounded-full flex items-center justify-center shrink-0">
-                        <Gift className="h-6 w-6 text-white" />
+                        <Lightbulb className="h-6 w-6 text-white" />
                     </div>
-                    <div>
-                        <h3 className="font-bold text-lg">💡 Astuce du Manager</h3>
-                        <p className="text-emerald-100 text-sm">
-                            Mettez en jeu une prime de 50€ pour l'employé du mois. 
-                            <br/>Un avis 5 étoiles détecté automatiquement = 1 point.
-                        </p>
+                    
+                    <div className="flex-1 w-full">
+                        <h3 className="font-bold text-lg mb-2">💡 Astuce du Manager (IA)</h3>
+                        
+                        {!adviceText ? (
+                            <div className="flex flex-col sm:flex-row gap-3 items-center">
+                                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                    <select 
+                                        className="bg-white/20 border border-white/30 text-white text-sm rounded-lg px-3 py-2 outline-none focus:bg-white/30 cursor-pointer"
+                                        value={adviceMemberId}
+                                        onChange={(e) => setAdviceMemberId(e.target.value)}
+                                    >
+                                        {staff.map(s => <option key={s.id} value={s.id} className="text-slate-900">{s.name}</option>)}
+                                    </select>
+                                    
+                                    <select 
+                                        className="bg-white/20 border border-white/30 text-white text-sm rounded-lg px-3 py-2 outline-none focus:bg-white/30 cursor-pointer"
+                                        value={adviceType}
+                                        onChange={(e) => setAdviceType(e.target.value as any)}
+                                    >
+                                        <option value="volume" className="text-slate-900">Objectif: Plus d'avis (Volume)</option>
+                                        <option value="quality" className="text-slate-900">Objectif: Meilleure note (Qualité)</option>
+                                    </select>
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    onClick={handleGenerateAdvice} 
+                                    isLoading={isAdviceLoading}
+                                    className="bg-white text-emerald-700 hover:bg-emerald-50 border-none shadow-md w-full sm:w-auto"
+                                    icon={RefreshCw}
+                                >
+                                    Générer conseil
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="animate-in fade-in slide-in-from-bottom-2">
+                                <p className="text-emerald-50 text-sm font-medium leading-relaxed italic bg-white/10 p-3 rounded-lg border border-white/20">
+                                    "{adviceText}"
+                                </p>
+                                <button 
+                                    onClick={() => setAdviceText('')} 
+                                    className="text-xs text-emerald-200 hover:text-white mt-2 underline"
+                                >
+                                    Générer un autre conseil
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
-                {sortedStaff[0] && (
-                    <Button 
-                        className="bg-white text-emerald-700 hover:bg-emerald-50 border-none whitespace-nowrap shadow-md"
-                        icon={Mail}
-                        onClick={() => handleSendReward(sortedStaff[0])}
-                    >
-                        Féliciter {sortedStaff[0].name}
-                    </Button>
-                )}
             </div>
 
             {staff.length > 0 ? (
@@ -244,8 +319,8 @@ export const TeamPage = () => {
                                                     </div>
                                                 </td>
                                                 <td className="py-4 text-right flex items-center justify-end gap-2">
-                                                    <button onClick={() => handleSendReward(member)} className="text-slate-400 hover:text-green-600 p-2" title="Envoyer email">
-                                                        <Mail className="h-4 w-4" />
+                                                    <button onClick={() => handleSendReward(member)} className="text-slate-400 hover:text-green-600 p-2" title="Féliciter">
+                                                        <Gift className="h-4 w-4" />
                                                     </button>
                                                     <button onClick={() => handleDelete(member.id)} className="text-slate-400 hover:text-red-500 p-2" title="Supprimer">
                                                         <Trash2 className="h-4 w-4" />
@@ -291,12 +366,9 @@ export const TeamPage = () => {
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Poste</label>
                                 <Select value={newStaffRole} onChange={e => setNewStaffRole(e.target.value)}>
-                                    <option value="Serveur">Serveur</option>
-                                    <option value="Vendeur">Vendeur</option>
-                                    <option value="Caisse">Caisse</option>
-                                    <option value="Manager">Manager</option>
-                                    <option value="Cuisinier">Cuisinier</option>
-                                    <option value="Autre">Autre</option>
+                                    {ROLES.map(role => (
+                                        <option key={role} value={role}>{role}</option>
+                                    ))}
                                 </Select>
                             </div>
                             

@@ -1,4 +1,6 @@
 
+
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/genai'
 
@@ -95,6 +97,28 @@ Deno.serve(async (req: Request) => {
             
             Tâche : Génère un profil psychologique court (1 phrase) et une "Next Best Action" (suggestion commerciale).
             Format JSON attendu : { "profile": "...", "suggestion": "..." }
+        `;
+    }
+    else if (task === 'generate_manager_advice') {
+        const { name, role, reviewCount, avgRating, rank, type } = context;
+        
+        prompt = `
+            Rôle : Coach en management d'équipe pour un commerce de proximité.
+            Objectif : Donner un conseil court, concret et actionnable au manager concernant un employé spécifique.
+            
+            Employé : ${name} (${role})
+            Performance : ${reviewCount} avis collectés, Note moyenne de ${avgRating}/5.
+            Classement dans l'équipe : #${rank}.
+            
+            Le manager veut un conseil axé sur : ${type === 'volume' ? "L'augmentation du nombre d'avis (Volume)" : "L'amélioration de la note moyenne (Qualité)"}.
+            
+            Consignes :
+            - Le conseil doit être directement applicable.
+            - Ton motivant et professionnel.
+            - Mentionne le prénom "${name}".
+            - Fais référence à sa performance actuelle.
+            - Maximum 2 phrases.
+            - Pas de généralités, du concret.
         `;
     }
     else {
