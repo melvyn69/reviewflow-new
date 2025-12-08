@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
@@ -31,22 +30,37 @@ const getAIClient = () => {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
+// Helper to safely get env vars
+const getEnv = (key: string) => {
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    return import.meta.env[key];
+  }
+  // @ts-ignore
+  if (typeof process !== 'undefined' && process.env) {
+    // @ts-ignore
+    return process.env[key];
+  }
+  return '';
+};
+
 // --- OAUTH CONFIG ---
 // NOTE: These should ideally come from env vars or a config endpoint, hardcoded for structural example
 const OAUTH_CONFIG = {
     facebook: {
         authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
-        clientId: import.meta.env.VITE_FACEBOOK_CLIENT_ID || '123456789', // Replace with real ID
+        clientId: getEnv('VITE_FACEBOOK_CLIENT_ID') || '123456789', // Replace with real ID
         scopes: 'pages_show_list,pages_read_engagement,pages_manage_posts'
     },
     instagram: {
         authUrl: 'https://api.instagram.com/oauth/authorize',
-        clientId: import.meta.env.VITE_INSTAGRAM_CLIENT_ID || '123456789',
+        clientId: getEnv('VITE_INSTAGRAM_CLIENT_ID') || '123456789',
         scopes: 'instagram_basic,instagram_content_publish'
     },
     linkedin: {
         authUrl: 'https://www.linkedin.com/oauth/v2/authorization',
-        clientId: import.meta.env.VITE_LINKEDIN_CLIENT_ID || '123456789',
+        clientId: getEnv('VITE_LINKEDIN_CLIENT_ID') || '123456789',
         scopes: 'w_member_social,r_liteprofile,r_emailaddress'
     }
 };
