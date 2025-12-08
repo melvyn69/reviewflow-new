@@ -6,6 +6,9 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY: string;
   readonly VITE_STRIPE_LINK_STARTER: string;
   readonly VITE_STRIPE_LINK_PRO: string;
+  readonly VITE_FACEBOOK_CLIENT_ID: string;
+  readonly VITE_INSTAGRAM_CLIENT_ID: string;
+  readonly VITE_LINKEDIN_CLIENT_ID: string;
 }
 
 interface ImportMeta {

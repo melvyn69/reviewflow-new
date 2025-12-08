@@ -31,6 +31,26 @@ const getAIClient = () => {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
+// --- OAUTH CONFIG ---
+// NOTE: These should ideally come from env vars or a config endpoint, hardcoded for structural example
+const OAUTH_CONFIG = {
+    facebook: {
+        authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
+        clientId: import.meta.env.VITE_FACEBOOK_CLIENT_ID || '123456789', // Replace with real ID
+        scopes: 'pages_show_list,pages_read_engagement,pages_manage_posts'
+    },
+    instagram: {
+        authUrl: 'https://api.instagram.com/oauth/authorize',
+        clientId: import.meta.env.VITE_INSTAGRAM_CLIENT_ID || '123456789',
+        scopes: 'instagram_basic,instagram_content_publish'
+    },
+    linkedin: {
+        authUrl: 'https://www.linkedin.com/oauth/v2/authorization',
+        clientId: import.meta.env.VITE_LINKEDIN_CLIENT_ID || '123456789',
+        scopes: 'w_member_social,r_liteprofile,r_emailaddress'
+    }
+};
+
 export const api = {
   auth: {
     getUser: async (): Promise<User | null> => {
@@ -1186,8 +1206,35 @@ export const api = {
           if (isDemoMode()) return;
           await supabase!.from('social_posts').delete().eq('id', id);
       },
-      connectAccount: async (platform: SocialPlatform, status: boolean) => {
+      // --- NEW OAUTH METHODS ---
+      connectAccount: async (platform: SocialPlatform) => {
           if (isDemoMode()) return;
+          const config = OAUTH_CONFIG[platform as keyof typeof OAUTH_CONFIG];
+          if (!config) throw new Error("Platform not supported");
+
+          // State for security (simple implementation)
+          const state = btoa(JSON.stringify({ platform, timestamp: Date.now() }));
+          
+          // Construct URL
+          const redirectUri = window.location.origin + '/social'; // Handles callback
+          const url = `${config.authUrl}?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(config.scopes)}&state=${state}`;
+          
+          window.location.href = url;
+      },
+      handleCallback: async (platform: string, code: string) => {
+          return await invoke('social_oauth', { 
+              action: 'exchange',
+              platform,
+              code,
+              redirectUri: window.location.origin + '/social'
+          });
+      },
+      getAccounts: async () => {
+          if (isDemoMode()) return [];
+          if (!supabase) return [];
+          const user = await api.auth.getUser();
+          const { data } = await supabase.from('social_accounts').select('*').eq('organization_id', user?.organization_id);
+          return data || [];
       }
   },
   global: {

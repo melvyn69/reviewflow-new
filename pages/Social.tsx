@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
-import { Review, Organization, SocialPost } from '../types';
+import { Review, Organization, SocialPost, SocialAccount } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Badge, ProLock, Select, Toggle } from '../components/ui';
 import { 
     Share2, 
@@ -18,9 +18,11 @@ import {
     Clock,
     Trash2,
     Plus,
-    Hash
+    Hash,
+    CheckCircle2
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import { useLocation, useNavigate } from '../components/ui'; // From ui.tsx
 
 // Template styles
 const TEMPLATES = [
@@ -46,6 +48,7 @@ export const SocialPage = () => {
     const [org, setOrg] = useState<Organization | null>(null);
     const [activeTab, setActiveTab] = useState<'create' | 'calendar' | 'accounts'>('create');
     const [posts, setPosts] = useState<SocialPost[]>([]);
+    const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
     
     // Editor State
     const [template, setTemplate] = useState('minimal');
@@ -69,10 +72,42 @@ export const SocialPage = () => {
     const toast = useToast();
     const canvasRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    
+    const location = useLocation();
+    const navigate = useNavigate();
 
     useEffect(() => {
         loadData();
     }, []);
+
+    // OAuth Callback Handling
+    useEffect(() => {
+        const query = new URLSearchParams(location.search);
+        const code = query.get('code');
+        const stateStr = query.get('state');
+
+        if (code && stateStr) {
+            const handleAuth = async () => {
+                try {
+                    const state = JSON.parse(atob(stateStr));
+                    const platform = state.platform;
+                    
+                    toast.info(`Connexion ${platform} en cours...`);
+                    
+                    await api.social.handleCallback(platform, code);
+                    
+                    toast.success("Compte connecté avec succès !");
+                    // Clean URL
+                    window.history.replaceState({}, '', window.location.pathname);
+                    setActiveTab('accounts');
+                    loadData();
+                } catch (e: any) {
+                    toast.error("Erreur connexion: " + e.message);
+                }
+            };
+            handleAuth();
+        }
+    }, [location.search]);
 
     // Responsive Scale Effect
     useEffect(() => {
@@ -114,16 +149,23 @@ export const SocialPage = () => {
 
     const loadData = async () => {
         setLoading(true);
-        const [reviewsData, organization, scheduledPosts] = await Promise.all([
-            api.reviews.list({ rating: 5 }),
-            api.organization.get(),
-            api.social.getPosts()
-        ]);
-        setReviews(reviewsData);
-        setOrg(organization);
-        setPosts(scheduledPosts);
-        if (reviewsData.length > 0) setSelectedReview(reviewsData[0]);
-        setLoading(false);
+        try {
+            const [reviewsData, organization, scheduledPosts, accounts] = await Promise.all([
+                api.reviews.list({ rating: 5 }),
+                api.organization.get(),
+                api.social.getPosts(),
+                api.social.getAccounts()
+            ]);
+            setReviews(reviewsData);
+            setOrg(organization);
+            setPosts(scheduledPosts);
+            setConnectedAccounts(accounts);
+            if (reviewsData.length > 0) setSelectedReview(reviewsData[0]);
+        } catch(e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleGenerateCaption = async () => {
@@ -203,12 +245,11 @@ export const SocialPage = () => {
     };
 
     const handleConnect = async (platform: 'facebook' | 'instagram' | 'linkedin') => {
-        toast.info(`Connexion à ${platform}...`);
-        setTimeout(async () => {
-            await api.social.connectAccount(platform, true);
-            await loadData();
-            toast.success(`${platform} connecté !`);
-        }, 1500);
+        try {
+            await api.social.connectAccount(platform);
+        } catch (e: any) {
+            toast.error("Erreur de redirection: " + e.message);
+        }
     };
 
     const handleNewPost = () => {
@@ -225,6 +266,8 @@ export const SocialPage = () => {
         if (length < 200) return 'text-5xl';
         return 'text-4xl';
     };
+
+    const isConnected = (platform: string) => connectedAccounts.some(a => a.platform === platform);
 
     // PAYWALL: Block Free AND Starter plans. Only allow Pro/Enterprise.
     if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
@@ -520,57 +563,60 @@ export const SocialPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
                     <Card>
                         <CardContent className="p-6 flex flex-col items-center text-center gap-4">
-                            <div className="h-16 w-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center border-4 border-white shadow-md">
+                            <div className="h-16 w-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center border-4 border-white shadow-md relative">
                                 <Facebook className="h-8 w-8" />
+                                {isConnected('facebook') && <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full border-2 border-white p-1"><CheckCircle2 className="h-3 w-3 text-white"/></div>}
                             </div>
                             <div>
                                 <h3 className="font-bold text-lg">Facebook Page</h3>
-                                <p className="text-xs text-slate-500">{org?.integrations.facebook_posting ? 'Compte connecté' : 'Non connecté'}</p>
+                                <p className="text-xs text-slate-500">{isConnected('facebook') ? 'Connecté' : 'Non connecté'}</p>
                             </div>
                             <Button 
-                                variant={org?.integrations.facebook_posting ? 'outline' : 'primary'} 
+                                variant={isConnected('facebook') ? 'outline' : 'primary'} 
                                 className="w-full"
                                 onClick={() => handleConnect('facebook')}
                             >
-                                {org?.integrations.facebook_posting ? 'Déconnecter' : 'Connecter'}
+                                {isConnected('facebook') ? 'Reconnecter' : 'Connecter'}
                             </Button>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardContent className="p-6 flex flex-col items-center text-center gap-4">
-                            <div className="h-16 w-16 bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 text-white rounded-full flex items-center justify-center border-4 border-white shadow-md">
+                            <div className="h-16 w-16 bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 text-white rounded-full flex items-center justify-center border-4 border-white shadow-md relative">
                                 <Instagram className="h-8 w-8" />
+                                {isConnected('instagram') && <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full border-2 border-white p-1"><CheckCircle2 className="h-3 w-3 text-white"/></div>}
                             </div>
                             <div>
                                 <h3 className="font-bold text-lg">Instagram Business</h3>
-                                <p className="text-xs text-slate-500">{org?.integrations.instagram_posting ? 'Compte connecté' : 'Non connecté'}</p>
+                                <p className="text-xs text-slate-500">{isConnected('instagram') ? 'Connecté' : 'Non connecté'}</p>
                             </div>
                             <Button 
-                                variant={org?.integrations.instagram_posting ? 'outline' : 'primary'} 
+                                variant={isConnected('instagram') ? 'outline' : 'primary'} 
                                 className="w-full"
                                 onClick={() => handleConnect('instagram')}
                             >
-                                {org?.integrations.instagram_posting ? 'Déconnecter' : 'Connecter'}
+                                {isConnected('instagram') ? 'Reconnecter' : 'Connecter'}
                             </Button>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardContent className="p-6 flex flex-col items-center text-center gap-4">
-                            <div className="h-16 w-16 bg-blue-700 text-white rounded-full flex items-center justify-center border-4 border-white shadow-md">
+                            <div className="h-16 w-16 bg-blue-700 text-white rounded-full flex items-center justify-center border-4 border-white shadow-md relative">
                                 <Linkedin className="h-8 w-8" />
+                                {isConnected('linkedin') && <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full border-2 border-white p-1"><CheckCircle2 className="h-3 w-3 text-white"/></div>}
                             </div>
                             <div>
                                 <h3 className="font-bold text-lg">LinkedIn Company</h3>
-                                <p className="text-xs text-slate-500">{org?.integrations.linkedin_posting ? 'Compte connecté' : 'Non connecté'}</p>
+                                <p className="text-xs text-slate-500">{isConnected('linkedin') ? 'Connecté' : 'Non connecté'}</p>
                             </div>
                             <Button 
-                                variant={org?.integrations.linkedin_posting ? 'outline' : 'primary'} 
+                                variant={isConnected('linkedin') ? 'outline' : 'primary'} 
                                 className="w-full"
                                 onClick={() => handleConnect('linkedin')}
                             >
-                                {org?.integrations.linkedin_posting ? 'Déconnecter' : 'Connecter'}
+                                {isConnected('linkedin') ? 'Reconnecter' : 'Connecter'}
                             </Button>
                         </CardContent>
                     </Card>
