@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
 import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select, ProLock } from '../components/ui';
-import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star, Share2 } from 'lucide-react';
+import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star, Share2, Rocket } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -197,7 +197,7 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                     <option value="auto_reply">Répondre automatiquement (Auto-pilot)</option>
                                     <option value="email_alert">M'envoyer une alerte email</option>
                                     <option value="add_tag">Ajouter un tag interne</option>
-                                    <option value="post_social">Publier sur les réseaux sociaux</option>
+                                    <option value="post_social">Publier sur les réseaux sociaux (Booster)</option>
                                 </Select>
                                 <button onClick={() => handleRemoveAction(action.id)} className="text-slate-400 hover:text-red-500">
                                     <Trash2 className="h-4 w-4" />
@@ -259,22 +259,41 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                 )}
 
                                 {action.type === 'post_social' && (
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-2">Plateformes cibles</label>
-                                        <div className="flex gap-4">
-                                            {['facebook', 'instagram', 'linkedin'].map(p => (
-                                                <label key={p} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded border border-indigo-100 hover:border-indigo-300 transition-colors">
-                                                    <Toggle 
-                                                        checked={action.config[p] === true} 
-                                                        onChange={(v) => updateAction(action.id, 'config', { ...action.config, [p]: v })} 
-                                                    />
-                                                    <span className="capitalize text-sm font-medium">{p}</span>
-                                                </label>
-                                            ))}
+                                    <div className="space-y-4">
+                                        <div className="flex items-start gap-2 bg-purple-50 p-3 rounded-lg border border-purple-100 text-purple-800 text-xs mb-3">
+                                            <Rocket className="h-4 w-4 shrink-0 mt-0.5" />
+                                            <div>
+                                                <strong>Auto-Post IA :</strong> Le nouveau moteur "Social Booster" générera automatiquement un visuel et une légende pour vos réseaux.
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-slate-400 mt-2">
-                                            L'IA générera automatiquement un visuel et une légende optimisée pour chaque réseau.
-                                        </p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 mb-2">Plateformes cibles</label>
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {['facebook', 'instagram', 'linkedin'].map(p => (
+                                                        <label key={p} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded border border-indigo-100 hover:border-indigo-300 transition-colors">
+                                                            <Toggle 
+                                                                checked={action.config[p] === true} 
+                                                                onChange={(v) => updateAction(action.id, 'config', { ...action.config, [p]: v })} 
+                                                            />
+                                                            <span className="capitalize text-sm font-medium">{p}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 mb-2">Style du post</label>
+                                                <Select 
+                                                    value={action.config.tone || 'enthusiastic'} 
+                                                    onChange={(e) => updateAction(action.id, 'config', { ...action.config, tone: e.target.value })}
+                                                >
+                                                    <option value="enthusiastic">Enthousiaste & Emojis 🎉</option>
+                                                    <option value="professional">Professionnel & Sobre 👔</option>
+                                                    <option value="grateful">Reconnaissant & Chaleureux 🙏</option>
+                                                    <option value="humorous">Décalé & Humour 😂</option>
+                                                </Select>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -387,7 +406,7 @@ export const AutomationPage = () => {
           color: "bg-pink-500",
           conditions: [{ id: generateId(), field: 'rating', operator: 'equals', value: 5 }],
           actions: [
-              { id: generateId(), type: 'post_social', config: { instagram: true, facebook: true } },
+              { id: generateId(), type: 'post_social', config: { instagram: true, facebook: true, tone: 'enthusiastic' } },
               { id: generateId(), type: 'auto_reply', config: { tone: 'enthusiastic' } }
           ]
       },
@@ -461,7 +480,7 @@ export const AutomationPage = () => {
               Automatisation
               <Badge variant="pro">GROWTH</Badge>
           </h1>
-          <p className="text-slate-500">Gagnez du temps avec des scénarios intelligents.</p>
+          <p className="text-slate-500">Gagnez du temps avec des scénarios intelligents (y compris Autopost IA).</p>
         </div>
         <div className="flex gap-3">
             <Button variant="secondary" icon={Play} onClick={handleRunManually} isLoading={isRunning}>Tester</Button>
@@ -508,7 +527,7 @@ export const AutomationPage = () => {
                                   <ArrowRight className="h-3 w-3 text-slate-300 self-center" />
                                   {wf.actions.map((a, i) => (
                                       <Badge key={i} variant="default" className="text-[10px]">
-                                          {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type === 'post_social' ? 'Publication Sociale' : a.type}
+                                          {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type === 'post_social' ? 'Booster Social' : a.type}
                                       </Badge>
                                   ))}
                               </div>

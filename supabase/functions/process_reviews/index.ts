@@ -152,10 +152,12 @@ Deno.serve(async (req: Request) => {
                         
                         if (platforms.length > 0) {
                             try {
+                                const tone = action.config?.tone || 'Enthusiastic, Grateful';
                                 const captionPrompt = `
                                     Act as a Social Media Manager. Write a post caption to celebrate this 5-star customer review:
                                     "${review.text}" by ${review.author_name}.
-                                    Tone: Enthusiastic, Grateful. 
+                                    
+                                    Tone: ${tone}.
                                     Language: French.
                                     Include 3 relevant emojis and hashtags.
                                     No quotes.
@@ -181,7 +183,7 @@ Deno.serve(async (req: Request) => {
                                         review_id: review.id,
                                         image_url: 'https://placehold.co/1080x1080/4f46e5/ffffff?text=Avis+Client+5+Etoiles' // Placeholder until image gen integration
                                     });
-                                    console.log(`[Social] Scheduled post for ${platform}`);
+                                    console.log(`[Social] Scheduled post for ${platform} with tone: ${tone}`);
                                 }
                             } catch (err) {
                                 console.error("Social Auto-Post Error", err);
