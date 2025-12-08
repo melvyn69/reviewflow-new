@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle, useNavigate } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Linkedin } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Linkedin, Star } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
@@ -186,7 +187,7 @@ export const CollectPage = () => {
       try {
           const dataUrl = await toPng(printRef.current, { 
               cacheBust: true, 
-              pixelRatio: 4,
+              pixelRatio: 4, 
               backgroundColor: supportType === 'sticker' ? 'transparent' : '#ffffff' // Transparent for stickers
           });
           
@@ -384,7 +385,7 @@ export const CollectPage = () => {
   };
 
   if (!org) {
-      if (loadingError) return <div className="p-12 text-center text-slate-500">Erreur de chargement. <Button variant="link" onClick={useDemoData}>Utiliser Démo</Button></div>;
+      if (loadingError) return <div className="p-12 text-center text-slate-500">Erreur de chargement. <Button variant="ghost" onClick={useDemoData}>Utiliser Démo</Button></div>;
       return <div className="p-12 text-center text-slate-500">Chargement...</div>;
   }
 

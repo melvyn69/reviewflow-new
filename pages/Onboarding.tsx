@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from '../components/ui';
 import { api } from '../lib/api';
 import { Button, Input, Select, useToast, Card } from '../components/ui';
-import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut } from 'lucide-react';
+import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut, Link as LinkIcon } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 
 const GoogleIcon = () => (
@@ -25,6 +25,7 @@ export const OnboardingPage = () => {
     // Data State
     const [companyName, setCompanyName] = useState('');
     const [industry, setIndustry] = useState('restaurant');
+    const [googleUrl, setGoogleUrl] = useState('');
     const [googleConnected, setGoogleConnected] = useState(false);
     const [tone, setTone] = useState('professionnel');
     const [style, setStyle] = useState('formal');
@@ -34,14 +35,31 @@ export const OnboardingPage = () => {
         try {
             // Save current step data
             if (step === 1) {
+                if (!companyName || !googleUrl) {
+                    toast.error("Veuillez remplir tous les champs obligatoires.");
+                    setLoading(false);
+                    return;
+                }
+
                 // Check if user already has an org
-                const currentOrg = await api.organization.get();
+                let currentOrg = await api.organization.get();
                 if (currentOrg) {
                     await api.organization.update({ name: companyName, industry: industry as any });
                 } else {
                     // Create new org if none exists
-                    await api.organization.create(companyName, industry);
+                    currentOrg = await api.organization.create(companyName, industry);
                 }
+
+                // Create default location with GMB Link immediately
+                if (currentOrg) {
+                    await api.locations.create({
+                        name: companyName,
+                        google_review_url: googleUrl,
+                        city: "Siège", // Default city
+                        country: "France"
+                    });
+                }
+
             } else if (step === 3) {
                 await api.organization.update({ 
                     brand: { 
@@ -115,13 +133,26 @@ export const OnboardingPage = () => {
                     {step === 1 && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-8">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement <span className="text-red-500">*</span></label>
                                 <Input 
                                     placeholder="Ex: Le Petit Bistro" 
                                     value={companyName}
                                     onChange={e => setCompanyName(e.target.value)}
                                     autoFocus
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Lien Google Avis (URL) <span className="text-red-500">*</span></label>
+                                <div className="relative">
+                                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <Input 
+                                        placeholder="https://g.page/r/..." 
+                                        className="pl-9"
+                                        value={googleUrl}
+                                        onChange={e => setGoogleUrl(e.target.value)}
+                                    />
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1">Lien direct vers votre page d'avis Google.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Secteur d'activité</label>
@@ -145,8 +176,8 @@ export const OnboardingPage = () => {
                                         <GoogleIcon />
                                     </div>
                                     <div>
-                                        <div className="font-bold text-slate-900 text-sm">Google Business</div>
-                                        <div className="text-xs text-slate-500">{googleConnected ? 'Connecté avec succès' : 'Sync avis & réponses'}</div>
+                                        <div className="font-bold text-slate-900 text-sm">Google Business (Optionnel)</div>
+                                        <div className="text-xs text-slate-500">{googleConnected ? 'Connecté avec succès' : 'Sync auto des réponses'}</div>
                                     </div>
                                 </div>
                                 {googleConnected ? (
@@ -202,7 +233,7 @@ export const OnboardingPage = () => {
                         ) : (
                             <div></div>
                         )}
-                        <Button onClick={handleNext} isLoading={loading} disabled={step === 1 && !companyName}>
+                        <Button onClick={handleNext} isLoading={loading} disabled={step === 1 && (!companyName || !googleUrl)}>
                             {step === 3 ? t('onboarding.finish') : t('onboarding.next')} <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     </div>

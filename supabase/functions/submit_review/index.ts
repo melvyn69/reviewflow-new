@@ -34,6 +34,14 @@ Deno.serve(async (req: Request) => {
       )
     }
 
+    // Validation du feedback obligatoire
+    if (!feedback || feedback.trim() === '') {
+        return new Response(
+            JSON.stringify({ error: 'Le message est obligatoire.' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+    }
+
     // --- STAFF ATTRIBUTION LOGIC ---
     let staffAttributed = null
     let internalNoteText = ''
