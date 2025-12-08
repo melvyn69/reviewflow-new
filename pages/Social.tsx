@@ -61,6 +61,7 @@ export const SocialPage = () => {
     const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [scheduleDate, setScheduleDate] = useState('');
     const [scheduleTime, setScheduleTime] = useState('10:00');
+    const [scheduling, setScheduling] = useState(false);
     
     // Responsive State
     const [scale, setScale] = useState(0.8);
@@ -169,26 +170,37 @@ export const SocialPage = () => {
 
     const handleSchedule = async () => {
         if (!scheduleDate || !scheduleTime || !selectedReview) return;
+        setScheduling(true);
         
-        const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-        
-        await api.social.schedulePost({
-            platform: 'instagram', // Default for now
-            content: caption,
-            scheduled_date: scheduledDateTime,
-            review_id: selectedReview.id
-        });
-        
-        toast.success("Post planifié avec succès !");
-        setShowScheduleModal(false);
-        loadData();
-        setActiveTab('calendar');
+        try {
+            const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+            
+            const newPost = await api.social.schedulePost({
+                platform: 'instagram', // Default for now
+                content: caption,
+                scheduled_date: scheduledDateTime,
+                review_id: selectedReview.id
+            });
+            
+            // Optimistic update for instant feedback
+            setPosts(prev => [...prev, newPost]);
+            
+            toast.success("Post planifié avec succès !");
+            setShowScheduleModal(false);
+            setActiveTab('calendar');
+        } catch (e: any) {
+            toast.error("Erreur lors de la planification: " + e.message);
+        } finally {
+            setScheduling(false);
+        }
     };
 
     const handleDeletePost = async (id: string) => {
         if(confirm("Supprimer ce post ?")) {
             await api.social.deletePost(id);
-            loadData();
+            // Optimistic removal
+            setPosts(prev => prev.filter(p => p.id !== id));
+            toast.success("Post supprimé");
         }
     };
 
@@ -559,7 +571,7 @@ export const SocialPage = () => {
                             </div>
                             <div className="flex gap-2 pt-2">
                                 <Button variant="ghost" className="flex-1" onClick={() => setShowScheduleModal(false)}>Annuler</Button>
-                                <Button className="flex-1" onClick={handleSchedule} disabled={!scheduleDate || !scheduleTime}>Confirmer</Button>
+                                <Button className="flex-1" onClick={handleSchedule} disabled={!scheduleDate || !scheduleTime || scheduling} isLoading={scheduling}>Confirmer</Button>
                             </div>
                         </CardContent>
                     </Card>

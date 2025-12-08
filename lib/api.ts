@@ -1163,10 +1163,24 @@ export const api = {
           const { data } = await supabase.from('social_posts').select('*');
           return data || [];
       },
-      schedulePost: async (post: Partial<SocialPost>) => {
-          if (isDemoMode()) return;
+      schedulePost: async (post: Partial<SocialPost>): Promise<SocialPost> => {
+          if (isDemoMode()) {
+              return {
+                  id: 'post-' + Date.now(),
+                  ...post,
+                  status: 'scheduled'
+              } as SocialPost;
+          }
           const org = await api.organization.get();
-          await supabase!.from('social_posts').insert({ ...post, organization_id: org?.id, status: 'scheduled' });
+          // Important: .select().single() to return the created data
+          const { data, error } = await supabase!.from('social_posts').insert({
+              ...post,
+              organization_id: org?.id,
+              status: 'scheduled'
+          }).select().single();
+          
+          if (error) throw error;
+          return data;
       },
       deletePost: async (id: string) => {
           if (isDemoMode()) return;
