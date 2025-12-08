@@ -1,4 +1,5 @@
 
+
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, 
@@ -200,10 +201,10 @@ export const api = {
             const org = await api.organization.get();
             await supabase!.from('organizations').update({ subscription_plan: plan }).eq('id', org?.id);
         },
-        addStaffMember: async (name: string, role: string) => {
+        addStaffMember: async (name: string, role: string, email?: string) => {
             if (isDemoMode()) return;
             const org = await api.organization.get();
-            await supabase!.from('staff_members').insert({ name, role, organization_id: org?.id });
+            await supabase!.from('staff_members').insert({ name, role, email, organization_id: org?.id });
         },
         removeStaffMember: async (id: string) => {
             if (isDemoMode()) return;

@@ -20,11 +20,13 @@ import {
     Trophy,
     Filter,
     FileText,
-    Download,
+    Download, 
     MapPin,
     Globe,
     Medal,
-    RefreshCw
+    RefreshCw,
+    Lightbulb,
+    Shield
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';

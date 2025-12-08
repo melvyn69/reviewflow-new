@@ -1,4 +1,5 @@
 
+
 export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
@@ -105,6 +106,7 @@ export interface SavedReply {
 export interface StaffMember {
     id: string;
     name: string;
+    email?: string;
     role: string;
     reviews_count: number;
     average_rating: number;
