@@ -1,5 +1,4 @@
-
-import { Review, User, Organization, AnalyticsSummary, WorkflowRule, ReportConfig, Competitor } from '../types';
+import { Review, User, Organization, AnalyticsSummary, WorkflowRule, ReportConfig, Competitor, SocialPost } from '../types';
 
 // --- INITIAL SEED DATA ---
 
@@ -285,6 +284,27 @@ export const INITIAL_REPORTS: ReportConfig[] = [
     enabled: true,
     last_sent: '2023-10-01'
   }
+];
+
+export const INITIAL_SOCIAL_POSTS: SocialPost[] = [
+    {
+        id: 'sp1',
+        location_id: 'loc1',
+        platform: 'instagram',
+        content: 'Super avis de notre cliente ! Merci à toute l\'équipe.',
+        image_url: 'https://images.unsplash.com/photo-1556742049-0cfed4f7a07d',
+        scheduled_date: new Date(Date.now() + 86400000).toISOString(),
+        status: 'scheduled'
+    },
+    {
+        id: 'sp2',
+        location_id: 'loc1',
+        platform: 'facebook',
+        content: 'Nous sommes ouverts ce dimanche ! Venez profiter du soleil.',
+        scheduled_date: new Date(Date.now() - 172800000).toISOString(),
+        status: 'published',
+        published_url: 'https://facebook.com'
+    }
 ];
 
 export const db = {};

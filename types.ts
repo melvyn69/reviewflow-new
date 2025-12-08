@@ -3,9 +3,12 @@ export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
     id: string;
+    location_id: string;
     platform: SocialPlatform;
     content: string;
-    image_url?: string;
+    image_url?: string; // Legacy or generated
+    media_files?: File[]; // For upload handling
+    media_urls?: string[]; // For storage
     scheduled_date: string; // ISO String
     status: 'scheduled' | 'published' | 'failed';
     review_id?: string; // Original review
@@ -15,6 +18,7 @@ export interface SocialPost {
 
 export interface SocialTemplate {
     id: string;
+    location_id?: string; // Optional (global vs local)
     name: string;
     style: {
         bg: string;
@@ -22,6 +26,15 @@ export interface SocialTemplate {
         font: string;
     };
     tags: string[];
+}
+
+export interface SocialLog {
+    id: string;
+    post_id: string;
+    platform: SocialPlatform;
+    status: 'success' | 'failure';
+    message: string;
+    created_at: string;
 }
 
 export interface AppNotification {
@@ -366,6 +379,7 @@ export interface Customer {
 
 export interface SocialAccount {
     id: string;
+    location_id?: string; // Linked to specific location
     platform: SocialPlatform;
     name: string;
     avatar_url?: string;

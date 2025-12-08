@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, 
@@ -7,7 +6,8 @@ import {
     INITIAL_ANALYTICS, 
     INITIAL_WORKFLOWS, 
     INITIAL_REPORTS, 
-    INITIAL_COMPETITORS
+    INITIAL_COMPETITORS,
+    INITIAL_SOCIAL_POSTS
 } from './db';
 import { 
     DEMO_REVIEWS, 
@@ -37,7 +37,8 @@ import {
     SavedReply,
     BrandSettings,
     NotificationSettings,
-    SocialTemplate
+    SocialTemplate,
+    SocialLog
 } from '../types';
 
 const isDemoMode = () => {
@@ -45,10 +46,15 @@ const isDemoMode = () => {
 };
 
 // --- MOCK STORAGE FOR DEMO MODE ---
-// Simple in-memory storage for demo session (resets on reload)
 let mockReviews = [...DEMO_REVIEWS, ...INITIAL_REVIEWS];
-let mockPosts: SocialPost[] = [];
-let mockCustomers: Customer[] = [];
+let mockPosts: SocialPost[] = INITIAL_SOCIAL_POSTS ? [...INITIAL_SOCIAL_POSTS] : [];
+let mockLogs: SocialLog[] = [
+    { id: '1', post_id: 'sp3', platform: 'instagram', status: 'success', message: 'Published successfully', created_at: new Date(Date.now() - 86400000).toISOString() }
+];
+let mockCustomers: Customer[] = [
+    { id: 'cust1', name: 'Jean Dupont', source: 'Google', stage: 'new', average_rating: 4.5, total_reviews: 2, last_interaction: new Date().toISOString(), status: 'promoter', ltv_estimate: 150 },
+    { id: 'cust2', name: 'Marie Martin', source: 'Facebook', stage: 'risk', average_rating: 2.0, total_reviews: 1, last_interaction: new Date(Date.now() - 1000000000).toISOString(), status: 'detractor', ltv_estimate: 45 }
+];
 
 export const api = {
     auth: {
@@ -88,7 +94,6 @@ export const api = {
         },
         connectGoogleBusiness: async () => {
             if (isDemoMode()) return true;
-            // In real app, this redirects to OAuth
             window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${import.meta.env.VITE_GOOGLE_CLIENT_ID}&redirect_uri=${window.location.origin}/auth/callback&response_type=code&scope=https://www.googleapis.com/auth/business.manage`;
         },
         updateProfile: async (data: Partial<User> & { password?: string }) => {
@@ -99,7 +104,7 @@ export const api = {
             if (data.password) {
                 const { error } = await supabase!.auth.updateUser({ password: data.password });
                 if (error) throw error;
-                delete data.password; // Don't send to public profile table
+                delete data.password; 
             }
 
             if (Object.keys(data).length > 0) {
@@ -163,7 +168,7 @@ export const api = {
                 if (user?.organization_id) {
                     await supabase.from('organizations').update({
                         google_refresh_token: session.provider_refresh_token,
-                        integrations: { google: true } // Merge logic needed in real DB
+                        integrations: { google: true }
                     }).eq('id', user.organization_id);
                     return true;
                 }
@@ -187,7 +192,7 @@ export const api = {
             await supabase!.functions.invoke('manage_org_settings', { body: { action: 'delete_webhook', data: { id } } });
         },
         testWebhook: async (id: string) => {
-            return true; // Mock
+            return true;
         },
         simulatePlanChange: async (plan: string) => {
             if (isDemoMode()) return;
@@ -212,7 +217,7 @@ export const api = {
             if (isDemoMode()) {
                 let res = mockReviews;
                 if (filters.status) res = res.filter(r => r.status === filters.status);
-                if (filters.rating) res = res.filter(r => r.rating === parseInt(filters.rating.replace(' ★', '')));
+                if (filters.rating) res = res.filter(r => r.rating === parseInt(filters.rating.toString().replace(' ★', '')));
                 return res;
             }
             if (!supabase) return [];
@@ -239,7 +244,6 @@ export const api = {
                 mockReviews = mockReviews.map(r => r.id === reviewId ? { ...r, status: 'sent', posted_reply: text, replied_at: new Date().toISOString() } : r);
                 return;
             }
-            // If connected to Google, post to Google
             const { error } = await supabase!.functions.invoke('post_google_reply', { body: { reviewId, replyText: text } });
             if (error) throw error;
         },
@@ -257,16 +261,27 @@ export const api = {
             if (isDemoMode()) return { id: Date.now().toString(), text, author_name: 'Moi', created_at: new Date().toISOString() };
             const { data: { user } } = await supabase!.auth.getUser();
             const note = { id: crypto.randomUUID(), text, author_name: user?.user_metadata?.name || 'User', created_at: new Date().toISOString() };
-            // In real DB, we would append to a JSONB array or a separate table.
-            // Using RPC or array append approach:
-            // await supabase.rpc('append_internal_note', { review_id: reviewId, note });
             return note;
         },
         addTag: async (reviewId: string, tag: string) => {
-            // Implementation depends on DB structure
+            if (isDemoMode()) {
+                mockReviews = mockReviews.map(r => {
+                    if (r.id === reviewId) {
+                        return { ...r, tags: [...(r.tags || []), tag] };
+                    }
+                    return r;
+                });
+            }
         },
         removeTag: async (reviewId: string, tag: string) => {
-            // Implementation depends on DB structure
+            if (isDemoMode()) {
+                mockReviews = mockReviews.map(r => {
+                    if (r.id === reviewId) {
+                        return { ...r, tags: r.tags?.filter(t => t !== tag) || [] };
+                    }
+                    return r;
+                });
+            }
         },
         getTimeline: (review: Review): ReviewTimelineEvent[] => {
             const events: ReviewTimelineEvent[] = [
@@ -284,7 +299,6 @@ export const api = {
             return events.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         },
         uploadCsv: async (file: File, locationId: string) => {
-            // Mock upload
             return 50;
         },
         subscribe: (callback: (payload: any) => void) => {
@@ -295,7 +309,6 @@ export const api = {
     analytics: {
         getOverview: async (period = '30j'): Promise<AnalyticsSummary> => {
             if (isDemoMode()) return DEMO_STATS;
-            // Real implementation would calculate aggregates via RPC or Edge Function
             return DEMO_STATS; 
         }
     },
@@ -402,7 +415,6 @@ export const api = {
     },
     global: {
         search: async (term: string) => {
-            // Mock search
             return [];
         }
     },
@@ -431,67 +443,56 @@ export const api = {
             return data;
         },
         previewBrandVoice: async (settings: BrandSettings, sampleReview: any) => {
-            // Reuse generate reply logic with specific settings
             return api.ai.generateReply(sampleReview, { tone: settings.tone });
         }
     },
     social: {
-        getPosts: async (): Promise<SocialPost[]> => {
+        getPosts: async (locationId?: string): Promise<SocialPost[]> => {
             if (isDemoMode()) {
-                const now = new Date();
-                return [
-                    { 
-                        id: 'sp1', 
-                        platform: 'instagram', 
-                        content: 'Découvrez notre nouveau menu ! 🥗', 
-                        scheduled_date: new Date(now.getTime() + 86400000).toISOString(), 
-                        status: 'scheduled',
-                        tags: ['Promotion', 'Produit']
-                    },
-                    { 
-                        id: 'sp2', 
-                        platform: 'facebook', 
-                        content: 'Soirée spéciale Jazz ce vendredi 🎷', 
-                        scheduled_date: new Date(now.getTime() + 172800000).toISOString(), 
-                        status: 'scheduled',
-                        tags: ['Évènement']
-                    },
-                    // Mock Published History
-                    {
-                        id: 'sp3',
-                        platform: 'instagram',
-                        content: 'Merci à tous pour vos retours ! ❤️',
-                        scheduled_date: new Date(now.getTime() - 86400000).toISOString(),
-                        status: 'published',
-                        published_url: 'https://instagram.com',
-                        tags: ['Remerciement']
-                    }
-                ];
+                let res = mockPosts;
+                if (locationId) res = res.filter(p => p.location_id === locationId);
+                return res;
             }
             const org = await api.organization.get();
-            const { data } = await supabase!.from('social_posts').select('*').eq('organization_id', org?.id);
+            let query = supabase!.from('social_posts').select('*').eq('organization_id', org?.id);
+            if (locationId) query = query.eq('location_id', locationId);
+            const { data } = await query;
             return data || [];
         },
         schedulePost: async (post: Partial<SocialPost>): Promise<SocialPost> => {
-            if (isDemoMode()) return { id: 'new-' + Date.now(), ...post, status: 'scheduled' } as SocialPost;
+            if (isDemoMode()) {
+                const newPost = { id: 'new-' + Date.now(), ...post, status: 'scheduled' } as SocialPost;
+                mockPosts.push(newPost);
+                return newPost;
+            }
             const org = await api.organization.get();
             const { data, error } = await supabase!.from('social_posts').insert({ ...post, organization_id: org?.id, status: 'scheduled' }).select().single();
             if (error) throw error;
             return data;
         },
         updatePost: async (id: string, post: Partial<SocialPost>): Promise<SocialPost> => {
-            if (isDemoMode()) return { id, ...post } as SocialPost; // Mock update
+            if (isDemoMode()) {
+                const updated = { id, ...post } as SocialPost;
+                mockPosts = mockPosts.map(p => p.id === id ? { ...p, ...post } : p);
+                return updated;
+            }
             const { data, error } = await supabase!.from('social_posts').update(post).eq('id', id).select().single();
             if (error) throw error;
             return data;
         },
         deletePost: async (id: string) => {
+            if (isDemoMode()) {
+                mockPosts = mockPosts.filter(p => p.id !== id);
+                return;
+            }
             await supabase!.from('social_posts').delete().eq('id', id);
         },
-        getAccounts: async (): Promise<SocialAccount[]> => {
-            if (isDemoMode()) return [{ id: '1', platform: 'instagram', name: 'Demo Account', connected_at: new Date().toISOString() }];
+        getAccounts: async (locationId?: string): Promise<SocialAccount[]> => {
+            if (isDemoMode()) return [{ id: '1', platform: 'instagram', name: 'Demo Account', connected_at: new Date().toISOString(), location_id: locationId }];
             const org = await api.organization.get();
-            const { data } = await supabase!.from('social_accounts').select('*').eq('organization_id', org?.id);
+            let query = supabase!.from('social_accounts').select('*').eq('organization_id', org?.id);
+            if (locationId) query = query.eq('location_id', locationId);
+            const { data } = await query;
             return data || [];
         },
         handleCallback: async (platform: string, code: string) => {
@@ -501,15 +502,45 @@ export const api = {
             if (error) throw error;
         },
         connectAccount: async (platform: string) => {
-            // Mock logic for demo, real would redirect to specific OAuth URL
             if (platform === 'facebook') window.location.href = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${import.meta.env.VITE_FACEBOOK_CLIENT_ID}&redirect_uri=${window.location.origin}/social&state=${btoa(JSON.stringify({platform: 'facebook'}))}&scope=pages_show_list,pages_read_engagement,pages_manage_posts`;
-            // Add others...
         },
-        getTemplates: async (): Promise<SocialTemplate[]> => {
+        getTemplates: async (locationId?: string): Promise<SocialTemplate[]> => {
             return []; // To be implemented with DB
         },
         saveTemplate: async (template: Partial<SocialTemplate>) => {
-            // Just local mock or DB insert
+            // Local mock or DB
+        },
+        getLogs: async (): Promise<SocialLog[]> => {
+            if (isDemoMode()) return mockLogs;
+            return mockLogs; 
+        },
+        publishNow: async (postId: string) => {
+            if (isDemoMode()) {
+                const log: SocialLog = { id: 'new-log', post_id: postId, platform: 'instagram', status: 'success', message: 'Published successfully (Demo)', created_at: new Date().toISOString() };
+                mockLogs.unshift(log);
+                return { success: true };
+            }
+            const { data, error } = await supabase!.functions.invoke('publish_social', {
+                body: { postId }
+            });
+            if (error) throw error;
+            return data;
+        },
+        uploadMedia: async (file: File): Promise<string> => {
+            if (isDemoMode()) {
+                // Return a fake object URL for preview
+                return URL.createObjectURL(file);
+            }
+            // Real Supabase Storage upload
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `social-media/${fileName}`;
+            
+            const { error: uploadError } = await supabase!.storage.from('assets').upload(filePath, file);
+            if (uploadError) throw uploadError;
+            
+            const { data } = supabase!.storage.from('assets').getPublicUrl(filePath);
+            return data.publicUrl;
         }
     },
     campaigns: {
@@ -529,7 +560,6 @@ export const api = {
             return data;
         },
         getActiveOffer: async (locationId: string, rating: number): Promise<Offer | null> => {
-            // Mock logic
             if (rating >= 5) return { 
                 id: 'off1', 
                 title: 'Café Offert', 
@@ -589,50 +619,42 @@ export const api = {
             return data;
         }
     },
-    activity: {
-        getRecent: async () => {
-            return [
-                { id: 1, type: 'review', text: 'Nouvel avis 5 étoiles reçu', location: 'Paris', time: 'Il y a 2 min' },
-                { id: 2, type: 'alert', text: 'Réponse approuvée automatiquement', location: 'Lyon', time: 'Il y a 1h' }
-            ];
-        }
-    },
-    billing: {
-        getInvoices: async () => {
+    google: {
+        fetchAllGoogleLocations: async () => {
             if (isDemoMode()) return [];
-            const { data } = await supabase!.functions.invoke('get_invoices');
-            return data?.invoices || [];
+            // Requires accessToken, usually handled via backend or client-side context. 
+            // Assuming backend proxy or using stored token via edge function
+            const { data, error } = await supabase!.functions.invoke('fetch_google_locations');
+            if (error) throw error;
+            return data;
         },
-        createCheckoutSession: async (plan: string) => {
-            if (isDemoMode()) return '#';
-            const { data } = await supabase!.functions.invoke('create_checkout', { body: { plan } });
-            return data.url;
-        },
-        createPortalSession: async () => {
-            if (isDemoMode()) return '#';
-            const { data } = await supabase!.functions.invoke('create_portal');
-            return data.url;
+        syncReviewsForLocation: async (locationId: string, resourceName: string) => {
+            if (isDemoMode()) return 5;
+            const org = await api.organization.get();
+            const { data, error } = await supabase!.functions.invoke('fetch_google_reviews', {
+                body: { locationId, googleLocationName: resourceName, organizationId: org?.id }
+            });
+            if (error) throw error;
+            return data.count;
         }
     },
-    onboarding: {
-        checkStatus: async (): Promise<SetupStatus> => {
-            // Logic to check DB fields
-            return {
-                completionPercentage: 33,
-                googleConnected: false,
-                brandVoiceConfigured: false,
-                firstReviewReplied: false
-            };
-        }
-    },
-    admin: {
-        getStats: async () => {
-            return { mrr: '12 450 €', active_tenants: 142, total_reviews_processed: 45000, tenants: [] };
+    system: {
+        checkHealth: async () => {
+            if (!supabase) return { db: false, latency: 0 };
+            const start = Date.now();
+            const { error } = await supabase.from('users').select('count').limit(1).single();
+            return { db: !error, latency: Date.now() - start };
         }
     },
     company: {
         search: async (query: string) => {
-            return []; // Connect to Sirene API or similar
+            // Mock API call to sirene or similar
+            if (isDemoMode()) {
+                return [
+                    { legal_name: query + ' SAS', siret: '12345678900012', address: '10 Rue de Paris' }
+                ];
+            }
+            return []; // Placeholder for real implementation
         }
     },
     locations: {
@@ -646,58 +668,90 @@ export const api = {
             await supabase!.from('locations').update(data).eq('id', id);
         },
         delete: async (id: string) => {
+            if (isDemoMode()) return;
             await supabase!.from('locations').delete().eq('id', id);
         },
         importFromGoogle: async () => {
-            // Trigger cloud function or local sync
-            const { data } = await supabase!.functions.invoke('cron_sync_reviews');
-            return data?.report?.length || 0;
+            if (isDemoMode()) return 3;
+            const { data, error } = await supabase!.functions.invoke('fetch_google_locations');
+            if (error) throw error;
+            // logic to match and save would typically be here or inside function, simplifying to return count
+            return data?.length || 0; 
+        }
+    },
+    activity: {
+        getRecent: async () => {
+            // Mock or DB call
+            return [
+                { id: '1', type: 'review', text: 'Nouvel avis 5 étoiles reçu', location: 'Paris', time: '2 min' },
+                { id: '2', type: 'alert', text: 'Avis négatif détecté', location: 'Lyon', time: '1h' },
+                { id: '3', type: 'reply', text: 'Réponse automatique envoyée', location: 'Paris', time: '3h' }
+            ];
+        }
+    },
+    onboarding: {
+        checkStatus: async (): Promise<SetupStatus> => {
+            if (isDemoMode()) return { completionPercentage: 30, googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false };
+            const org = await api.organization.get();
+            return {
+                completionPercentage: org?.integrations.google ? 100 : 30,
+                googleConnected: !!org?.integrations.google,
+                brandVoiceConfigured: !!org?.brand?.tone,
+                firstReviewReplied: false // Placeholder, check reviews table in real app
+            };
+        }
+    },
+    seedCloudDatabase: async () => {
+        // Demo function to populate empty DB
+        console.log("Seeding database...");
+    },
+    billing: {
+        getInvoices: async () => {
+            if (isDemoMode()) return [];
+            const { data, error } = await supabase!.functions.invoke('get_invoices');
+            if (error) throw error;
+            return data.invoices;
+        },
+        createCheckoutSession: async (plan: string) => {
+            if (isDemoMode()) return 'https://checkout.stripe.com/demo';
+            const { data, error } = await supabase!.functions.invoke('create_checkout', { body: { plan } });
+            if (error) throw error;
+            return data.url;
+        },
+        createPortalSession: async () => {
+            if (isDemoMode()) return 'https://billing.stripe.com/demo';
+            const { data, error } = await supabase!.functions.invoke('create_portal');
+            if (error) throw error;
+            return data.url;
         }
     },
     customers: {
         list: async (): Promise<Customer[]> => {
-            if (isDemoMode()) return [];
-            // This would likely come from a 'customers' table in real DB
-            return mockCustomers; 
+            if (isDemoMode()) return mockCustomers; 
+            const { data } = await supabase!.from('customers').select('*');
+            return data || [];
         },
         update: async (id: string, data: Partial<Customer>) => {
-            // Mock update
+            if (isDemoMode()) return;
+            await supabase!.from('customers').update(data).eq('id', id);
         },
         enrichProfile: async (id: string) => {
-            // Call AI
-            return { profile: "Client exigeant mais fidèle", suggestion: "Offrir un dessert" };
+            if (isDemoMode()) return { profile: "Client exigent", suggestion: "Offrir un dessert" };
+            const { data, error } = await supabase!.functions.invoke('ai_generate', { body: { task: 'enrich_customer', context: { customerId: id } } });
+            if (error) throw error;
+            return data.insight;
         }
     },
-    system: {
-        checkHealth: async () => {
-            const start = Date.now();
-            const { error } = await supabase!.from('users').select('count', { count: 'exact', head: true });
-            return { db: !error, latency: Date.now() - start };
-        }
-    },
-    seedCloudDatabase: async () => {
-        // Only for dev
-    },
-    google: {
-        fetchAllGoogleLocations: async () => {
-            if (isDemoMode()) return [];
-            const { data: { session } } = await supabase!.auth.getSession();
-            if (!session?.provider_token) throw new Error("No Google Token");
-            
-            const { data, error } = await supabase!.functions.invoke('fetch_google_locations', {
-                body: { accessToken: session.provider_token }
-            });
-            if (error) throw error;
-            return data;
-        },
-        syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
-            if (isDemoMode()) return 5;
-            const org = await api.organization.get();
-            const { data, error } = await supabase!.functions.invoke('fetch_google_reviews', {
-                body: { locationId, googleLocationName, organizationId: org?.id }
-            });
-            if (error) throw error;
-            return data.count;
+    admin: {
+        getStats: async () => {
+            return {
+                mrr: '12,450€',
+                active_tenants: 142,
+                total_reviews_processed: 45000,
+                tenants: [
+                    { id: '1', name: 'Org Demo', admin_email: 'demo@org.com', plan: 'pro', usage: 120, mrr: '89€' }
+                ]
+            };
         }
     }
 };

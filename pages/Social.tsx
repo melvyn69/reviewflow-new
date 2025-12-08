@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
-import { Review, Organization, SocialPost, SocialAccount } from '../types';
+import { Review, Organization, SocialPost, SocialAccount, SocialLog, Location } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Badge, ProLock, Select, Toggle } from '../components/ui';
 import { 
     Share2, 
@@ -30,12 +30,27 @@ import {
     ThumbsUp,
     MoreHorizontal,
     ExternalLink,
-    Pencil
+    Pencil,
+    History,
+    AlertCircle,
+    Play,
+    Store,
+    Image as ImageIcon,
+    UploadCloud,
+    Film,
+    ChevronRight,
+    ChevronLeft
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useLocation, useNavigate } from '../components/ui';
 
-// Template styles
+// --- HELPERS ---
+const FORMATS = [
+    { id: 'square', name: 'Carré (1:1)', width: 1080, height: 1080 },
+    { id: 'portrait', name: 'Story (9:16)', width: 1080, height: 1920 },
+    { id: 'landscape', name: 'LinkedIn (1.91:1)', width: 1200, height: 628 }
+];
+
 const TEMPLATES = [
     { id: 'minimal', name: 'Minimal', style: 'bg-white text-slate-900 border-2 border-slate-900' },
     { id: 'dark', name: 'Dark Mode', style: 'bg-slate-900 text-white border-2 border-slate-700' },
@@ -43,887 +58,532 @@ const TEMPLATES = [
     { id: 'paper', name: 'Papier', style: 'bg-[#fdfbf7] text-slate-800 shadow-xl' },
 ];
 
-const FORMATS = [
-    { id: 'square', name: 'Carré (1:1)', width: 1080, height: 1080 }, // HD Resolution
-    { id: 'portrait', name: 'Story (9:16)', width: 1080, height: 1920 },
-    { id: 'landscape', name: 'LinkedIn (1.91:1)', width: 1200, height: 628 }
-];
+// --- COMPONENT: DRAG & DROP UPLOADER ---
+const ImageUploader = ({ onUpload, currentImage }: { onUpload: (url: string) => void, currentImage?: string }) => {
+    const [dragging, setDragging] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-// --- SOCIAL PREVIEW COMPONENTS ---
-const SocialFeedPreview = ({ platform, children, caption, author, avatar }: { platform: string, children: React.ReactNode, caption: string, author: string, avatar: string }) => {
-    
-    if (platform === 'instagram') {
-        return (
-            <div className="w-full max-w-sm mx-auto bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-                {/* Header */}
-                <div className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-yellow-400 to-purple-600 p-[2px]">
-                            <div className="h-full w-full rounded-full bg-white p-[2px]">
-                                <img src={avatar} className="h-full w-full rounded-full object-cover bg-slate-200" />
-                            </div>
-                        </div>
-                        <span className="text-xs font-semibold text-slate-900">{author.toLowerCase().replace(/\s/g, '_')}</span>
-                    </div>
-                    <MoreHorizontal className="h-4 w-4 text-slate-600" />
-                </div>
-                {/* Content */}
-                <div className="w-full bg-slate-100 aspect-square overflow-hidden flex items-center justify-center">
-                    <div className="transform scale-[0.35] origin-center">{children}</div>
-                </div>
-                {/* Actions */}
-                <div className="p-3">
-                    <div className="flex justify-between mb-2">
-                        <div className="flex gap-4">
-                            <ThumbsUp className="h-6 w-6 text-slate-800" />
-                            <MessageSquare className="h-6 w-6 text-slate-800" />
-                            <Send className="h-6 w-6 text-slate-800 rotate-[-45deg] mb-1" />
-                        </div>
-                        <div className="text-slate-800">
-                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
-                        </div>
-                    </div>
-                    <div className="text-xs font-semibold mb-1">1 240 J'aime</div>
-                    <div className="text-xs text-slate-900">
-                        <span className="font-semibold mr-1">{author.toLowerCase().replace(/\s/g, '_')}</span>
-                        {caption}
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer.files[0];
+        if (file) await processFile(file);
+    };
 
-    if (platform === 'facebook' || platform === 'linkedin') {
-        return (
-            <div className="w-full max-w-md mx-auto bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-                {/* Header */}
-                <div className="p-3 flex items-start gap-3">
-                    <img src={avatar} className="h-10 w-10 rounded-full bg-slate-200" />
-                    <div>
-                        <div className="text-sm font-bold text-slate-900">{author}</div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                            2h • <Globe className="h-3 w-3" />
-                        </div>
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) await processFile(file);
+    };
+
+    const processFile = async (file: File) => {
+        if (!file.type.startsWith('image/')) return alert("Seules les images sont acceptées");
+        setUploading(true);
+        try {
+            // Compress client-side via canvas
+            const compressedFile = await compressImage(file);
+            // Upload
+            const url = await api.social.uploadMedia(compressedFile);
+            onUpload(url);
+        } catch (e) {
+            console.error(e);
+            alert("Erreur upload");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const compressImage = (file: File): Promise<File> => {
+        return new Promise((resolve) => {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const MAX_WIDTH = 1920;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height = Math.round((height * MAX_WIDTH) / width);
+                    width = MAX_WIDTH;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                ctx?.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const newFile = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+                        resolve(newFile);
+                    } else {
+                        resolve(file); // Fallback
+                    }
+                }, 'image/jpeg', 0.8);
+            };
+        });
+    };
+
+    return (
+        <div 
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer relative overflow-hidden ${dragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 hover:border-slate-400 hover:bg-slate-50'}`}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+        >
+            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+            
+            {uploading ? (
+                <div className="flex flex-col items-center">
+                    <div className="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full mb-2"></div>
+                    <p className="text-sm text-indigo-600 font-medium">Optimisation & Envoi...</p>
+                </div>
+            ) : currentImage ? (
+                <div className="relative group">
+                    <img src={currentImage} className="max-h-64 mx-auto rounded-lg shadow-sm" />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                        <p className="text-white font-bold">Changer l'image</p>
                     </div>
-                    <MoreHorizontal className="h-5 w-5 text-slate-500 ml-auto" />
                 </div>
-                {/* Caption */}
-                <div className="px-3 pb-3 text-sm text-slate-800 whitespace-pre-wrap">
-                    {caption}
+            ) : (
+                <div className="space-y-2">
+                    <div className="mx-auto w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
+                        <UploadCloud className="h-6 w-6" />
+                    </div>
+                    <h3 className="font-bold text-slate-700">Glissez une image ici</h3>
+                    <p className="text-xs text-slate-500">JPG, PNG jusqu'à 5MB</p>
                 </div>
-                {/* Content */}
-                <div className="w-full bg-slate-100 aspect-video overflow-hidden flex items-center justify-center">
-                     <div className="transform scale-[0.40] origin-center">{children}</div>
-                </div>
-                {/* Footer */}
-                <div className="p-3 border-t border-slate-100 flex justify-around text-slate-500">
-                    <div className="flex items-center gap-2 text-sm font-medium"><ThumbsUp className="h-4 w-4" /> J'aime</div>
-                    <div className="flex items-center gap-2 text-sm font-medium"><MessageSquare className="h-4 w-4" /> Commenter</div>
-                    <div className="flex items-center gap-2 text-sm font-medium"><Share2 className="h-4 w-4" /> Partager</div>
-                </div>
-            </div>
-        );
-    }
+            )}
+        </div>
+    );
+};
 
-    return <div>{children}</div>;
-}
-
-// Icon for Send
-const Send = ({ className }: { className?: string }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+// --- WIZARD COMPONENTS ---
+const WizardStep = ({ number, title, active, completed }: any) => (
+    <div className={`flex items-center gap-2 ${active ? 'text-indigo-600' : completed ? 'text-green-600' : 'text-slate-400'}`}>
+        <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm border-2 ${active ? 'border-indigo-600 bg-indigo-50' : completed ? 'border-green-600 bg-green-50' : 'border-slate-300'}`}>
+            {completed ? <CheckCircle2 className="h-5 w-5" /> : number}
+        </div>
+        <span className={`text-sm font-medium hidden sm:inline ${active ? 'font-bold' : ''}`}>{title}</span>
+        <div className={`h-0.5 w-8 bg-slate-200 mx-2 hidden md:block`}></div>
+    </div>
 );
-// Icon for Globe
-const Globe = ({ className }: { className?: string }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-);
 
+// --- MAIN PAGE ---
 export const SocialPage = () => {
-    const [reviews, setReviews] = useState<Review[]>([]);
-    const [selectedReview, setSelectedReview] = useState<Review | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [generating, setGenerating] = useState(false);
-    const [caption, setCaption] = useState('');
-    const [generatingCaption, setGeneratingCaption] = useState(false);
     const [org, setOrg] = useState<Organization | null>(null);
+    const [locations, setLocations] = useState<Location[]>([]);
+    const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
     const [activeTab, setActiveTab] = useState<'create' | 'calendar' | 'accounts'>('create');
-    const [posts, setPosts] = useState<SocialPost[]>([]);
-    const [connectedAccounts, setConnectedAccounts] = useState<SocialAccount[]>([]);
     
-    // Editor State
+    // Data Lists
+    const [posts, setPosts] = useState<SocialPost[]>([]);
+    const [reviews, setReviews] = useState<Review[]>([]);
+    
+    // Wizard State
+    const [currentStep, setCurrentStep] = useState(1);
+    const [wizardData, setWizardData] = useState({
+        content: '',
+        image_url: '',
+        platforms: { instagram: true, facebook: false, linkedin: false },
+        date: '',
+        time: '10:00'
+    });
+    
+    // Editor State (for Canvas generation)
+    const [selectedReview, setSelectedReview] = useState<Review | null>(null);
     const [template, setTemplate] = useState('minimal');
     const [format, setFormat] = useState('square');
-    const [showBrand, setShowBrand] = useState(true);
-    const [customColor, setCustomColor] = useState('#4f46e5');
-    const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
-    const [previewPlatform, setPreviewPlatform] = useState('instagram');
-    
-    // AI Settings
-    const [socialTone, setSocialTone] = useState('enthusiastic');
-    const [useHashtags, setUseHashtags] = useState(true);
-    
-    // Schedule Modal
-    const [showScheduleModal, setShowScheduleModal] = useState(false);
-    const [scheduleDate, setScheduleDate] = useState('');
-    const [scheduleTime, setScheduleTime] = useState('10:00');
-    const [scheduling, setScheduling] = useState(false);
-    const [editingPost, setEditingPost] = useState<SocialPost | null>(null);
-    
-    // Tags for new post
-    const [postTags, setPostTags] = useState<string[]>([]);
-    const [tagInput, setTagInput] = useState('');
-
-    // Filtering State (Calendar)
-    const [filterTag, setFilterTag] = useState('All');
-    const [searchQuery, setSearchQuery] = useState('');
-    
-    // Responsive State
-    const [scale, setScale] = useState(0.8);
-    
-    const toast = useToast();
     const canvasRef = useRef<HTMLDivElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
-    
-    const location = useLocation();
+    const [generatingCanvas, setGeneratingCanvas] = useState(false);
+
+    // Other state
+    const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+    const toast = useToast();
     const navigate = useNavigate();
 
     useEffect(() => {
         loadData();
-    }, []);
-
-    // ... (Keep existing useEffects for OAuth and Resize) ...
-    // OAuth Callback Handling
-    useEffect(() => {
-        const query = new URLSearchParams(location.search);
-        const code = query.get('code');
-        const stateStr = query.get('state');
-
-        if (code && stateStr) {
-            const handleAuth = async () => {
-                try {
-                    const state = JSON.parse(atob(stateStr));
-                    const platform = state.platform;
-                    
-                    toast.info(`Connexion ${platform} en cours...`);
-                    
-                    await api.social.handleCallback(platform, code);
-                    
-                    toast.success("Compte connecté avec succès !");
-                    // Clean URL
-                    window.history.replaceState({}, '', window.location.pathname);
-                    setActiveTab('accounts');
-                    loadData();
-                } catch (e: any) {
-                    toast.error("Erreur connexion: " + e.message);
-                }
-            };
-            handleAuth();
-        }
-    }, [location.search]);
-
-    // Responsive Scale Effect
-    useEffect(() => {
-        const handleResize = () => {
-            if (containerRef.current && activeTab === 'create' && viewMode === 'edit') {
-                const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
-                
-                const containerWidth = containerRef.current.clientWidth;
-                const containerHeight = containerRef.current.clientHeight;
-                
-                // Add padding to calculation to prevent edge touching
-                const padding = 40;
-                const availableWidth = containerWidth - padding;
-                const availableHeight = containerHeight - padding;
-                
-                const scaleX = availableWidth / currentFormat.width;
-                const scaleY = availableHeight / currentFormat.height;
-                
-                let newScale = Math.min(scaleX, scaleY);
-                if (newScale > 0.6) newScale = 0.6;
-                if (newScale < 0.15) newScale = 0.15;
-                
-                setScale(newScale);
-            }
-        };
-
-        window.addEventListener('resize', handleResize);
-        const timer = setTimeout(handleResize, 100);
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-            clearTimeout(timer);
-        };
-    }, [format, activeTab, template, viewMode]);
+    }, [selectedLocationId]);
 
     const loadData = async () => {
-        setLoading(true);
-        try {
-            const [reviewsData, organization, scheduledPosts, accounts] = await Promise.all([
-                api.reviews.list({ rating: 5 }),
-                api.organization.get(),
-                api.social.getPosts(),
-                api.social.getAccounts()
-            ]);
-            setReviews(reviewsData);
-            setOrg(organization);
-            setPosts(scheduledPosts);
-            setConnectedAccounts(accounts);
-            if (reviewsData.length > 0) setSelectedReview(reviewsData[0]);
-        } catch(e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
+        const organization = await api.organization.get();
+        setOrg(organization);
+        setLocations(organization?.locations || []);
+        
+        // Filter logic
+        const locFilter = selectedLocationId === 'all' ? undefined : selectedLocationId;
+        
+        const [postsData, reviewsData] = await Promise.all([
+            api.social.getPosts(locFilter),
+            api.reviews.list({ rating: 5 }) // Filter by location inside list if needed
+        ]);
+        
+        setPosts(postsData);
+        // Client-side filter for reviews as api.reviews.list might be generic
+        setReviews(locFilter ? reviewsData.filter(r => r.location_id === locFilter) : reviewsData);
     };
 
-    const handleGenerateCaption = async () => {
-        if (!selectedReview) return;
-        setGeneratingCaption(true);
+    const handleWizardChange = (field: string, value: any) => {
+        setWizardData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleGenerateContent = async () => {
+        setIsGeneratingAI(true);
         try {
-            const text = await api.ai.generateSocialPost(selectedReview, 'instagram', { tone: socialTone, hashtags: useHashtags });
-            setCaption(text);
-        } catch (e) {
+            // Mock context
+            const context = { 
+                rating: 5, 
+                author_name: "Client", 
+                body: "Super expérience" 
+            }; 
+            const text = await api.ai.generateSocialPost(context as any, 'instagram');
+            handleWizardChange('content', text);
+        } catch(e) {
             toast.error("Erreur IA");
         } finally {
-            setGeneratingCaption(false);
+            setIsGeneratingAI(false);
         }
     };
 
-    const handleDownload = async () => {
-        // Must be in edit mode to capture canvas
-        if (viewMode !== 'edit') setViewMode('edit');
-        // Small delay to let render
-        await new Promise(r => setTimeout(r, 100));
-
-        if (!canvasRef.current || !selectedReview) return;
-        setGenerating(true);
-        const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
-
+    const handleCanvasToImage = async () => {
+        if (!canvasRef.current) return;
+        setGeneratingCanvas(true);
         try {
-            const dataUrl = await toPng(canvasRef.current, { 
-                cacheBust: true, 
-                pixelRatio: 1, 
-                width: currentFormat.width,
-                height: currentFormat.height,
-                style: {
-                    transform: 'none', 
-                    transformOrigin: 'top left'
-                }
-            });
-            const link = document.createElement('a');
-            link.download = `social-post-${selectedReview.author_name.replace(/\s+/g, '-')}.png`;
-            link.href = dataUrl;
-            link.click();
-            toast.success("Image HD téléchargée !");
-        } catch (e) {
+            const dataUrl = await toPng(canvasRef.current, { cacheBust: true, pixelRatio: 2 });
+            // Upload this dataUrl to storage (mocked) to get a persistent URL
+            // Converting dataURL to File object
+            const res = await fetch(dataUrl);
+            const blob = await res.blob();
+            const file = new File([blob], "review-card.png", { type: "image/png" });
+            const url = await api.social.uploadMedia(file);
+            
+            handleWizardChange('image_url', url);
+            toast.success("Image générée et ajoutée !");
+        } catch(e) {
             console.error(e);
-            toast.error("Erreur de génération d'image");
+            toast.error("Erreur génération image");
         } finally {
-            setGenerating(false);
+            setGeneratingCanvas(false);
         }
-    };
-
-    const handleAddPostTag = () => {
-        if (tagInput.trim() && !postTags.includes(tagInput.trim())) {
-            setPostTags([...postTags, tagInput.trim()]);
-            setTagInput('');
-        }
-    };
-
-    const handleRemovePostTag = (tag: string) => {
-        setPostTags(postTags.filter(t => t !== tag));
-    };
-
-    const handleEditPost = (post: SocialPost) => {
-        setEditingPost(post);
-        setCaption(post.content);
-        const d = new Date(post.scheduled_date);
-        setScheduleDate(d.toISOString().split('T')[0]);
-        setScheduleTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        setPostTags(post.tags || []);
-        setShowScheduleModal(true);
     };
 
     const handleSchedule = async () => {
-        if (!scheduleDate || !scheduleTime) return;
-        setScheduling(true);
+        if (!wizardData.date || !wizardData.time) return toast.error("Date requise");
         
-        try {
-            const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-            const payload = {
-                platform: editingPost ? editingPost.platform : 'instagram' as any,
-                content: caption,
-                scheduled_date: scheduledDateTime,
-                review_id: selectedReview?.id,
-                tags: postTags
-            };
-
-            if (editingPost) {
-                const updated = await api.social.updatePost(editingPost.id, payload);
-                setPosts(prev => prev.map(p => p.id === updated.id ? updated : p));
-                toast.success("Post mis à jour !");
-            } else {
-                if (!selectedReview) throw new Error("No review selected");
-                const newPost = await api.social.schedulePost(payload);
-                setPosts(prev => [...prev, newPost]);
-                toast.success("Post planifié !");
-            }
-            
-            setShowScheduleModal(false);
-            setEditingPost(null);
-            if (!editingPost) setPostTags([]); 
-            setActiveTab('calendar');
-        } catch (e: any) {
-            toast.error("Erreur: " + e.message);
-        } finally {
-            setScheduling(false);
+        const scheduledDate = new Date(`${wizardData.date}T${wizardData.time}`).toISOString();
+        
+        // Create one post per selected platform
+        const activePlatforms = Object.entries(wizardData.platforms).filter(([_, active]) => active).map(([p]) => p);
+        
+        for (const platform of activePlatforms) {
+            await api.social.schedulePost({
+                location_id: selectedLocationId === 'all' ? locations[0]?.id : selectedLocationId, // Fallback to first loc
+                platform: platform as any,
+                content: wizardData.content,
+                image_url: wizardData.image_url,
+                scheduled_date: scheduledDate
+            });
         }
+        
+        toast.success(`${activePlatforms.length} posts planifiés !`);
+        setWizardData({ content: '', image_url: '', platforms: { instagram: true, facebook: false, linkedin: false }, date: '', time: '10:00' });
+        setCurrentStep(1);
+        setActiveTab('calendar');
+        loadData();
     };
 
-    const handleDeletePost = async (id: string) => {
-        if(confirm("Supprimer ce post ?")) {
-            await api.social.deletePost(id);
-            setPosts(prev => prev.filter(p => p.id !== id));
-            toast.success("Post supprimé");
-        }
-    };
-
-    const handleConnect = async (platform: 'facebook' | 'instagram' | 'linkedin') => {
-        try {
-            await api.social.connectAccount(platform);
-        } catch (e: any) {
-            toast.error("Erreur de redirection: " + e.message);
-        }
-    };
-
-    const handleNewPost = () => {
-        setEditingPost(null);
-        setCaption('');
-        setPostTags([]);
-        setActiveTab('create');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    // Filter Logic
-    const scheduledPosts = posts.filter(p => p.status === 'scheduled' || p.status === 'failed');
-    const publishedPosts = posts.filter(p => p.status === 'published');
-
-    const filterPosts = (list: SocialPost[]) => {
-        return list.filter(post => {
-            const matchesTag = filterTag === 'All' || (post.tags && post.tags.includes(filterTag));
-            const matchesSearch = !searchQuery || post.content.toLowerCase().includes(searchQuery.toLowerCase());
-            return matchesTag && matchesSearch;
-        });
-    };
-
-    const allTags = Array.from(new Set(posts.flatMap(p => p.tags || [])));
-
-    // Helper to get template classes
-    const getTemplateClass = (id: string) => TEMPLATES.find(t => t.id === id)?.style || '';
-    const currentFormat = FORMATS.find(f => f.id === format) || FORMATS[0];
-    const reviewTextSize = (length: number) => {
-        if (length < 50) return 'text-7xl';
-        if (length < 100) return 'text-6xl';
-        if (length < 200) return 'text-5xl';
-        return 'text-4xl';
-    };
-
-    const isConnected = (platform: string) => connectedAccounts.some(a => a.platform === platform);
-
-    // Canvas Component
-    const CanvasContent = () => (
+    // --- CANVAS RENDERER ---
+    const CanvasRenderer = () => (
         <div 
             ref={canvasRef}
-            style={{ 
-                width: currentFormat.width, 
-                height: currentFormat.height,
-                transform: viewMode === 'edit' ? `scale(${scale})` : 'none', 
-                transformOrigin: 'center center',
-                fontSize: '2rem'
-            }}
-            className={`flex flex-col items-center justify-center p-16 relative shadow-2xl transition-all duration-500 shrink-0 ${getTemplateClass(template)}`}
+            className={`w-[1080px] h-[1080px] flex flex-col items-center justify-center p-16 relative ${TEMPLATES.find(t => t.id === template)?.style}`}
+            style={{ transform: 'scale(0.3)', transformOrigin: 'top left', marginBottom: '-700px' }} // Tiny preview hacks
         >
-            <div className="absolute top-12 right-12 flex gap-2">
-                {[1,2,3,4,5].map(i => (
-                    <Star key={i} className={`h-12 w-12 ${template === 'dark' || template === 'gradient' ? 'text-yellow-400 fill-yellow-400' : 'text-amber-400 fill-amber-400'}`} />
-                ))}
+            <div className="text-6xl font-serif text-center italic">
+                "{selectedReview?.body}"
             </div>
-
-            <div className="flex-1 flex items-center justify-center w-full">
-                <p className={`text-center font-serif leading-relaxed italic ${reviewTextSize(selectedReview?.body?.length || 0)}`}>
-                    "{selectedReview?.body}"
-                </p>
+            <div className="mt-12 text-4xl font-bold">
+                - {selectedReview?.author_name}
             </div>
-
-            <div className="flex items-center gap-6 mt-12 w-full border-t border-current pt-8 opacity-90">
-                <div className={`h-24 w-24 rounded-full flex items-center justify-center text-4xl font-bold ${template === 'dark' ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
-                    {selectedReview?.author_name.charAt(0)}
-                </div>
-                <div>
-                    <div className="font-bold text-3xl">{selectedReview?.author_name}</div>
-                    <div className="opacity-80 text-xl mt-1">Client Vérifié</div>
-                </div>
-                {showBrand && (
-                    <div className="ml-auto flex items-center gap-3 opacity-60">
-                        <div className="h-12 w-1.5 px-2" style={{ backgroundColor: customColor }}></div>
-                        <span className="font-bold tracking-widest uppercase text-lg">Reviewflow</span>
-                    </div>
-                )}
+            <div className="flex gap-2 mt-8">
+                {[1,2,3,4,5].map(i => <Star key={i} className="h-12 w-12 fill-current text-yellow-400" />)}
             </div>
         </div>
     );
 
-    // PAYWALL
-    if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
-        return (
-            <div className="max-w-7xl mx-auto mt-8 animate-in fade-in duration-500 px-4 sm:px-6">
-                {/* ... Paywall content same as before ... */}
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Social Studio</h1>
-                    <p className="text-slate-500">Transformez vos meilleurs avis en posts viraux.</p>
-                </div>
-                <ProLock
-                    title="Débloquez le Social Studio"
-                    description="Créez des visuels HD, planifiez vos posts et publiez sur Instagram et LinkedIn automatiquement."
-                >
-                    <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8 opacity-20 filter blur-[1px]">
-                        <div className="bg-white border border-slate-200 h-96 rounded-xl shadow-lg"></div>
-                    </div>
-                </ProLock>
-            </div>
-        );
-    }
-
     return (
-        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-4 sm:px-6 pb-20 lg:pb-8">
-            {/* Header & Tabs */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-4 sm:px-6 pb-20">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                         <Share2 className="h-8 w-8 text-indigo-600" />
                         Social Studio
                         <Badge variant="pro">GROWTH</Badge>
                     </h1>
-                    <p className="text-slate-500">Transformez vos meilleurs avis en posts viraux.</p>
+                    <p className="text-slate-500">Gestion centralisée multi-canaux.</p>
                 </div>
                 
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                    <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto max-w-full no-scrollbar flex-1 md:flex-none justify-center">
-                        <button 
-                            onClick={() => setActiveTab('create')} 
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                {/* Location Selector */}
+                {locations.length > 0 && (
+                    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                        <Store className="h-4 w-4 text-slate-400 ml-2" />
+                        <select 
+                            className="bg-transparent border-none text-sm font-medium focus:ring-0 cursor-pointer py-1 pr-8"
+                            value={selectedLocationId}
+                            onChange={(e) => setSelectedLocationId(e.target.value)}
                         >
-                            Studio
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('calendar')} 
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'calendar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            Planning & Historique
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('accounts')} 
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'accounts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            Comptes
-                        </button>
+                            <option value="all">Tous les établissements</option>
+                            {locations.map(loc => (
+                                <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
+                        </select>
                     </div>
-                    
-                    <Button onClick={handleNewPost} icon={Plus} className="shadow-lg shadow-indigo-200 whitespace-nowrap flex-1 md:flex-none">
-                        Nouveau Post
-                    </Button>
-                </div>
+                )}
             </div>
 
-            {/* --- TAB: CREATION STUDIO --- */}
-            {activeTab === 'create' && (
-                <div className="flex flex-col lg:flex-row gap-6 h-auto lg:h-[calc(100vh-14rem)]">
-                    
-                    {/* 1. SELECTION LIST */}
-                    <div className="order-2 lg:order-1 w-full lg:w-80 shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-80 lg:h-full">
-                        <div className="p-4 border-b border-slate-100 bg-slate-50 font-bold text-slate-700 flex items-center gap-2 sticky top-0 z-10">
-                            <Star className="h-4 w-4 text-amber-400 fill-current" />
-                            Vos Pépites (5★)
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-                            {loading && <div className="p-4 text-center text-slate-400 text-sm">Chargement...</div>}
-                            
-                            {!loading && reviews.length === 0 && (
-                                <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-                                    <div className="bg-slate-100 p-3 rounded-full mb-3">
-                                        <Star className="h-6 w-6 text-slate-300" />
-                                    </div>
-                                    <p className="text-sm font-medium text-slate-900 mb-1">Aucun avis 5★</p>
-                                    <p className="text-xs text-slate-500 mb-4">Collectez plus d'avis pour les transformer en posts.</p>
-                                    <Button variant="outline" size="xs" onClick={() => navigate('/collect')}>
-                                        Lancer une collecte
-                                    </Button>
-                                </div>
-                            )}
+            {/* Tabs */}
+            <div className="flex border-b border-slate-200">
+                <button 
+                    onClick={() => setActiveTab('create')} 
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'create' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    Créer un Post
+                </button>
+                <button 
+                    onClick={() => setActiveTab('calendar')} 
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'calendar' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    Planning
+                </button>
+                <button 
+                    onClick={() => setActiveTab('accounts')} 
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'accounts' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                >
+                    Comptes
+                </button>
+            </div>
 
-                            {reviews.map(review => (
-                                <div 
-                                    key={review.id}
-                                    onClick={() => setSelectedReview(review)}
-                                    className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${selectedReview?.id === review.id ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600' : 'border-slate-200 bg-white hover:border-indigo-300'}`}
-                                >
-                                    <div className="flex justify-between mb-2">
-                                        <span className="font-bold text-sm text-slate-900 truncate max-w-[120px]">{review.author_name}</span>
-                                        <span className="text-[10px] text-slate-400 shrink-0">{new Date(review.received_at).toLocaleDateString()}</span>
-                                    </div>
-                                    <p className="text-xs text-slate-600 line-clamp-3 italic">"{review.body}"</p>
-                                </div>
-                            ))}
-                        </div>
+            {/* --- WIZARD: CREATE --- */}
+            {activeTab === 'create' && (
+                <div className="space-y-8">
+                    {/* Progress */}
+                    <div className="flex justify-between max-w-3xl mx-auto mb-8">
+                        <WizardStep number={1} title="Contenu" active={currentStep === 1} completed={currentStep > 1} />
+                        <WizardStep number={2} title="Média" active={currentStep === 2} completed={currentStep > 2} />
+                        <WizardStep number={3} title="Réseaux" active={currentStep === 3} completed={currentStep > 3} />
+                        <WizardStep number={4} title="Planification" active={currentStep === 4} completed={currentStep > 4} />
                     </div>
 
-                    {/* 2. MAIN AREA */}
-                    <div className="order-1 lg:order-2 flex-1 flex flex-col gap-4 min-w-0">
-                        
-                        {/* CANVAS / PREVIEW TOGGLE */}
-                        <div className="bg-slate-200/50 rounded-xl border border-slate-200 flex flex-col items-center justify-center p-4 overflow-hidden relative min-h-[450px] lg:flex-1 w-full">
-                            <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur rounded-lg p-1 flex shadow-sm">
-                                <button onClick={() => setViewMode('edit')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'edit' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
-                                    Éditeur
-                                </button>
-                                <button onClick={() => setViewMode('preview')} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${viewMode === 'preview' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
-                                    Aperçu Réel
-                                </button>
-                            </div>
-
-                            {viewMode === 'preview' && (
-                                <div className="absolute top-4 right-4 z-10 flex gap-2">
-                                    <button onClick={() => setPreviewPlatform('instagram')} className={`p-1.5 rounded bg-white shadow-sm ${previewPlatform === 'instagram' ? 'text-pink-600 ring-1 ring-pink-600' : 'text-slate-400'}`}><Instagram className="h-4 w-4" /></button>
-                                    <button onClick={() => setPreviewPlatform('facebook')} className={`p-1.5 rounded bg-white shadow-sm ${previewPlatform === 'facebook' ? 'text-blue-600 ring-1 ring-blue-600' : 'text-slate-400'}`}><Facebook className="h-4 w-4" /></button>
-                                    <button onClick={() => setPreviewPlatform('linkedin')} className={`p-1.5 rounded bg-white shadow-sm ${previewPlatform === 'linkedin' ? 'text-blue-700 ring-1 ring-blue-700' : 'text-slate-400'}`}><Linkedin className="h-4 w-4" /></button>
-                                </div>
-                            )}
-
-                            {!selectedReview ? (
-                                <div className="text-center text-slate-400 flex flex-col items-center">
-                                    <MessageSquare className="h-8 w-8 mb-2" />
-                                    <p>Sélectionnez un avis</p>
-                                </div>
-                            ) : (
-                                viewMode === 'edit' ? (
-                                    <div ref={containerRef} className="w-full h-full flex items-center justify-center">
-                                        <CanvasContent />
-                                    </div>
-                                ) : (
-                                    <SocialFeedPreview 
-                                        platform={previewPlatform} 
-                                        caption={caption || "Votre légende s'affichera ici..."} 
-                                        author={org?.name || "Votre Entreprise"}
-                                        avatar="https://ui-avatars.com/api/?name=R+F&background=4f46e5&color=fff"
-                                    >
-                                        <CanvasContent />
-                                    </SocialFeedPreview>
-                                )
-                            )}
-                        </div>
-
-                        {/* CONTROLS CARD */}
-                        <div className={`bg-white rounded-xl border border-slate-200 shadow-sm shrink-0 transition-opacity duration-300 ${!selectedReview ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                    {/* Style & Format Selectors */}
-                                    <div>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
-                                                <Palette className="h-4 w-4" /> Style & Format
-                                            </label>
-                                            <Button 
-                                                variant="ghost" 
-                                                size="xs" 
-                                                className="text-indigo-600 hover:text-indigo-700 h-auto py-0 px-2 font-bold bg-indigo-50"
-                                                onClick={() => navigate('/social/models/create')}
-                                            >
-                                                + Créer
+                    <div className="max-w-3xl mx-auto">
+                        <Card className="min-h-[400px] flex flex-col">
+                            <CardContent className="p-8 flex-1">
+                                
+                                {/* STEP 1: CONTENT */}
+                                {currentStep === 1 && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-lg font-bold text-slate-900">Quoi de neuf ?</h3>
+                                            <Button size="xs" variant="secondary" onClick={handleGenerateContent} isLoading={isGeneratingAI} icon={Sparkles}>
+                                                Assistant IA
                                             </Button>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row gap-4">
-                                            <select value={template} onChange={(e) => setTemplate(e.target.value)} className="block w-full rounded-lg border-slate-200 text-sm py-2 px-3 focus:ring-2 focus:ring-indigo-500">
-                                                {TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                            </select>
-                                            <select value={format} onChange={(e) => setFormat(e.target.value)} className="block w-full rounded-lg border-slate-200 text-sm py-2 px-3 focus:ring-2 focus:ring-indigo-500">
-                                                {FORMATS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                            </select>
+                                        <textarea 
+                                            className="w-full h-40 p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 resize-none bg-slate-50"
+                                            placeholder="Écrivez votre légende ici..."
+                                            value={wizardData.content}
+                                            onChange={(e) => handleWizardChange('content', e.target.value)}
+                                        />
+                                        <div className="flex gap-2">
+                                            <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #Promotion')}>#Promotion</Badge>
+                                            <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #Event')}>#Event</Badge>
+                                            <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #New')}>#New</Badge>
                                         </div>
                                     </div>
-                                    
-                                    <div className="flex flex-wrap items-center gap-4">
-                                        <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
-                                            <input type="checkbox" checked={showBrand} onChange={(e) => setShowBrand(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500" />
-                                            Afficher la marque
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-slate-500 font-bold uppercase">Couleur</span>
-                                            <input type="color" value={customColor} onChange={(e) => setCustomColor(e.target.value)} className="h-8 w-8 rounded cursor-pointer border-0 p-0 shadow-sm" />
-                                        </div>
-                                    </div>
+                                )}
 
-                                    {/* TAGS INPUT */}
-                                    <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2 mb-2">
-                                            <Tag className="h-4 w-4" /> Tags (Organisation)
-                                        </label>
-                                        <div className="flex gap-2 mb-2">
-                                            <Input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPostTag()} placeholder="Ex: Promotion, Été..." className="text-xs h-8" />
-                                            <Button size="xs" variant="secondary" onClick={handleAddPostTag}>Ajouter</Button>
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {postTags.map(tag => (
-                                                <Badge key={tag} variant="neutral" className="pr-1 text-[10px]">
-                                                    {tag}
-                                                    <button onClick={() => handleRemovePostTag(tag)} className="ml-1 hover:text-red-500"><X className="h-3 w-3" /></button>
-                                                </Badge>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
+                                {/* STEP 2: MEDIA */}
+                                {currentStep === 2 && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                        <h3 className="text-lg font-bold text-slate-900">Ajouter un visuel</h3>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {/* Option A: Upload */}
+                                            <div>
+                                                <h4 className="text-sm font-bold text-slate-500 mb-2 uppercase">Importer</h4>
+                                                <ImageUploader 
+                                                    currentImage={wizardData.image_url} 
+                                                    onUpload={(url) => handleWizardChange('image_url', url)} 
+                                                />
+                                            </div>
 
-                                <div className="space-y-4 flex flex-col justify-between">
-                                    <div>
-                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
-                                                <Type className="h-4 w-4" /> Légende IA
-                                            </label>
-                                            
-                                            <div className="flex items-center gap-2">
-                                                <Select value={socialTone} onChange={e => setSocialTone(e.target.value)} className="h-7 text-xs w-32">
-                                                    <option value="enthusiastic">Enthousiaste</option>
-                                                    <option value="professionnel">Professionnel</option>
-                                                    <option value="humoristique">Humour</option>
-                                                    <option value="corporate">Corporate</option>
-                                                </Select>
-                                                <button onClick={() => setUseHashtags(!useHashtags)} className={`p-1.5 rounded text-xs border ${useHashtags ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400'}`} title="Hashtags">
-                                                    <Hash className="h-3 w-3" />
-                                                </button>
-                                                <button onClick={handleGenerateCaption} disabled={generatingCaption} className="text-xs text-white font-bold flex items-center gap-1 bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1.5 rounded-full shadow-sm hover:shadow-md transition-all active:scale-95">
-                                                    <Sparkles className="h-3 w-3" /> {generatingCaption ? '...' : 'Générer'}
-                                                </button>
+                                            {/* Option B: From Review */}
+                                            <div className="border-l border-slate-100 pl-6">
+                                                <h4 className="text-sm font-bold text-slate-500 mb-2 uppercase">Ou créer depuis un avis</h4>
+                                                <div className="space-y-4">
+                                                    <Select 
+                                                        value={selectedReview?.id || ''} 
+                                                        onChange={(e) => setSelectedReview(reviews.find(r => r.id === e.target.value) || null)}
+                                                    >
+                                                        <option value="">Choisir un avis 5★...</option>
+                                                        {reviews.map(r => <option key={r.id} value={r.id}>{r.author_name} - {r.rating}★</option>)}
+                                                    </Select>
+                                                    
+                                                    {selectedReview && (
+                                                        <div className="bg-slate-50 p-2 rounded border border-slate-200 overflow-hidden h-40 relative">
+                                                            {/* Hidden Canvas for generation */}
+                                                            <div className="absolute opacity-0 pointer-events-none">
+                                                                <CanvasRenderer />
+                                                            </div>
+                                                            <div className="text-center pt-8 text-xs text-slate-400">Aperçu généré en arrière-plan</div>
+                                                            <Button size="sm" className="absolute bottom-2 left-2 right-2" onClick={handleCanvasToImage} isLoading={generatingCanvas}>
+                                                                Utiliser cet avis
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
-                                        <textarea className="w-full h-24 p-3 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 resize-none bg-slate-50 leading-relaxed" placeholder="Générez une légende virale..." value={caption} onChange={e => setCaption(e.target.value)} />
                                     </div>
+                                )}
 
-                                    <div className="flex gap-2">
-                                        <Button className="flex-1" variant="outline" onClick={handleDownload} isLoading={generating} icon={Download}>Télécharger</Button>
-                                        <Button className="flex-1 shadow-lg shadow-indigo-200" onClick={() => { setEditingPost(null); setShowScheduleModal(true); }} icon={Calendar}>Planifier</Button>
+                                {/* STEP 3: NETWORKS */}
+                                {currentStep === 3 && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                        <h3 className="text-lg font-bold text-slate-900">Choisir les plateformes</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {[
+                                                { id: 'instagram', icon: Instagram, label: 'Instagram', color: 'text-pink-600' },
+                                                { id: 'facebook', icon: Facebook, label: 'Facebook', color: 'text-blue-600' },
+                                                { id: 'linkedin', icon: Linkedin, label: 'LinkedIn', color: 'text-blue-700' },
+                                            ].map(net => (
+                                                <div 
+                                                    key={net.id}
+                                                    onClick={() => handleWizardChange('platforms', { ...wizardData.platforms, [net.id]: !wizardData.platforms[net.id as keyof typeof wizardData.platforms] })}
+                                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${wizardData.platforms[net.id as keyof typeof wizardData.platforms] ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                                >
+                                                    <net.icon className={`h-6 w-6 ${net.color}`} />
+                                                    <span className="font-bold text-slate-700">{net.label}</span>
+                                                    {wizardData.platforms[net.id as keyof typeof wizardData.platforms] && <CheckCircle2 className="ml-auto h-5 w-5 text-indigo-600" />}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        
+                                        {!wizardData.image_url && wizardData.platforms.instagram && (
+                                            <div className="bg-amber-50 text-amber-800 p-3 rounded-lg text-sm flex items-center gap-2">
+                                                <AlertCircle className="h-4 w-4" />
+                                                Instagram nécessite une image. Retournez à l'étape 2.
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                )}
+
+                                {/* STEP 4: SCHEDULE */}
+                                {currentStep === 4 && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                        <h3 className="text-lg font-bold text-slate-900">Quand publier ?</h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                                                <Input type="date" value={wizardData.date} onChange={e => handleWizardChange('date', e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Heure</label>
+                                                <Input type="time" value={wizardData.time} onChange={e => handleWizardChange('time', e.target.value)} />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4">
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Récapitulatif</h4>
+                                            <div className="flex gap-4 items-start">
+                                                {wizardData.image_url && <img src={wizardData.image_url} className="h-16 w-16 object-cover rounded-lg bg-slate-200" />}
+                                                <div>
+                                                    <p className="text-sm text-slate-800 line-clamp-2 italic">"{wizardData.content}"</p>
+                                                    <div className="flex gap-2 mt-2">
+                                                        {Object.entries(wizardData.platforms).filter(([_, v]) => v).map(([k]) => (
+                                                            <Badge key={k} variant="neutral" className="capitalize">{k}</Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </CardContent>
+                            
+                            {/* FOOTER NAV */}
+                            <div className="p-6 border-t border-slate-100 flex justify-between bg-slate-50 rounded-b-xl">
+                                <Button variant="ghost" onClick={() => setCurrentStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>
+                                    <ChevronLeft className="h-4 w-4 mr-2" /> Retour
+                                </Button>
+                                {currentStep < 4 ? (
+                                    <Button onClick={() => setCurrentStep(currentStep + 1)} disabled={currentStep === 1 && !wizardData.content}>
+                                        Suivant <ChevronRight className="h-4 w-4 ml-2" />
+                                    </Button>
+                                ) : (
+                                    <Button onClick={handleSchedule} className="bg-green-600 hover:bg-green-700 border-none">
+                                        Confirmer la planification
+                                    </Button>
+                                )}
                             </div>
-                        </div>
+                        </Card>
                     </div>
                 </div>
             )}
 
-            {/* --- TAB: CALENDAR & HISTORY --- */}
+            {/* --- TAB: CALENDAR --- */}
             {activeTab === 'calendar' && (
-                <div className="space-y-8 animate-in fade-in">
-                    
-                    {/* Filters */}
-                    <div className="flex flex-col sm:flex-row gap-4 items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <Input placeholder="Rechercher..." className="pl-9 h-9 text-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                        </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <Filter className="h-4 w-4 text-slate-400" />
-                            <Select value={filterTag} onChange={e => setFilterTag(e.target.value)} className="h-9 text-sm w-full sm:w-40">
-                                <option value="All">Tous les tags</option>
-                                {allTags.map(tag => <option key={tag} value={tag}>{tag}</option>)}
-                            </Select>
-                        </div>
-                    </div>
-
-                    {/* UPCOMING */}
-                    <div>
-                        <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-indigo-600" /> À venir
+                <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-indigo-600" /> Planning
                         </h3>
-                        {filterPosts(scheduledPosts).length === 0 ? (
-                            <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-xl">
-                                <p className="text-slate-500 text-sm">Aucun post planifié.</p>
-                            </div>
+                        {posts.length === 0 ? (
+                            <div className="text-center text-slate-500 py-8">Aucun post planifié pour cet établissement.</div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {filterPosts(scheduledPosts).sort((a,b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime()).map(post => (
-                                    <div key={post.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow flex flex-col">
-                                        <div className="h-24 bg-gradient-to-r from-indigo-50 to-slate-50 flex items-center justify-center text-slate-400 shrink-0 relative">
-                                            <Sparkles className="h-6 w-6" />
-                                            <div className="absolute top-2 right-2">
-                                                <Badge variant="warning">Planifié</Badge>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {posts.map(post => (
+                                    <div key={post.id} className="border border-slate-200 rounded-lg p-4 bg-white flex flex-col hover:shadow-md transition-shadow">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="flex items-center gap-2">
+                                                {post.platform === 'instagram' && <Instagram className="h-4 w-4 text-pink-600" />}
+                                                {post.platform === 'facebook' && <Facebook className="h-4 w-4 text-blue-600" />}
+                                                <span className="text-xs font-bold capitalize">{post.platform}</span>
                                             </div>
+                                            <Badge variant={post.status === 'published' ? 'success' : 'warning'}>{post.status}</Badge>
                                         </div>
-                                        <div className="p-4 flex-1 flex flex-col">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-1.5">
-                                                    {post.platform === 'instagram' && <Instagram className="h-4 w-4 text-pink-600" />}
-                                                    {post.platform === 'facebook' && <Facebook className="h-4 w-4 text-blue-600" />}
-                                                    {post.platform === 'linkedin' && <Linkedin className="h-4 w-4 text-blue-700" />}
-                                                    <span className="text-xs font-bold text-slate-700 capitalize">{post.platform}</span>
-                                                </div>
-                                            </div>
-                                            <p className="text-xs text-slate-600 line-clamp-2 mb-3 bg-slate-50 p-2 rounded flex-1">{post.content}</p>
-                                            <div className="flex justify-between items-center text-xs text-slate-500 pt-2 border-t border-slate-100">
-                                                <span className="flex items-center gap-1 font-semibold">
-                                                    <Clock className="h-3 w-3" />
-                                                    {new Date(post.scheduled_date).toLocaleString()}
-                                                </span>
-                                                <div className="flex gap-1">
-                                                    <button onClick={() => handleEditPost(post)} className="text-slate-400 hover:text-indigo-600 p-1 hover:bg-slate-100 rounded" title="Modifier">
-                                                        <Pencil className="h-4 w-4" />
-                                                    </button>
-                                                    <button onClick={() => handleDeletePost(post.id)} className="text-slate-400 hover:text-red-600 p-1 hover:bg-red-50 rounded" title="Supprimer">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
+                                        {post.image_url && <img src={post.image_url} className="w-full h-32 object-cover rounded-md mb-2 bg-slate-100" />}
+                                        <p className="text-xs text-slate-600 line-clamp-2 mb-3 flex-1">{post.content}</p>
+                                        <div className="text-xs text-slate-400 flex items-center gap-1">
+                                            <Clock className="h-3 w-3" /> {new Date(post.scheduled_date).toLocaleString()}
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
-
-                    {/* HISTORY */}
-                    <div>
-                        <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2 mt-8">
-                            <CheckCircle2 className="h-5 w-5 text-green-600" /> Historique (Publiés)
-                        </h3>
-                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                            <table className="min-w-full divide-y divide-slate-100">
-                                <thead className="bg-slate-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Réseau</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Contenu</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Lien</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-slate-50">
-                                    {filterPosts(publishedPosts).length === 0 ? (
-                                        <tr><td colSpan={5} className="p-6 text-center text-sm text-slate-500">Aucun post publié pour le moment.</td></tr>
-                                    ) : (
-                                        filterPosts(publishedPosts).sort((a,b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime()).map(post => (
-                                            <tr key={post.id} className="hover:bg-slate-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                                                    {new Date(post.scheduled_date).toLocaleDateString()} <span className="text-xs text-slate-400">{new Date(post.scheduled_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2">
-                                                        {post.platform === 'instagram' && <Instagram className="h-4 w-4 text-pink-600" />}
-                                                        {post.platform === 'facebook' && <Facebook className="h-4 w-4 text-blue-600" />}
-                                                        {post.platform === 'linkedin' && <Linkedin className="h-4 w-4 text-blue-700" />}
-                                                        <span className="text-sm font-medium capitalize">{post.platform}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <p className="text-xs text-slate-600 line-clamp-1 max-w-xs">{post.content}</p>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <Badge variant="success">Publié</Badge>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                    {post.published_url ? (
-                                                        <a href={post.published_url} target="_blank" className="text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 text-xs font-medium">
-                                                            Voir <ExternalLink className="h-3 w-3" />
-                                                        </a>
-                                                    ) : (
-                                                        <span className="text-slate-400 text-xs">-</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 </div>
             )}
 
-            {/* ... (Keep Accounts Tab and Schedule Modal but update modal title) ... */}
+            {/* --- TAB: ACCOUNTS --- */}
             {activeTab === 'accounts' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
-                    {/* ... (Keep existing Account Cards) ... */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Card>
-                        <CardContent className="p-6 flex flex-col items-center text-center gap-4">
-                            <div className="h-16 w-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center border-4 border-white shadow-md relative">
-                                <Facebook className="h-8 w-8" />
-                                {isConnected('facebook') && <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full border-2 border-white p-1"><CheckCircle2 className="h-3 w-3 text-white"/></div>}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-lg">Facebook Page</h3>
-                                <p className="text-xs text-slate-500">{isConnected('facebook') ? 'Connecté' : 'Non connecté'}</p>
-                            </div>
-                            <Button variant={isConnected('facebook') ? 'outline' : 'primary'} className="w-full" onClick={() => handleConnect('facebook')}>
-                                {isConnected('facebook') ? 'Reconnecter' : 'Connecter'}
-                            </Button>
+                        <CardHeader><CardTitle>Instagram</CardTitle></CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-4">Connectez votre compte Instagram Business.</p>
+                            <Button variant="outline" className="w-full" onClick={() => api.social.connectAccount('instagram')}>Connecter</Button>
                         </CardContent>
                     </Card>
                     <Card>
-                        <CardContent className="p-6 flex flex-col items-center text-center gap-4">
-                            <div className="h-16 w-16 bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 text-white rounded-full flex items-center justify-center border-4 border-white shadow-md relative">
-                                <Instagram className="h-8 w-8" />
-                                {isConnected('instagram') && <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full border-2 border-white p-1"><CheckCircle2 className="h-3 w-3 text-white"/></div>}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-lg">Instagram Business</h3>
-                                <p className="text-xs text-slate-500">{isConnected('instagram') ? 'Connecté' : 'Non connecté'}</p>
-                            </div>
-                            <Button variant={isConnected('instagram') ? 'outline' : 'primary'} className="w-full" onClick={() => handleConnect('instagram')}>
-                                {isConnected('instagram') ? 'Reconnecter' : 'Connecter'}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardContent className="p-6 flex flex-col items-center text-center gap-4">
-                            <div className="h-16 w-16 bg-blue-700 text-white rounded-full flex items-center justify-center border-4 border-white shadow-md relative">
-                                <Linkedin className="h-8 w-8" />
-                                {isConnected('linkedin') && <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full border-2 border-white p-1"><CheckCircle2 className="h-3 w-3 text-white"/></div>}
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-lg">LinkedIn Company</h3>
-                                <p className="text-xs text-slate-500">{isConnected('linkedin') ? 'Connecté' : 'Non connecté'}</p>
-                            </div>
-                            <Button variant={isConnected('linkedin') ? 'outline' : 'primary'} className="w-full" onClick={() => handleConnect('linkedin')}>
-                                {isConnected('linkedin') ? 'Reconnecter' : 'Connecter'}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* SCHEDULE MODAL */}
-            {showScheduleModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <Card className="w-full max-w-sm animate-in zoom-in-95">
-                        <CardHeader>
-                            <CardTitle>{editingPost ? 'Modifier le post' : 'Planifier la publication'}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
-                                <Input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Heure</label>
-                                <Input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} />
-                            </div>
-                            {editingPost && (
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Texte</label>
-                                    <textarea className="w-full p-2 border rounded text-xs h-20" value={caption} onChange={e => setCaption(e.target.value)} />
-                                </div>
-                            )}
-                            <div className="flex gap-2 pt-2">
-                                <Button variant="ghost" className="flex-1" onClick={() => { setShowScheduleModal(false); setEditingPost(null); }}>Annuler</Button>
-                                <Button className="flex-1" onClick={handleSchedule} disabled={!scheduleDate || !scheduleTime || scheduling} isLoading={scheduling}>
-                                    {editingPost ? 'Mettre à jour' : 'Confirmer'}
-                                </Button>
-                            </div>
+                        <CardHeader><CardTitle>Facebook</CardTitle></CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-4">Connectez votre Page Facebook.</p>
+                            <Button variant="outline" className="w-full" onClick={() => api.social.connectAccount('facebook')}>Connecter</Button>
                         </CardContent>
                     </Card>
                 </div>
