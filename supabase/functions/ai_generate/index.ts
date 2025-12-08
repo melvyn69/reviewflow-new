@@ -1,10 +1,4 @@
 
-
-
-
-
-
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/genai'
 
@@ -147,6 +141,25 @@ Deno.serve(async (req: Request) => {
             Exemple de ton attendu: "🎁 Surprise ! Profitez de -20% ce weekend avec le code PROMO20. A très vite !"
         `;
     }
+    else if (task === 'generate_email_campaign') {
+        const { offerTitle, offerDesc, segment } = context;
+        
+        prompt = `
+            Rôle: Copywriter Email Marketing Expert.
+            Tâche: Rédiger l'objet et le corps d'un email pour une campagne de collecte d'avis ou d'offre.
+            
+            Contexte:
+            - Offre/Sujet: "${offerTitle}" (${offerDesc})
+            - Cible: ${segment}
+            
+            Consignes:
+            - Langue: Français.
+            - Format JSON strict: { "subject": "...", "body": "..." }
+            - Le corps doit être en HTML simple (p, br, strong).
+            - Utilise les variables {{name}} pour le prénom et {{link}} pour le lien d'action.
+            - Ton: Engageant, personnel, incite au clic.
+        `;
+    }
     else {
         throw new Error('Unknown task')
     }
@@ -155,13 +168,9 @@ Deno.serve(async (req: Request) => {
     const result = await model.generateContent(prompt)
     let text = result.response.text()
 
-    // Nettoyage basique JSON si nécessaire
-    if (task === 'enrich_customer') {
+    // Nettoyage basique JSON
+    if (task === 'enrich_customer' || task === 'generate_email_campaign') {
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return new Response(
-            JSON.stringify({ insight: JSON.parse(text) }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
     }
 
     return new Response(

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Offer, Coupon } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, useToast, Badge, Select, Toggle } from '../components/ui';
-import { Gift, Plus, Scan, CheckCircle2, XCircle, Trash2, Tag, Loader2, Send, Users, BarChart3, PieChart, Palette, Mail, Smartphone, RefreshCw, DollarSign, MessageSquare, Zap, X, AlertTriangle } from 'lucide-react';
+import { Gift, Plus, Scan, CheckCircle2, XCircle, Trash2, Tag, Loader2, Send, Users, BarChart3, PieChart, Palette, Mail, Smartphone, RefreshCw, DollarSign, MessageSquare, Zap, X, AlertTriangle, Link as LinkIcon, Wand2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Quote Modal Component
@@ -328,41 +328,75 @@ const CreateOfferForm = ({ onCreate }: { onCreate: (o: any) => void }) => {
 const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampaignSent: () => void }) => {
     const [selectedOfferId, setSelectedOfferId] = useState<string>('');
     const [segment, setSegment] = useState('vip');
-    const [channel, setChannel] = useState('email');
+    const [channel, setChannel] = useState<'email' | 'sms'>('email');
     const [sending, setSending] = useState(false);
-    const [customMessage, setCustomMessage] = useState('');
-    const [useAI, setUseAI] = useState(true);
+    
+    // Message State
+    const [subject, setSubject] = useState('');
+    const [body, setBody] = useState('');
+    const [generatedLink, setGeneratedLink] = useState('');
+    
     const [generating, setGenerating] = useState(false);
     const [showQuoteModal, setShowQuoteModal] = useState(false);
     const toast = useToast();
 
     const selectedOffer = offers.find(o => o.id === selectedOfferId);
 
-    // Auto-generate message when offer/segment changes if AI is ON
+    // Initial setup when offer selected
     useEffect(() => {
-        if (useAI && selectedOffer) {
-            handleGenerateMessage();
+        if (selectedOffer) {
+            prepareLink();
         }
-    }, [selectedOfferId, segment, channel]);
+    }, [selectedOffer]);
+
+    const prepareLink = async () => {
+        if (!selectedOffer) return;
+        // Generate a "pretty" short link for this campaign
+        // In reality, this would likely be specific to the campaign batch or user
+        // Here we create one generic for the offer/campaign context
+        const longUrl = `https://reviewflow.vercel.app/#/redeem/${selectedOffer.id}`;
+        try {
+            const short = await api.links.createShortLink(longUrl);
+            setGeneratedLink(`avis.reviewflow.com/v/${short.slug}`);
+        } catch (e) {
+            setGeneratedLink(longUrl);
+        }
+    };
 
     const handleGenerateMessage = async () => {
         if (!selectedOffer) return;
         setGenerating(true);
         try {
-            const context = {
-                offerTitle: selectedOffer.title,
-                offerDesc: selectedOffer.description,
-                offerCode: selectedOffer.code_prefix + 'VIP',
-                segment: segment,
-                channel: channel
-            };
-            const text = await api.ai.generateSms(context);
-            setCustomMessage(text);
+            if (channel === 'sms') {
+                const context = {
+                    offerTitle: selectedOffer.title,
+                    offerDesc: selectedOffer.description,
+                    offerCode: selectedOffer.code_prefix + 'VIP',
+                    segment: segment,
+                    channel: channel
+                };
+                const text = await api.ai.generateSms(context);
+                setBody(text);
+            } else {
+                const context = {
+                    offerTitle: selectedOffer.title,
+                    offerDesc: selectedOffer.description,
+                    segment: segment
+                };
+                const result = await api.ai.generateEmailCampaign(context);
+                setSubject(result.subject);
+                setBody(result.body);
+            }
         } catch (e) {
             console.error(e);
+            toast.error("Erreur génération IA");
         } finally {
             setGenerating(false);
         }
+    };
+
+    const insertVariable = (variable: string) => {
+        setBody(prev => prev + ` {{${variable}}} `);
     };
 
     const handleSend = async () => {
@@ -370,8 +404,8 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
         try {
             // For demo purposes, we send to a dummy recipient or loop through customers
             // Here we assume backend handles list based on segment
-            const res = await api.campaigns.send(channel as any, 'list:' + segment, 'Campagne Promo', customMessage);
-            toast.success(`Campagne envoyée !`);
+            await api.campaigns.send(channel, 'list:' + segment, subject, body);
+            toast.success(`Campagne ${channel === 'email' ? 'email' : 'SMS'} envoyée !`);
             onCampaignSent();
         } catch (e: any) {
             toast.error("Erreur d'envoi: " + e.message);
@@ -401,7 +435,7 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
+                <Card className="h-full">
                     <CardHeader>
                         <CardTitle>Configuration</CardTitle>
                     </CardHeader>
@@ -442,68 +476,73 @@ const CampaignManager = ({ offers, onCampaignSent }: { offers: Offer[], onCampai
                 </Card>
 
                 {/* PREVIEW & MESSAGE */}
-                <Card className="bg-slate-50 border-slate-200">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle>Message</CardTitle>
-                        {channel === 'sms' && (
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-slate-500">IA Auto</span>
-                                <Toggle checked={useAI} onChange={setUseAI} />
-                            </div>
-                        )}
+                <Card className="bg-slate-50 border-slate-200 flex flex-col h-full">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle>Contenu du message</CardTitle>
+                        <Button 
+                            size="xs" 
+                            variant="secondary" 
+                            onClick={handleGenerateMessage} 
+                            isLoading={generating} 
+                            icon={Wand2}
+                            disabled={!selectedOffer}
+                        >
+                            Générer avec IA
+                        </Button>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="flex-1 flex flex-col">
                         {selectedOffer ? (
-                            <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm relative">
-                                {channel === 'email' ? (
-                                    <div className="space-y-4">
-                                        <div className="border-b pb-2 mb-2">
-                                            <div className="text-xs text-slate-400">Sujet:</div>
-                                            <div className="font-bold text-slate-900">🎁 Une surprise vous attend !</div>
-                                        </div>
-                                        <p className="text-sm text-slate-600">Bonjour,</p>
-                                        <div className="bg-pink-50 p-4 rounded-lg text-center border border-pink-100 my-4">
-                                            <div className="text-2xl mb-2">{selectedOffer.style?.icon === 'coffee' ? '☕️' : '🎁'}</div>
-                                            <h3 className="text-xl font-bold text-pink-700">{selectedOffer.title}</h3>
-                                            <p className="text-sm text-pink-600">{selectedOffer.description}</p>
-                                            <div className="mt-2 text-xs text-pink-400 uppercase tracking-widest font-mono">CODE: {selectedOffer.code_prefix}VIP</div>
-                                        </div>
-                                        <p className="text-xs text-slate-400">Valable 30 jours.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <textarea 
-                                            className="w-full bg-slate-100 p-4 rounded-lg border-none resize-none text-sm text-slate-800 min-h-[100px] focus:ring-2 focus:ring-indigo-500"
-                                            value={customMessage}
-                                            onChange={e => { setCustomMessage(e.target.value); setUseAI(false); }}
-                                            placeholder="Votre message SMS..."
+                            <div className="space-y-4 flex-1">
+                                {channel === 'email' && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Objet</label>
+                                        <Input 
+                                            value={subject} 
+                                            onChange={e => setSubject(e.target.value)} 
+                                            placeholder="Sujet de l'email..."
+                                            className="bg-white"
                                         />
-                                        <div className="flex justify-between items-center text-xs text-slate-400">
-                                            <span>{customMessage.length} caractères</span>
-                                            {useAI && (
-                                                <Button size="xs" variant="ghost" onClick={handleGenerateMessage} isLoading={generating} icon={RefreshCw}>
-                                                    Régénérer
-                                                </Button>
-                                            )}
-                                        </div>
-                                        {customMessage.length > 160 && (
-                                            <p className="text-xs text-amber-600 flex items-center gap-1">
-                                                <AlertTriangle className="h-3 w-3" /> Attention: Ce message utilisera 2 SMS.
-                                            </p>
-                                        )}
                                     </div>
                                 )}
+                                
+                                <div className="flex-1 flex flex-col">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase">Corps du message</label>
+                                        <div className="flex gap-1">
+                                            <Badge variant="neutral" className="cursor-pointer hover:bg-white" onClick={() => insertVariable('name')}>Prénom</Badge>
+                                            <Badge variant="neutral" className="cursor-pointer hover:bg-white" onClick={() => insertVariable('link')}>Lien</Badge>
+                                        </div>
+                                    </div>
+                                    <textarea 
+                                        className="w-full bg-white p-4 rounded-lg border border-slate-200 resize-none text-sm text-slate-800 min-h-[150px] focus:ring-2 focus:ring-indigo-500 flex-1"
+                                        value={body}
+                                        onChange={e => setBody(e.target.value)}
+                                        placeholder={channel === 'sms' ? "Votre message SMS..." : "Corps de l'email (HTML supporté)..."}
+                                    />
+                                    
+                                    {generatedLink && (
+                                        <div className="mt-2 text-xs text-slate-500 flex items-center gap-1 bg-white px-2 py-1 rounded w-fit border border-slate-200">
+                                            <LinkIcon className="h-3 w-3" /> Lien court actif : <span className="font-mono text-indigo-600">{generatedLink}</span>
+                                        </div>
+                                    )}
+
+                                    {channel === 'sms' && body.length > 160 && (
+                                        <p className="text-xs text-amber-600 flex items-center gap-1 mt-2">
+                                            <AlertTriangle className="h-3 w-3" /> Attention: Ce message utilisera 2 SMS.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         ) : (
-                            <div className="text-center text-slate-400 py-12">Sélectionnez une offre pour commencer.</div>
+                            <div className="text-center text-slate-400 py-12 flex-1 flex items-center justify-center">Sélectionnez une offre pour commencer.</div>
                         )}
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="flex justify-end">
-                <Button size="lg" icon={Send} onClick={handleSend} isLoading={sending} disabled={!selectedOffer || (channel === 'sms' && !customMessage)} className="shadow-xl shadow-indigo-200">
-                    Lancer la campagne
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+                <Button size="lg" icon={Send} onClick={handleSend} isLoading={sending} disabled={!selectedOffer || !body} className="shadow-xl shadow-indigo-200">
+                    Envoyer la campagne {channel === 'email' ? 'Email' : 'SMS'}
                 </Button>
             </div>
         </div>

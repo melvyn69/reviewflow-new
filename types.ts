@@ -37,6 +37,15 @@ export interface SocialLog {
     created_at: string;
 }
 
+export interface ShortLink {
+    id: string;
+    slug: string;
+    target_url: string;
+    organization_id: string;
+    clicks: number;
+    created_at: string;
+}
+
 export interface AppNotification {
     id: string;
     type: 'info' | 'success' | 'warning' | 'error';

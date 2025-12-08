@@ -25,6 +25,8 @@ export const CollectPage = () => {
   const [activeTab, setActiveTab] = useState<'qr' | 'campaigns' | 'widgets' | 'social'>('qr');
   const [campaignType, setCampaignType] = useState<'sms' | 'email'>('sms');
   const [recipient, setRecipient] = useState('');
+  const [subject, setSubject] = useState('');
+  const [content, setContent] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   
@@ -250,14 +252,15 @@ export const CollectPage = () => {
   };
 
   const handleSendCampaign = async () => {
-    if (!recipient) return;
+    if (!recipient || !content) return;
     setIsSending(true);
     try {
-        const subject = "Votre avis compte pour nous";
-        const content = `...`; // (Content shortened for brevity)
-        await api.campaigns.send(campaignType, recipient, subject, content);
+        const finalSubject = subject || "Votre avis compte pour nous";
+        await api.campaigns.send(campaignType, recipient, finalSubject, content);
         toast.success(`Campagne envoyée à ${recipient}`);
         setRecipient('');
+        setContent('');
+        setSubject('');
     } catch (e: any) {
         toast.error("Erreur : " + e.message);
     } finally {
@@ -661,7 +664,7 @@ export const CollectPage = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
               <div className="lg:col-span-2 space-y-6">
                   <Card>
-                      <CardHeader><CardTitle>Nouvelle Campagne</CardTitle></CardHeader>
+                      <CardHeader><CardTitle>Nouvelle Campagne Rapide</CardTitle></CardHeader>
                       <CardContent className="space-y-4">
                           <div className="flex gap-4 mb-4">
                               <button onClick={() => setCampaignType('sms')} className={`flex-1 p-4 rounded-xl border flex flex-col items-center gap-2 ${campaignType === 'sms' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 hover:bg-slate-50'}`}>
@@ -671,8 +674,29 @@ export const CollectPage = () => {
                                   <Mail className="h-6 w-6" /> <span className="font-bold">Email</span>
                               </button>
                           </div>
-                          <Input placeholder={campaignType === 'sms' ? '+33 6 12 34 56 78' : 'client@exemple.com'} value={recipient} onChange={(e) => setRecipient(e.target.value)} />
-                          <div className="flex justify-end"><Button icon={Send} onClick={handleSendCampaign} isLoading={isSending} disabled={!recipient}>Envoyer</Button></div>
+                          
+                          <Input 
+                            placeholder={campaignType === 'sms' ? '+33 6 12 34 56 78' : 'client@exemple.com'} 
+                            value={recipient} 
+                            onChange={(e) => setRecipient(e.target.value)} 
+                          />
+                          
+                          {campaignType === 'email' && (
+                              <Input 
+                                placeholder="Objet de l'email"
+                                value={subject}
+                                onChange={e => setSubject(e.target.value)}
+                              />
+                          )}
+
+                          <textarea 
+                            className="w-full p-3 border border-slate-200 rounded-lg text-sm h-32"
+                            placeholder="Votre message..."
+                            value={content}
+                            onChange={e => setContent(e.target.value)}
+                          />
+
+                          <div className="flex justify-end"><Button icon={Send} onClick={handleSendCampaign} isLoading={isSending} disabled={!recipient || !content}>Envoyer</Button></div>
                       </CardContent>
                   </Card>
               </div>

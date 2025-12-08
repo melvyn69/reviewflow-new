@@ -39,7 +39,8 @@ import {
     BrandSettings,
     NotificationSettings,
     SocialTemplate,
-    SocialLog
+    SocialLog,
+    ShortLink
 } from '../types';
 
 const isDemoMode = () => {
@@ -53,8 +54,8 @@ let mockLogs: SocialLog[] = [
     { id: '1', post_id: 'sp3', platform: 'instagram', status: 'success', message: 'Published successfully', created_at: new Date(Date.now() - 86400000).toISOString() }
 ];
 let mockCustomers: Customer[] = [
-    { id: 'cust1', name: 'Jean Dupont', source: 'Google', stage: 'new', average_rating: 4.5, total_reviews: 2, last_interaction: new Date().toISOString(), status: 'promoter', ltv_estimate: 150 },
-    { id: 'cust2', name: 'Marie Martin', source: 'Facebook', stage: 'risk', average_rating: 2.0, total_reviews: 1, last_interaction: new Date(Date.now() - 1000000000).toISOString(), status: 'detractor', ltv_estimate: 45 }
+    { id: 'cust1', name: 'Jean Dupont', source: 'Google', stage: 'new', average_rating: 4.5, total_reviews: 2, last_interaction: new Date().toISOString(), status: 'promoter', ltv_estimate: 150, email: 'jean.dupont@demo.com' },
+    { id: 'cust2', name: 'Marie Martin', source: 'Facebook', stage: 'risk', average_rating: 2.0, total_reviews: 1, last_interaction: new Date(Date.now() - 1000000000).toISOString(), status: 'detractor', ltv_estimate: 45, email: 'marie.m@demo.com' }
 ];
 
 export const api = {
@@ -482,7 +483,7 @@ export const api = {
             if (!user?.email) return;
             await supabase!.functions.invoke('send_campaign_emails', {
                 body: { 
-                    emails: [user.email], 
+                    recipients: [{ email: user.email, name: user.name }], 
                     subject: 'Test Reviewflow', 
                     html: '<h1>Ceci est un test</h1><p>Tout fonctionne !</p>'
                 }
@@ -531,6 +532,14 @@ export const api = {
             if (error) throw error;
             return data.text;
         },
+        generateEmailCampaign: async (context: any) => {
+            if (isDemoMode()) return { subject: "Offre exclusive : -20% sur tout !", body: "<p>Bonjour {{name}},</p><p>Profitez de notre offre...</p>" };
+            const { data, error } = await supabase!.functions.invoke('ai_generate', {
+                body: { task: 'generate_email_campaign', context }
+            });
+            if (error) throw error;
+            return JSON.parse(data.text);
+        },
         runCustomTask: async (payload: any) => {
             const { data, error } = await supabase!.functions.invoke('ai_generate', {
                 body: { ...payload }
@@ -561,6 +570,38 @@ export const api = {
             });
             if (error) throw error;
             return data.text;
+        }
+    },
+    links: {
+        createShortLink: async (targetUrl: string): Promise<ShortLink> => {
+            // In a real app, this calls the backend to insert into DB and generate a unique slug
+            // Here we simulate it for the demo
+            const slug = Math.random().toString(36).substr(2, 6);
+            if (isDemoMode()) {
+                return {
+                    id: 'mock-id',
+                    slug,
+                    target_url: targetUrl,
+                    organization_id: 'demo-org-id',
+                    clicks: 0,
+                    created_at: new Date().toISOString()
+                };
+            }
+            // Real implementation would look like:
+            /*
+            const { data, error } = await supabase.from('short_links').insert({ target_url: targetUrl, organization_id: org.id }).select().single();
+            if (error) throw error;
+            return data;
+            */
+           // Fallback simulation
+           return {
+               id: 'simulated',
+               slug,
+               target_url: targetUrl,
+               organization_id: 'org',
+               clicks: 0,
+               created_at: new Date().toISOString()
+           };
         }
     },
     social: {
@@ -661,17 +702,34 @@ export const api = {
         }
     },
     campaigns: {
-        send: async (type: 'sms'|'email', recipient: string, subject: string, content: string) => {
+        send: async (type: 'sms'|'email', recipient: string, subject: string, content: string, variables?: any) => {
             if (isDemoMode()) return;
+            
+            // Handle "List" vs "Single" logic
+            let recipientsList = [];
+            if (recipient.startsWith('list:')) {
+                // Mock fetching list from DB based on segment
+                // In real app: fetch customers where stage = segment
+                recipientsList = mockCustomers.map(c => ({ email: c.email || 'test@test.com', name: c.name, id: c.id }));
+            } else {
+                recipientsList = [{ email: recipient, name: 'Client' }];
+            }
+
             if (type === 'email') {
                 await supabase!.functions.invoke('send_campaign_emails', {
-                    body: { emails: [recipient], subject, html: content }
+                    body: { 
+                        recipients: recipientsList, 
+                        subject, 
+                        html: content 
+                    }
                 });
             } else if (type === 'sms') {
                 const org = await api.organization.get();
                 if (!org?.twilio_settings?.account_sid) {
                     throw new Error("Twilio non configuré dans les paramètres");
                 }
+                // For SMS, we simplify and just send to the first one or loop if needed in backend
+                // This specific function endpoint might need update for batch
                 await supabase!.functions.invoke('send_sms_campaign', {
                     body: { 
                         to: recipient, 
