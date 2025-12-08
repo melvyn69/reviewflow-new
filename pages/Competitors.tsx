@@ -23,7 +23,8 @@ import {
     ArrowRight,
     History,
     FileText,
-    Play
+    Play,
+    Menu
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
@@ -118,7 +119,7 @@ export const CompetitorsPage = () => {
             if (results && results.length > 0) {
                 toast.success(`${results.length} concurrents détectés dans la zone.`);
             } else {
-                toast.info("Aucun concurrent trouvé avec ces critères.");
+                toast.info("Aucun concurrent trouvé. Essayez d'élargir le rayon.");
             }
         } catch (e: any) {
             setLocationStatus('error');
@@ -212,10 +213,10 @@ export const CompetitorsPage = () => {
     // PAYWALL - PRO (GROWTH) PLAN ONLY
     if (org.subscription_plan === 'free' || org.subscription_plan === 'starter') {
         return (
-            <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8">
+            <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8 px-4">
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Veille Concurrentielle</h1>
-                    <p className="text-slate-500">Espionnez légalement vos concurrents et analysez leur stratégie.</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">Veille Concurrentielle</h1>
+                    <p className="text-slate-500 text-sm md:text-base">Espionnez légalement vos concurrents et analysez leur stratégie.</p>
                 </div>
                 
                 <ProLock 
@@ -242,43 +243,48 @@ export const CompetitorsPage = () => {
     }
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 animate-in fade-in duration-500 px-4 sm:px-6 md:px-8 pb-20">
+            {/* Header Section */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-8">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                        <Target className="h-8 w-8 text-red-600" />
+                        <Target className="h-8 w-8 text-red-600 shrink-0" />
                         Veille Concurrentielle
-                        <Badge variant="pro">GROWTH</Badge>
+                        <Badge variant="pro" className="hidden sm:inline-flex">GROWTH</Badge>
                     </h1>
-                    <p className="text-slate-500">Surveillez votre marché et anticipez les mouvements adverses.</p>
+                    <p className="text-slate-500 text-sm mt-1">Surveillez votre marché et anticipez les mouvements adverses.</p>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setActiveTab('tracked')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'tracked' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        Ma Sélection
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('scan')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'scan' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <Radar className="h-4 w-4" /> Radar
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('insights')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'insights' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <BarChart3 className="h-4 w-4" /> Analyse SWOT
-                    </button>
+                
+                {/* Mobile Scrollable Tabs */}
+                <div className="w-full lg:w-auto overflow-x-auto pb-1 -mx-1 px-1">
+                    <div className="flex bg-slate-100 p-1 rounded-lg min-w-fit">
+                        <button 
+                            onClick={() => setActiveTab('tracked')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'tracked' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Ma Sélection
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('scan')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'scan' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <Radar className="h-4 w-4" /> Radar
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('insights')}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'insights' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <BarChart3 className="h-4 w-4" /> Analyse SWOT
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* REST OF THE PAGE - Only rendered if plan is Pro */}
-            
+            {/* TAB: INSIGHTS (SWOT) */}
             {activeTab === 'insights' && (
                 <div className="grid grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="col-span-12 lg:col-span-3 space-y-6">
+                    {/* Left Panel: Configuration */}
+                    <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-6">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-sm uppercase tracking-wide text-slate-500">Nouvelle Analyse</CardTitle>
@@ -307,22 +313,24 @@ export const CompetitorsPage = () => {
                                 </Button>
                             </CardContent>
                         </Card>
+                        
+                        {/* Report History */}
                         {reportHistory.length > 0 && (
-                            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                                 <div className="p-3 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
                                     <History className="h-3 w-3" /> Historique
                                 </div>
-                                <div className="max-h-[400px] overflow-y-auto">
+                                <div className="max-h-[300px] overflow-y-auto">
                                     {reportHistory.map(report => (
                                         <div 
                                             key={report.id}
                                             onClick={() => handleSelectReport(report)}
-                                            className={`p-3 border-b border-slate-50 cursor-pointer transition-colors hover:bg-indigo-50 ${selectedReport?.id === report.id ? 'bg-indigo-50 border-l-2 border-l-indigo-600' : ''}`}
+                                            className={`p-3 border-b border-slate-50 cursor-pointer transition-colors hover:bg-indigo-50 last:border-0 ${selectedReport?.id === report.id ? 'bg-indigo-50 border-l-4 border-l-indigo-600 pl-2' : ''}`}
                                         >
                                             <div className="font-medium text-sm text-slate-900 truncate">{report.sector}</div>
                                             <div className="text-xs text-slate-500 flex justify-between mt-1">
-                                                <span>{report.location}</span>
-                                                <span>{new Date(report.created_at).toLocaleDateString()}</span>
+                                                <span className="truncate max-w-[120px]">{report.location}</span>
+                                                <span className="shrink-0">{new Date(report.created_at).toLocaleDateString()}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -330,31 +338,37 @@ export const CompetitorsPage = () => {
                             </div>
                         )}
                     </div>
-                    <div className="col-span-12 lg:col-span-9">
+
+                    {/* Main Panel: Results */}
+                    <div className="col-span-12 lg:col-span-8 xl:col-span-9">
                         {loadingInsights ? (
-                            <div className="h-full flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-slate-200 min-h-[400px]">
+                            <div className="h-full flex flex-col items-center justify-center p-8 md:p-12 bg-white rounded-xl border border-slate-200 min-h-[400px]">
                                 <Loader2 className="h-12 w-12 text-indigo-600 animate-spin mb-4" />
-                                <h3 className="text-xl font-bold text-slate-900">Analyse de marché en cours...</h3>
-                                <p className="text-slate-500 mt-2 max-w-md text-center">
+                                <h3 className="text-xl font-bold text-slate-900 text-center">Analyse de marché en cours...</h3>
+                                <p className="text-slate-500 mt-2 max-w-md text-center text-sm">
                                     L'IA explore les données des concurrents, identifie les tendances et génère votre matrice SWOT.
                                 </p>
                             </div>
                         ) : marketData ? (
                             <div className="space-y-6">
-                                <div className="flex justify-between items-end pb-4 border-b border-slate-200">
+                                {/* Header Results */}
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end pb-4 border-b border-slate-200 gap-4">
                                     <div>
-                                        <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+                                        <div className="flex items-center gap-2 text-xs md:text-sm text-slate-500 mb-1">
                                             <FileText className="h-4 w-4" /> 
                                             Rapport généré le {selectedReport ? new Date(selectedReport.created_at).toLocaleDateString() : new Date().toLocaleDateString()}
                                         </div>
-                                        <h2 className="text-2xl font-bold text-slate-900">
+                                        <h2 className="text-xl md:text-2xl font-bold text-slate-900">
                                             Analyse: {sectorInput || selectedReport?.sector} - {locationInput || selectedReport?.location}
                                         </h2>
                                     </div>
                                     <Button variant="outline" size="sm" icon={Download}>PDF</Button>
                                 </div>
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                    <Card className="lg:col-span-1 bg-slate-900 text-white border-none shadow-xl flex flex-col">
+
+                                {/* Trends & SWOT */}
+                                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                                    {/* Trends Card */}
+                                    <Card className="xl:col-span-1 bg-slate-900 text-white border-none shadow-xl flex flex-col">
                                         <CardHeader>
                                             <CardTitle className="flex items-center gap-2">
                                                 <TrendingUp className="h-5 w-5 text-yellow-400" />
@@ -365,14 +379,16 @@ export const CompetitorsPage = () => {
                                             <ul className="space-y-4">
                                                 {marketData.trends?.map((trend: string, i: number) => (
                                                     <li key={i} className="flex gap-3 text-sm text-slate-300 leading-relaxed">
-                                                        <span className="text-yellow-400 font-bold">•</span>
-                                                        {trend}
+                                                        <span className="text-yellow-400 font-bold mt-1">•</span>
+                                                        <span>{trend}</span>
                                                     </li>
                                                 ))}
                                             </ul>
                                         </CardContent>
                                     </Card>
-                                    <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                                    {/* SWOT Grid */}
+                                    <div className="xl:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <Card className="bg-emerald-50 border-emerald-100 shadow-sm">
                                             <CardHeader className="pb-2">
                                                 <CardTitle className="text-emerald-800 flex items-center gap-2 text-base">
@@ -382,8 +398,8 @@ export const CompetitorsPage = () => {
                                             <CardContent>
                                                 <ul className="space-y-2">
                                                     {marketData.swot?.strengths?.map((item: string, i: number) => (
-                                                        <li key={i} className="text-sm text-emerald-700 flex gap-2">
-                                                            <span className="font-bold">+</span> {item}
+                                                        <li key={i} className="text-sm text-emerald-700 flex gap-2 items-start">
+                                                            <span className="font-bold mt-0.5">+</span> {item}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -398,8 +414,8 @@ export const CompetitorsPage = () => {
                                             <CardContent>
                                                 <ul className="space-y-2">
                                                     {marketData.swot?.weaknesses?.map((item: string, i: number) => (
-                                                        <li key={i} className="text-sm text-rose-700 flex gap-2">
-                                                            <span className="font-bold">-</span> {item}
+                                                        <li key={i} className="text-sm text-rose-700 flex gap-2 items-start">
+                                                            <span className="font-bold mt-0.5">-</span> {item}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -414,8 +430,8 @@ export const CompetitorsPage = () => {
                                             <CardContent>
                                                 <ul className="space-y-2">
                                                     {marketData.swot?.opportunities?.map((item: string, i: number) => (
-                                                        <li key={i} className="text-sm text-blue-700 flex gap-2">
-                                                            <span className="font-bold">→</span> {item}
+                                                        <li key={i} className="text-sm text-blue-700 flex gap-2 items-start">
+                                                            <span className="font-bold mt-0.5">→</span> {item}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -430,8 +446,8 @@ export const CompetitorsPage = () => {
                                             <CardContent>
                                                 <ul className="space-y-2">
                                                     {marketData.swot?.threats?.map((item: string, i: number) => (
-                                                        <li key={i} className="text-sm text-amber-700 flex gap-2">
-                                                            <span className="font-bold">!</span> {item}
+                                                        <li key={i} className="text-sm text-amber-700 flex gap-2 items-start">
+                                                            <span className="font-bold mt-0.5">!</span> {item}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -439,13 +455,14 @@ export const CompetitorsPage = () => {
                                         </Card>
                                     </div>
                                 </div>
+
                                 <h3 className="text-lg font-bold text-slate-900 mt-8 mb-4">Détail par Concurrent</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {marketData.competitors_detailed?.map((comp: any, i: number) => (
                                         <Card key={i} className="hover:shadow-md transition-shadow">
                                             <CardContent className="p-6">
                                                 <div className="flex justify-between items-start mb-2">
-                                                    <h4 className="font-bold text-slate-900 truncate pr-2">{comp.name}</h4>
+                                                    <h4 className="font-bold text-slate-900 truncate pr-2 max-w-[70%]">{comp.name}</h4>
                                                     <Badge variant={comp.sentiment_trend === 'Positif' ? 'success' : comp.sentiment_trend === 'Négatif' ? 'error' : 'neutral'} className="shrink-0">
                                                         {comp.sentiment_trend}
                                                     </Badge>
@@ -456,7 +473,7 @@ export const CompetitorsPage = () => {
                                                 </p>
                                                 <div className="bg-red-50 p-2 rounded border border-red-100">
                                                     <p className="text-[10px] text-red-500 font-bold uppercase mb-1">Point faible majeur</p>
-                                                    <p className="text-xs text-red-800 font-medium">{comp.top_complaint}</p>
+                                                    <p className="text-xs text-red-800 font-medium line-clamp-2">{comp.top_complaint}</p>
                                                 </div>
                                             </CardContent>
                                         </Card>
@@ -464,10 +481,10 @@ export const CompetitorsPage = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center p-12 bg-slate-50 rounded-xl border border-dashed border-slate-300 min-h-[400px]">
+                            <div className="h-full flex flex-col items-center justify-center p-8 md:p-12 bg-slate-50 rounded-xl border border-dashed border-slate-300 min-h-[400px]">
                                 <BarChart3 className="h-12 w-12 text-slate-300 mb-4" />
-                                <h3 className="text-lg font-medium text-slate-900">Aucune analyse sélectionnée</h3>
-                                <p className="text-slate-500 mb-6 text-center max-w-sm">
+                                <h3 className="text-lg font-medium text-slate-900 text-center">Aucune analyse sélectionnée</h3>
+                                <p className="text-slate-500 mb-6 text-center max-w-sm text-sm">
                                     Sélectionnez un rapport dans l'historique ou lancez une nouvelle analyse pour obtenir des insights stratégiques.
                                 </p>
                             </div>
@@ -476,21 +493,22 @@ export const CompetitorsPage = () => {
                 </div>
             )}
             
+            {/* TAB: SCAN (RADAR) */}
             {activeTab === 'scan' && (
                 <div className="space-y-6 animate-in fade-in">
                     <Card className="bg-slate-900 text-white border-none shadow-xl">
-                        <CardContent className="p-8">
-                            <div className="flex flex-col md:flex-row gap-6 items-end">
+                        <CardContent className="p-6 md:p-8">
+                            <div className="flex flex-col lg:flex-row gap-6 items-end">
                                 <div className="flex-1 w-full">
                                     <label className="block text-sm font-medium text-slate-400 mb-2">Secteur d'activité</label>
                                     <Input 
-                                        placeholder="Mot-clé (facultatif)" 
+                                        placeholder="Mot-clé (ex: Burger, Plombier...)" 
                                         className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                                         value={scanSector}
                                         onChange={e => setScanSector(e.target.value)}
                                     />
                                 </div>
-                                <div className="w-full md:w-48">
+                                <div className="w-full lg:w-48">
                                     <label className="block text-sm font-medium text-slate-400 mb-2">Rayon de recherche</label>
                                     <select 
                                         className="w-full bg-slate-800 border border-slate-700 rounded-lg text-white px-3 py-2.5 focus:ring-2 focus:ring-indigo-500"
@@ -505,7 +523,7 @@ export const CompetitorsPage = () => {
                                 </div>
                                 <Button 
                                     size="lg" 
-                                    className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-500 border-none shadow-lg shadow-indigo-900/50"
+                                    className="w-full lg:w-auto bg-indigo-600 hover:bg-indigo-500 border-none shadow-lg shadow-indigo-900/50"
                                     onClick={handleScan}
                                     isLoading={loading}
                                     disabled={locationStatus === 'locating'}
@@ -516,38 +534,39 @@ export const CompetitorsPage = () => {
                             </div>
                         </CardContent>
                     </Card>
+                    
                     {scannedResults.length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4">
                             {scannedResults.map((result, i) => (
                                 <Card key={i} className="hover:shadow-lg transition-shadow border-slate-200">
                                     <CardContent className="p-6">
                                         <div className="flex justify-between items-start mb-4">
-                                            <div>
-                                                <h3 className="font-bold text-lg text-slate-900">{result.name}</h3>
-                                                <p className="text-xs text-slate-500 flex items-center gap-1">
-                                                    <MapPin className="h-3 w-3" /> {result.address || 'Proche'}
+                                            <div className="overflow-hidden">
+                                                <h3 className="font-bold text-lg text-slate-900 truncate">{result.name}</h3>
+                                                <p className="text-xs text-slate-500 flex items-center gap-1 truncate">
+                                                    <MapPin className="h-3 w-3 shrink-0" /> {result.address || 'Proche'}
                                                 </p>
                                             </div>
-                                            <div className={`px-2 py-1 rounded text-xs font-bold ${result.threat_level > 80 ? 'bg-red-100 text-red-700' : result.threat_level > 50 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                                            <div className={`px-2 py-1 rounded text-xs font-bold shrink-0 ${result.threat_level > 80 ? 'bg-red-100 text-red-700' : result.threat_level > 50 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
                                                 Menace: {result.threat_level}%
                                             </div>
                                         </div>
-                                        <div className="flex gap-4 mb-4 text-sm">
-                                            <div>
-                                                <div className="text-slate-400 text-xs">Note</div>
+                                        <div className="flex gap-4 mb-4 text-sm bg-slate-50 p-2 rounded">
+                                            <div className="flex-1 text-center border-r border-slate-200">
+                                                <div className="text-slate-400 text-xs uppercase font-bold">Note</div>
                                                 <div className="font-bold text-slate-900">{result.rating} ★</div>
                                             </div>
-                                            <div>
-                                                <div className="text-slate-400 text-xs">Volume</div>
-                                                <div className="font-bold text-slate-900">{result.review_count} avis</div>
+                                            <div className="flex-1 text-center">
+                                                <div className="text-slate-400 text-xs uppercase font-bold">Avis</div>
+                                                <div className="font-bold text-slate-900">{result.review_count}</div>
                                             </div>
                                         </div>
                                         <div className="space-y-2 mb-6">
-                                            <div className="text-xs font-semibold text-green-700 bg-green-50 p-2 rounded">
-                                                👍 {result.strengths[0]}
+                                            <div className="text-xs font-semibold text-green-700 bg-green-50 p-2 rounded flex gap-2">
+                                                <span>👍</span> <span className="truncate">{result.strengths[0]}</span>
                                             </div>
-                                            <div className="text-xs font-semibold text-red-700 bg-red-50 p-2 rounded">
-                                                👎 {result.weaknesses[0]}
+                                            <div className="text-xs font-semibold text-red-700 bg-red-50 p-2 rounded flex gap-2">
+                                                <span>👎</span> <span className="truncate">{result.weaknesses[0]}</span>
                                             </div>
                                         </div>
                                         <Button className="w-full" variant="outline" icon={Plus} onClick={() => handleTrack(result)}>
@@ -561,19 +580,20 @@ export const CompetitorsPage = () => {
                 </div>
             )}
 
+            {/* TAB: TRACKED */}
             {activeTab === 'tracked' && (
-                <Card className="animate-in fade-in">
+                <Card className="animate-in fade-in shadow-sm border-slate-200">
                     <CardHeader>
                         <CardTitle>Concurrents Surveillés</CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-0">
                         {trackedCompetitors.length === 0 ? (
-                            <div className="text-center py-12">
+                            <div className="text-center py-12 px-4">
                                 <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                     <Search className="h-8 w-8 text-slate-400" />
                                 </div>
                                 <h3 className="text-lg font-medium text-slate-900 mb-2">Aucun concurrent suivi</h3>
-                                <p className="text-slate-500 mb-6">Utilisez le Radar de Zone pour détecter vos concurrents automatiquement.</p>
+                                <p className="text-slate-500 mb-6 max-w-sm mx-auto">Utilisez le Radar de Zone pour détecter vos concurrents automatiquement et les ajouter à votre liste.</p>
                                 <Button onClick={() => setActiveTab('scan')} icon={Radar}>Lancer un Scan</Button>
                             </div>
                         ) : (
@@ -584,8 +604,8 @@ export const CompetitorsPage = () => {
                                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nom</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Note</th>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Volume</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Forces</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Faiblesses</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hidden md:table-cell">Forces</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hidden md:table-cell">Faiblesses</th>
                                             <th className="px-6 py-3"></th>
                                         </tr>
                                     </thead>
@@ -593,8 +613,8 @@ export const CompetitorsPage = () => {
                                         {trackedCompetitors.map((comp) => (
                                             <tr key={comp.id} className="hover:bg-slate-50">
                                                 <td className="px-6 py-4">
-                                                    <div className="font-bold text-slate-900">{comp.name}</div>
-                                                    <div className="text-xs text-slate-500">{comp.address}</div>
+                                                    <div className="font-bold text-slate-900 text-sm truncate max-w-[150px] sm:max-w-none">{comp.name}</div>
+                                                    <div className="text-xs text-slate-500 truncate max-w-[150px] sm:max-w-none">{comp.address}</div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <Badge variant={comp.rating >= 4.5 ? 'success' : comp.rating >= 4 ? 'default' : 'warning'}>
@@ -602,24 +622,24 @@ export const CompetitorsPage = () => {
                                                     </Badge>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-slate-600">
-                                                    {comp.review_count} avis
+                                                    {comp.review_count}
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-4 hidden md:table-cell">
                                                     <div className="flex flex-wrap gap-1">
                                                         {comp.strengths.slice(0, 2).map(s => (
-                                                            <span key={s} className="text-[10px] bg-green-50 text-green-700 px-2 py-1 rounded border border-green-100">{s}</span>
+                                                            <span key={s} className="text-[10px] bg-green-50 text-green-700 px-2 py-1 rounded border border-green-100 whitespace-nowrap">{s}</span>
                                                         ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-4 hidden md:table-cell">
                                                     <div className="flex flex-wrap gap-1">
                                                         {comp.weaknesses.slice(0, 2).map(s => (
-                                                            <span key={s} className="text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-100">{s}</span>
+                                                            <span key={s} className="text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-100 whitespace-nowrap">{s}</span>
                                                         ))}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button onClick={() => handleDelete(comp.id)} className="text-slate-400 hover:text-red-600 transition-colors">
+                                                    <button onClick={() => handleDelete(comp.id)} className="text-slate-400 hover:text-red-600 transition-colors p-2 rounded-full hover:bg-slate-100">
                                                         <Trash2 className="h-4 w-4" />
                                                     </button>
                                                 </td>

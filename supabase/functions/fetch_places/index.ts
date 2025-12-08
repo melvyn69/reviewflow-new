@@ -8,6 +8,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Simple sleep helper
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -38,42 +41,81 @@ Deno.serve(async (req: Request) => {
         throw new Error("Latitude and Longitude are required");
     }
 
-    // 3. Call Google Places API (Nearby Search)
+    // --- REAL SCRAPING LOGIC WITH RETRY ---
+    // Note: If you have an Outscraper API key, you would use it here.
+    // Since we don't, we upgrade the Google Places logic to be more "scraper-like"
+    // by using Text Search which provides more comprehensive lists for specific sectors
+    // than Nearby Search which is strictly proximity based.
+
+    let results = [];
+    let success = false;
+    const maxRetries = 2; // Total 3 attempts
+    const startTime = Date.now();
+    let finalError = null;
+
     // Radius in meters (default 5000m = 5km)
     const searchRadius = (radius || 5) * 1000;
-    const typeQuery = keyword ? `&keyword=${encodeURIComponent(keyword)}` : '&type=establishment';
     
-    // Using standard Places Nearby Search
-    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${searchRadius}${typeQuery}&key=${googlePlacesKey}`;
+    // Construct text search query: "keyword near lat,lng" logic
+    // Google Places Text Search doesn't take lat/lng directly in query string easily for centering without bias
+    // We use location & radius parameters with query.
+    // Query Example: "Restaurant" 
+    const query = keyword || 'establishment';
     
-    console.log(`Fetching places: ${latitude},${longitude} r=${searchRadius} q=${keyword}`);
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${latitude},${longitude}&radius=${searchRadius}&key=${googlePlacesKey}`;
 
-    const googleRes = await fetch(url);
-    const googleData = await googleRes.json();
+    console.log(`Scanning competitors: ${query} around ${latitude},${longitude} (r=${searchRadius}m)...`);
 
-    if (googleData.status !== 'OK' && googleData.status !== 'ZERO_RESULTS') {
-        console.error("Google API Error", googleData);
-        throw new Error(`Google Places Error: ${googleData.status} - ${googleData.error_message || ''}`);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            if (attempt > 0) {
+                console.log(`Retry attempt ${attempt}...`);
+                await sleep(1500 * attempt); // Backoff strategy
+            }
+
+            const googleRes = await fetch(url);
+            
+            if (!googleRes.ok) {
+                throw new Error(`API Error ${googleRes.status}: ${await googleRes.text()}`);
+            }
+
+            const googleData = await googleRes.json();
+
+            if (googleData.status === 'OK' && googleData.results?.length > 0) {
+                results = googleData.results;
+                success = true;
+                break; // Success!
+            } else if (googleData.status === 'ZERO_RESULTS') {
+                // Not an error per se, but retrying might help if API flaked, 
+                // though usually ZERO_RESULTS is definitive. We stop to save quota.
+                console.log("Zero results found.");
+                break;
+            } else {
+                throw new Error(`API Status: ${googleData.status} - ${googleData.error_message || ''}`);
+            }
+
+        } catch (e: any) {
+            console.error(`Scan attempt ${attempt} failed:`, e.message);
+            finalError = e.message;
+        }
     }
 
-    const results = googleData.results || [];
+    const durationMs = Date.now() - startTime;
 
     // 4. Transform & Analyze Data
     const competitors = results.map((place: any) => {
         // Calculate "Threat Level" (0-100)
-        // Logic: Rating (0-5) contributes 60% of threat. Volume contributes 40%.
         const rating = place.rating || 0;
         const count = place.user_ratings_total || 0;
         
         let threat = 0;
         if (count > 0) {
-            // High rating (4.5+) is dangerous. Low rating is less threat.
+            // High rating (4.5+) is dangerous.
             threat += (rating / 5) * 60; 
-            // High volume means established competitor. Cap at 500 reviews for max score.
+            // Volume
             threat += Math.min(count, 500) / 500 * 40; 
         }
 
-        // Basic sentiment inference based on rating for "Strengths/Weaknesses"
         const strengths = [];
         const weaknesses = [];
         
@@ -87,7 +129,7 @@ Deno.serve(async (req: Request) => {
         return {
             place_id: place.place_id,
             name: place.name,
-            address: place.vicinity,
+            address: place.formatted_address || place.vicinity, // Text Search returns formatted_address
             rating: rating,
             review_count: count,
             types: place.types,
@@ -101,8 +143,34 @@ Deno.serve(async (req: Request) => {
     // Sort by threat level descending
     competitors.sort((a: any, b: any) => b.threat_level - a.threat_level);
 
+    // 5. Log the Scan (Fire and Forget)
+    try {
+        await supabase.from('competitor_scans').insert({
+            user_id: user.id,
+            query: keyword,
+            radius: radius,
+            center_lat: latitude,
+            center_lng: longitude,
+            results_count: competitors.length,
+            status: success ? 'success' : 'failure',
+            error_message: finalError,
+            execution_time_ms: durationMs,
+            created_at: new Date().toISOString()
+        });
+    } catch (logErr) {
+        console.error("Failed to log scan:", logErr);
+        // Don't fail the request if logging fails
+    }
+
+    if (!success && competitors.length === 0) {
+        return new Response(
+            JSON.stringify({ error: finalError || "Aucun résultat trouvé après plusieurs tentatives." }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+
     return new Response(
-      JSON.stringify({ success: true, results: competitors.slice(0, 15) }), // Limit to top 15 results
+      JSON.stringify({ success: true, results: competitors.slice(0, 20) }), // Top 20 relevant
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
