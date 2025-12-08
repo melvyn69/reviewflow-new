@@ -416,9 +416,19 @@ export const SocialPage = () => {
                                 <div className="space-y-4">
                                     {/* Style & Format Selectors */}
                                     <div>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                                            <Palette className="h-4 w-4" /> Style & Format
-                                        </label>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+                                                <Palette className="h-4 w-4" /> Style & Format
+                                            </label>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="xs" 
+                                                className="text-indigo-600 hover:text-indigo-700 h-auto py-0 px-2 font-bold bg-indigo-50"
+                                                onClick={() => navigate('/social/models/create')}
+                                            >
+                                                + Créer un modèle
+                                            </Button>
+                                        </div>
                                         <div className="flex flex-col sm:flex-row gap-4">
                                             <select 
                                                 value={template}

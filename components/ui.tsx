@@ -1,8 +1,130 @@
 
 import React, { InputHTMLAttributes, SelectHTMLAttributes, useContext, useState, useEffect, useMemo } from 'react';
 import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle, Lock, Sparkles, ChevronRight } from 'lucide-react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
-export { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams };
+
+// --- ROUTER SHIM (Replaces react-router-dom) ---
+const RouterContext = React.createContext<{ path: string; push: (p: string) => void; replace: (p: string) => void }>({ path: '/', push: () => {}, replace: () => {} });
+const ParamsContext = React.createContext<Record<string, string>>({});
+
+export const HashRouter: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [path, setPath] = useState(window.location.hash.slice(1) || '/');
+
+  useEffect(() => {
+    const handler = () => setPath(window.location.hash.slice(1) || '/');
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
+
+  const push = (p: string) => { window.location.hash = p; };
+  const replace = (p: string) => { window.location.replace('#' + p); };
+
+  return <RouterContext.Provider value={{ path, push, replace }}>{children}</RouterContext.Provider>;
+};
+
+export const useLocation = () => {
+  const { path } = useContext(RouterContext);
+  return { pathname: path.split('?')[0], search: path.includes('?') ? path.slice(path.indexOf('?')) : '', hash: '' };
+};
+
+export const useNavigate = () => {
+  const { push, replace } = useContext(RouterContext);
+  return (to: string | number, options?: { replace?: boolean }) => {
+    if (typeof to === 'number') { window.history.go(to); return; }
+    if (options?.replace) replace(to);
+    else push(to);
+  };
+};
+
+export const useParams = () => useContext(ParamsContext);
+
+export const useSearchParams = () => {
+    const { search } = useLocation();
+    const params = useMemo(() => new URLSearchParams(search), [search]);
+    return [params, (newParams: any) => {
+        const str = new URLSearchParams(newParams).toString();
+        window.location.hash = window.location.hash.split('?')[0] + '?' + str;
+    }] as const;
+};
+
+export const Routes: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { pathname } = useLocation();
+  let found: React.ReactNode = null;
+  let params: Record<string, string> = {};
+  
+  React.Children.forEach(children, (child) => {
+    if (found) return;
+    if (!React.isValidElement(child)) return;
+    
+    // @ts-ignore
+    const { path, element } = child.props;
+    if (!path) return;
+
+    const absPath = path.startsWith('/') ? path : '/' + path;
+    
+    if (path === '*') {
+       found = element;
+       return;
+    }
+
+    if (absPath === pathname) {
+      found = element;
+      return;
+    }
+    
+    if (absPath.includes(':')) {
+       const pathParts = absPath.split('/');
+       const currentParts = pathname.split('/');
+       if (pathParts.length === currentParts.length) {
+           let match = true;
+           const currentParams: Record<string, string> = {};
+           for (let i = 0; i < pathParts.length; i++) {
+               if (pathParts[i].startsWith(':')) {
+                   currentParams[pathParts[i].slice(1)] = currentParts[i];
+               } else if (pathParts[i] !== currentParts[i]) {
+                   match = false;
+                   break;
+               }
+           }
+           if (match) {
+               found = element;
+               params = currentParams;
+               return;
+           }
+       }
+    }
+    
+    if (absPath.endsWith('/*')) {
+        const base = absPath.slice(0, -2);
+        if (pathname.startsWith(base)) {
+            found = element;
+            return;
+        }
+    }
+  });
+  
+  return <ParamsContext.Provider value={params}>{found}</ParamsContext.Provider>;
+};
+
+export const Route: React.FC<{ path: string; element: React.ReactNode }> = () => null;
+
+export const Navigate: React.FC<{ to: string; replace?: boolean }> = ({ to, replace: rep }) => {
+  const navigate = useNavigate();
+  useEffect(() => { navigate(to, { replace: rep }); }, [to, rep, navigate]);
+  return null;
+};
+
+export const Link: React.FC<{ to: string; children: React.ReactNode; className?: string; onClick?: () => void }> = ({ to, children, className, onClick }) => {
+    const navigate = useNavigate();
+    return (
+        <a 
+            href={`#${to}`} 
+            onClick={(e) => { e.preventDefault(); navigate(to); if(onClick) onClick(); }} 
+            className={className}
+        >
+            {children}
+        </a>
+    );
+};
 
 // --- TOAST SYSTEM ---
 type ToastType = 'success' | 'error' | 'warning' | 'info';

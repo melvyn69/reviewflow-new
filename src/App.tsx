@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
 import { AnalyticsPage } from './pages/Analytics';
@@ -25,12 +24,14 @@ import { OnboardingPage } from './pages/Onboarding';
 import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
+import { SocialModelCreatePage } from './pages/SocialModelCreate';
 import { PublicProfilePage } from './pages/PublicProfile';
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
 import { User } from './types';
-import { ToastProvider } from './components/ui';
+import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from './components/ui';
 import { I18nProvider } from './lib/i18n';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // ScrollToTop component
 const ScrollToTop = () => {
@@ -143,6 +144,7 @@ function AppRoutes() {
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
                         <Route path="social" element={<SocialPage />} /> 
+                        <Route path="social/models/create" element={<SocialModelCreatePage />} />
                         <Route path="analytics" element={<AnalyticsPage />} />
                         <Route path="competitors" element={<CompetitorsPage />} />
                         <Route path="automation" element={<AutomationPage />} />
@@ -189,7 +191,9 @@ const App = () => {
     <HashRouter>
       <I18nProvider>
         <ToastProvider>
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
         </ToastProvider>
       </I18nProvider>
     </HashRouter>
