@@ -182,7 +182,6 @@ export const SocialPage = () => {
                 review_id: selectedReview.id
             });
             
-            // Optimistic update for instant feedback
             setPosts(prev => [...prev, newPost]);
             
             toast.success("Post planifié avec succès !");
@@ -198,7 +197,6 @@ export const SocialPage = () => {
     const handleDeletePost = async (id: string) => {
         if(confirm("Supprimer ce post ?")) {
             await api.social.deletePost(id);
-            // Optimistic removal
             setPosts(prev => prev.filter(p => p.id !== id));
             toast.success("Post supprimé");
         }
@@ -206,12 +204,16 @@ export const SocialPage = () => {
 
     const handleConnect = async (platform: 'facebook' | 'instagram' | 'linkedin') => {
         toast.info(`Connexion à ${platform}...`);
-        // Simulate OAuth flow
         setTimeout(async () => {
             await api.social.connectAccount(platform, true);
             await loadData();
             toast.success(`${platform} connecté !`);
         }, 1500);
+    };
+
+    const handleNewPost = () => {
+        setActiveTab('create');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // Helper to get template classes
@@ -249,7 +251,7 @@ export const SocialPage = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 px-4 sm:px-6 pb-20 lg:pb-8">
             {/* Header & Tabs */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                         <Share2 className="h-8 w-8 text-indigo-600" />
@@ -258,10 +260,32 @@ export const SocialPage = () => {
                     </h1>
                     <p className="text-slate-500">Transformez vos meilleurs avis en posts viraux.</p>
                 </div>
-                <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto max-w-full no-scrollbar">
-                    <button onClick={() => setActiveTab('create')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Créer</button>
-                    <button onClick={() => setActiveTab('calendar')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'calendar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Planning</button>
-                    <button onClick={() => setActiveTab('accounts')} className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'accounts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Comptes</button>
+                
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto max-w-full no-scrollbar flex-1 md:flex-none justify-center">
+                        <button 
+                            onClick={() => setActiveTab('create')} 
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Studio
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('calendar')} 
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'calendar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Planning
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('accounts')} 
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'accounts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Comptes
+                        </button>
+                    </div>
+                    
+                    <Button onClick={handleNewPost} icon={Plus} className="shadow-lg shadow-indigo-200 whitespace-nowrap flex-1 md:flex-none">
+                        Nouveau Post
+                    </Button>
                 </div>
             </div>
 
