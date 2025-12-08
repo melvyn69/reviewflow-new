@@ -1,7 +1,3 @@
-
-
-
-
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, 
@@ -235,6 +231,15 @@ export const api = {
                 }
                 
                 if (filters.rating && filters.rating !== 'Tout') res = res.filter(r => r.rating === parseInt(filters.rating.toString().replace(' ★', '')));
+                
+                // Date Filtering Mock
+                if (filters.startDate) {
+                    res = res.filter(r => new Date(r.received_at) >= new Date(filters.startDate));
+                }
+                if (filters.endDate) {
+                    res = res.filter(r => new Date(r.received_at) <= new Date(filters.endDate));
+                }
+
                 return res;
             }
             if (!supabase) return [];
@@ -265,6 +270,10 @@ export const api = {
             }
             if (filters.search) query = query.ilike('text', `%${filters.search}%`);
             
+            // Date Filtering
+            if (filters.startDate) query = query.gte('received_at', filters.startDate);
+            if (filters.endDate) query = query.lte('received_at', filters.endDate);
+
             if (filters.page !== undefined && filters.limit) {
                 query = query.range(filters.page * filters.limit, (filters.page + 1) * filters.limit - 1);
             }
