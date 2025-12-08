@@ -168,7 +168,7 @@ export interface Offer {
 }
 
 export type TriggerType = 'review_created' | 'review_updated';
-export type ActionType = 'generate_ai_reply' | 'auto_reply' | 'email_alert' | 'add_tag';
+export type ActionType = 'generate_ai_reply' | 'auto_reply' | 'email_alert' | 'add_tag' | 'post_social';
 
 export interface Condition {
     id: string;

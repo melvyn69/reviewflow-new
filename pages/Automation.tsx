@@ -1,9 +1,11 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
 import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select, ProLock } from '../components/ui';
-import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star } from 'lucide-react';
+import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star, Share2 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -195,6 +197,7 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                     <option value="auto_reply">Répondre automatiquement (Auto-pilot)</option>
                                     <option value="email_alert">M'envoyer une alerte email</option>
                                     <option value="add_tag">Ajouter un tag interne</option>
+                                    <option value="post_social">Publier sur les réseaux sociaux</option>
                                 </Select>
                                 <button onClick={() => handleRemoveAction(action.id)} className="text-slate-400 hover:text-red-500">
                                     <Trash2 className="h-4 w-4" />
@@ -252,6 +255,26 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                             value={action.config.tag_name || ''}
                                             onChange={(e) => updateAction(action.id, 'config', { tag_name: e.target.value })}
                                         />
+                                    </div>
+                                )}
+
+                                {action.type === 'post_social' && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-2">Plateformes cibles</label>
+                                        <div className="flex gap-4">
+                                            {['facebook', 'instagram', 'linkedin'].map(p => (
+                                                <label key={p} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded border border-indigo-100 hover:border-indigo-300 transition-colors">
+                                                    <Toggle 
+                                                        checked={action.config[p] === true} 
+                                                        onChange={(v) => updateAction(action.id, 'config', { ...action.config, [p]: v })} 
+                                                    />
+                                                    <span className="capitalize text-sm font-medium">{p}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-2">
+                                            L'IA générera automatiquement un visuel et une légende optimisée pour chaque réseau.
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -358,6 +381,17 @@ export const AutomationPage = () => {
           ]
       },
       {
+          title: "Social Booster 5★",
+          description: "Publier automatiquement les meilleurs avis sur Instagram et Facebook.",
+          icon: Share2,
+          color: "bg-pink-500",
+          conditions: [{ id: generateId(), field: 'rating', operator: 'equals', value: 5 }],
+          actions: [
+              { id: generateId(), type: 'post_social', config: { instagram: true, facebook: true } },
+              { id: generateId(), type: 'auto_reply', config: { tone: 'enthusiastic' } }
+          ]
+      },
+      {
           title: "Gestion de Crise",
           description: "Alerte email immédiate et brouillon d'excuse pour tout avis négatif.",
           icon: AlertTriangle,
@@ -436,7 +470,7 @@ export const AutomationPage = () => {
       </div>
 
       {/* Templates Gallery */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           {TEMPLATES.map((tpl, i) => (
               <WorkflowTemplateCard key={i} {...tpl} onClick={() => applyTemplate(tpl)} />
           ))}
@@ -474,7 +508,7 @@ export const AutomationPage = () => {
                                   <ArrowRight className="h-3 w-3 text-slate-300 self-center" />
                                   {wf.actions.map((a, i) => (
                                       <Badge key={i} variant="default" className="text-[10px]">
-                                          {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type}
+                                          {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type === 'post_social' ? 'Publication Sociale' : a.type}
                                       </Badge>
                                   ))}
                               </div>

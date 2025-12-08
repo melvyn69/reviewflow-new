@@ -1,4 +1,6 @@
 
+
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenAI } from 'https://esm.sh/@google/genai'
 
@@ -142,6 +144,49 @@ Deno.serve(async (req: Request) => {
                     // C. Tagging
                     if (action.type === 'add_tag') {
                         // Would update tags column in DB
+                    }
+
+                    // D. Social Posting (New)
+                    if (action.type === 'post_social') {
+                        const platforms = Object.keys(action.config).filter(key => action.config[key] === true && ['instagram', 'facebook', 'linkedin'].includes(key));
+                        
+                        if (platforms.length > 0) {
+                            try {
+                                const captionPrompt = `
+                                    Act as a Social Media Manager. Write a post caption to celebrate this 5-star customer review:
+                                    "${review.text}" by ${review.author_name}.
+                                    Tone: Enthusiastic, Grateful. 
+                                    Language: French.
+                                    Include 3 relevant emojis and hashtags.
+                                    No quotes.
+                                `;
+                                
+                                const captionRes = await ai.models.generateContent({
+                                    model: modelName,
+                                    contents: captionPrompt
+                                });
+                                const captionText = captionRes.text || "Merci pour cet avis incroyable ! ⭐";
+
+                                const scheduledDate = new Date();
+                                scheduledDate.setHours(scheduledDate.getHours() + 2); // Schedule 2 hours from now
+
+                                for (const platform of platforms) {
+                                    await supabase.from('social_posts').insert({
+                                        organization_id: org.id,
+                                        location_id: review.location_id,
+                                        platform: platform,
+                                        content: captionText,
+                                        status: 'scheduled',
+                                        scheduled_date: scheduledDate.toISOString(),
+                                        review_id: review.id,
+                                        image_url: 'https://placehold.co/1080x1080/4f46e5/ffffff?text=Avis+Client+5+Etoiles' // Placeholder until image gen integration
+                                    });
+                                    console.log(`[Social] Scheduled post for ${platform}`);
+                                }
+                            } catch (err) {
+                                console.error("Social Auto-Post Error", err);
+                            }
+                        }
                     }
                 }
                 
