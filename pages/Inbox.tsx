@@ -33,7 +33,10 @@ import {
   Activity,
   Plus,
   X,
-  Undo
+  Undo,
+  RefreshCw,
+  Inbox as InboxIcon,
+  CheckSquare
 } from 'lucide-react';
 import { useNavigate, useLocation as useRouterLocation } from '../components/ui';
 
@@ -119,6 +122,7 @@ const InboxSkeleton = () => (
 );
 
 const TimelineView = ({ review, onAddNote }: { review: Review; onAddNote: (text: string) => void }) => {
+    // ... existing implementation remains same ...
     const [noteText, setNoteText] = useState('');
     const timeline = api.reviews.getTimeline(review);
 
@@ -220,6 +224,8 @@ export const InboxPage = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [counts, setCounts] = useState({ todo: 0, done: 0 });
+  
   const LIMIT = 20;
 
   const navigate = useNavigate();
@@ -229,7 +235,8 @@ export const InboxPage = () => {
   const targetReviewId = searchParams.get('reviewId');
   const toast = useToast();
 
-  const [statusFilter, setStatusFilter] = useState('Tout');
+  // Filters State
+  const [viewMode, setViewMode] = useState<'todo' | 'done' | 'all'>('todo'); // Main Tab Filter
   const [sourceFilter, setSourceFilter] = useState('Tout');
   const [ratingFilter, setRatingFilter] = useState('Tout');
   const [locationFilter, setLocationFilter] = useState('Tout');
@@ -277,7 +284,8 @@ export const InboxPage = () => {
             setLocations(orgData.locations);
         }
         if (targetReviewId) {
-            setStatusFilter('Tout');
+            // Reset to show all if direct linking
+            setViewMode('all');
             setSourceFilter('Tout');
             setRatingFilter('Tout');
             setLocationFilter('Tout');
@@ -291,31 +299,27 @@ export const InboxPage = () => {
     setHasMore(true);
     loadReviews(true);
     loadTemplates();
-  }, [statusFilter, sourceFilter, ratingFilter, locationFilter, archiveFilter, searchQuery]);
+    updateCounts(); // Refresh counts
+  }, [viewMode, sourceFilter, ratingFilter, locationFilter, archiveFilter, searchQuery]);
 
   // Real-time subscription
   useEffect(() => {
       const sub = api.reviews.subscribe((payload) => {
           // Handle Realtime updates
-          if (payload.eventType === 'INSERT') {
-              const newReview = payload.new;
-              newReview.body = newReview.text; // mapper body
-              
-              // Only add if matches current filters? (Simplified for now: always show toast, add to top)
-              setReviews(prev => [newReview, ...prev]);
-              toast.info(`Nouvel avis reçu de ${newReview.author_name} !`);
-          } else if (payload.eventType === 'UPDATE') {
-              const updated = payload.new;
-              updated.body = updated.text;
-              setReviews(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
-              
-              if (selectedReview?.id === updated.id) {
-                  setSelectedReview(prev => ({ ...prev!, ...updated }));
-              }
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              // Simply reload counts and potentially list if top item
+              updateCounts();
+              // For simplicity in this demo, toast is enough, full reload might be jarring
+              if (payload.eventType === 'INSERT') toast.info(`Nouvel avis reçu !`);
           }
       });
       return () => { sub.unsubscribe(); };
-  }, [selectedReview]);
+  }, []);
+
+  const updateCounts = async () => {
+      const c = await api.reviews.getCounts();
+      setCounts(c);
+  };
 
   const loadReviews = async (reset = false) => {
     if (reset) {
@@ -334,7 +338,11 @@ export const InboxPage = () => {
         search: searchQuery,
         archived: archiveFilter === 'archived'
     };
-    if (statusFilter !== 'Tout') filters.status = statusFilter;
+    
+    // Apply View Mode Logic
+    if (viewMode === 'todo') filters.status = 'todo';
+    else if (viewMode === 'done') filters.status = 'done';
+    
     if (sourceFilter !== 'Tout') filters.source = sourceFilter;
     if (ratingFilter !== 'Tout') filters.rating = ratingFilter;
     
@@ -389,7 +397,7 @@ export const InboxPage = () => {
   };
 
   const handleResetFilters = () => {
-      setStatusFilter('Tout');
+      setViewMode('todo');
       setSourceFilter('Tout');
       setRatingFilter('Tout');
       setLocationFilter('Tout');
@@ -404,15 +412,13 @@ export const InboxPage = () => {
     setReplyText("");
     
     try {
-        // Retrieve context data from location list
         const locationData = locations.find(l => l.id === selectedReview.location_id);
-        
         const draftText = await api.ai.generateReply(selectedReview, {
             tone: aiTone,
             length: aiLength,
             businessName: locationData?.name || "",
             city: locationData?.city || "",
-            category: "Commerce" // Optional: could be fetched from org industry
+            category: "Commerce"
         });
         setReplyText(draftText);
     } catch (error: any) {
@@ -444,8 +450,17 @@ export const InboxPage = () => {
         replied_at: new Date().toISOString()
     };
     
+    // Update local list
     setReviews(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
     setSelectedReview(updatedReview);
+    
+    // If in "Todo" view, remove it from list for better UX
+    if (viewMode === 'todo') {
+        setReviews(prev => prev.filter(r => r.id !== selectedReview.id));
+        setSelectedReview(null);
+    }
+    
+    updateCounts();
     toast.success("Réponse envoyée avec succès !");
   };
 
@@ -465,6 +480,7 @@ export const InboxPage = () => {
       toast.success("Brouillon sauvegardé");
   };
 
+  // ... (Other handlers like handleAddNote, handleAddTag, handleArchive... remain same)
   const handleAddNote = async (text: string) => {
       if (!selectedReview) return;
       try {
@@ -486,12 +502,10 @@ export const InboxPage = () => {
   const handleAddTag = async () => {
       if (!selectedReview || !newTag.trim()) return;
       await api.reviews.addTag(selectedReview.id, newTag.trim());
-      
       const updatedReview = {
           ...selectedReview,
           tags: [...(selectedReview.tags || []), newTag.trim()]
       };
-      
       setReviews(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
       setSelectedReview(updatedReview);
       setNewTag('');
@@ -501,12 +515,10 @@ export const InboxPage = () => {
   const handleRemoveTag = async (tag: string) => {
       if (!selectedReview) return;
       await api.reviews.removeTag(selectedReview.id, tag);
-      
       const updatedReview = {
           ...selectedReview,
           tags: selectedReview.tags?.filter(t => t !== tag) || []
       };
-      
       setReviews(prev => prev.map(r => r.id === selectedReview.id ? updatedReview : r));
       setSelectedReview(updatedReview);
   };
@@ -566,7 +578,6 @@ export const InboxPage = () => {
       setShowShareModal(true);
   };
 
-  const pendingCount = reviews.filter(r => r.status === 'pending').length;
   const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'enterprise';
 
   return (
@@ -577,7 +588,7 @@ export const InboxPage = () => {
           <InboxFocusMode 
               reviews={reviews} 
               onClose={() => { setShowFocusMode(false); loadReviews(true); }} 
-              onUpdate={() => loadReviews(true)}
+              onUpdate={() => { loadReviews(true); updateCounts(); }}
           />
       )}
 
@@ -586,22 +597,47 @@ export const InboxPage = () => {
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                Boîte de réception 
-                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{reviews.length}{hasMore ? '+' : ''}</span>
+                Boîte de réception
             </h1>
             
-            {pendingCount > 0 && archiveFilter !== 'archived' && (
+            {counts.todo > 0 && archiveFilter !== 'archived' && (
                 <Button 
                     className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 animate-pulse"
                     size="sm"
                     icon={Zap}
                     onClick={() => setShowFocusMode(true)}
                 >
-                    Mode Focus ({pendingCount})
+                    Mode Focus ({counts.todo})
                 </Button>
             )}
           </div>
           
+          {/* Main Tabs */}
+          <div className="flex border-b border-slate-100">
+              <button 
+                onClick={() => setViewMode('todo')} 
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'todo' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              >
+                  <InboxIcon className="h-4 w-4" /> 
+                  À traiter 
+                  {counts.todo > 0 && <span className="bg-indigo-100 text-indigo-600 text-[10px] px-1.5 rounded-full">{counts.todo}</span>}
+              </button>
+              <button 
+                onClick={() => setViewMode('done')} 
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'done' ? 'border-green-600 text-green-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              >
+                  <CheckSquare className="h-4 w-4" /> 
+                  Répondu 
+                  <span className="bg-slate-100 text-slate-600 text-[10px] px-1.5 rounded-full">{counts.done}</span>
+              </button>
+              <button 
+                onClick={() => setViewMode('all')} 
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'all' ? 'border-slate-400 text-slate-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+              >
+                  Tout
+              </button>
+          </div>
+
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center">
              {searchQuery && (
                  <Badge variant="neutral" onClick={() => navigate('/inbox')} className="mr-2 cursor-pointer shrink-0">Recherche: {searchQuery} <span className="ml-1 opacity-50">×</span></Badge>
@@ -616,16 +652,6 @@ export const InboxPage = () => {
                  />
              )}
 
-             <FilterSelect 
-                label="Statut" 
-                value={statusFilter} 
-                onChange={setStatusFilter} 
-                options={[
-                    { label: 'En attente', value: 'pending' },
-                    { label: 'Brouillon', value: 'draft' },
-                    { label: 'Envoyé', value: 'sent' }
-                ]} 
-             />
              <FilterSelect 
                 label="Source" 
                 value={sourceFilter} 
@@ -647,7 +673,7 @@ export const InboxPage = () => {
                     { label: 'Archivés', value: 'archived' }
                 ]}
              />
-             {(statusFilter !== 'Tout' || sourceFilter !== 'Tout' || ratingFilter !== 'Tout' || locationFilter !== 'Tout' || archiveFilter !== 'active' || searchQuery) && (
+             {(sourceFilter !== 'Tout' || ratingFilter !== 'Tout' || locationFilter !== 'Tout' || archiveFilter !== 'active' || searchQuery) && (
                  <Button variant="ghost" size="xs" onClick={handleResetFilters} className="text-slate-400 hover:text-red-500 ml-auto shrink-0">Réinit.</Button>
              )}
           </div>
@@ -657,9 +683,21 @@ export const InboxPage = () => {
           {loading ? (
             <InboxSkeleton />
           ) : reviews.length === 0 ? (
-              <div className="p-8 text-center text-slate-400">
-                  <div className="mb-2">{archiveFilter === 'archived' ? '🗄️' : '📭'}</div>
-                  {archiveFilter === 'archived' ? 'Aucun avis archivé.' : 'Aucun avis ne correspond à vos filtres.'}
+              <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-400">
+                  {viewMode === 'todo' ? (
+                      <>
+                        <div className="h-16 w-16 bg-green-50 rounded-full flex items-center justify-center mb-4">
+                            <CheckCircle2 className="h-8 w-8 text-green-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-900 mb-1">Vous êtes à jour !</h3>
+                        <p className="text-sm">Aucun avis en attente de traitement.</p>
+                      </>
+                  ) : (
+                      <>
+                        <div className="mb-2 text-4xl opacity-50">📭</div>
+                        <p>Aucun avis ne correspond à vos filtres.</p>
+                      </>
+                  )}
               </div>
           ) : (
             <>
@@ -721,7 +759,7 @@ export const InboxPage = () => {
         </div>
       </div>
 
-      {/* Right Column: Review Details (Same as before) */}
+      {/* Right Column: Review Details */}
       {selectedReview ? (
         <div className="fixed inset-0 z-50 lg:static lg:z-auto flex-1 w-full lg:w-1/2 flex flex-col bg-slate-50/50 min-w-0">
           <div className="px-4 md:px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center h-[73px]">
@@ -843,16 +881,6 @@ export const InboxPage = () => {
                         </div>
                     </div>
                 )}
-                
-                {selectedReview.analysis?.flags && Object.values(selectedReview.analysis.flags).some(v => v) && (
-                     <div className="mt-4 bg-red-50 p-3 rounded-lg border border-red-100 flex gap-3 items-start animate-in fade-in slide-in-from-top-1">
-                        <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-                        <div>
-                            <h4 className="text-xs font-bold text-red-800 uppercase">Alerte Critique</h4>
-                            <p className="text-xs text-red-700 mt-0.5">Cet avis mentionne des problèmes potentiels d'hygiène ou de sécurité.</p>
-                        </div>
-                    </div>
-                )}
               </CardContent>
             </Card>
 
@@ -970,16 +998,29 @@ export const InboxPage = () => {
                             </div>
                             
                             <div className="flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
-                            <Button 
-                                variant="secondary" 
-                                size="sm"
-                                icon={Wand2} 
-                                onClick={handleGenerateReply}
-                                disabled={isGenerating}
-                                className="w-full sm:w-auto border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 shadow-none hover:shadow-sm"
-                            >
-                                {replyText ? 'Régénérer' : 'Générer Brouillon'}
-                            </Button>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm"
+                                    icon={Wand2} 
+                                    onClick={handleGenerateReply}
+                                    disabled={isGenerating}
+                                    className="border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 shadow-none hover:shadow-sm"
+                                >
+                                    {replyText ? 'Générer (Autre)' : 'Générer'}
+                                </Button>
+                                {replyText && (
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={handleGenerateReply}
+                                        disabled={isGenerating}
+                                        className="text-slate-500"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
                             
                             <div className="flex gap-3 w-full sm:w-auto items-center">
                                 {/* Reply Context Safety Indicator */}

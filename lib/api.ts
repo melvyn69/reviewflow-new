@@ -225,8 +225,13 @@ export const api = {
                     res = res.filter(r => r.archived);
                 }
 
-                if (filters.status) res = res.filter(r => r.status === filters.status);
-                if (filters.rating) res = res.filter(r => r.rating === parseInt(filters.rating.toString().replace(' ★', '')));
+                if (filters.status) {
+                    if (filters.status === 'todo') res = res.filter(r => ['pending', 'draft'].includes(r.status));
+                    else if (filters.status === 'done') res = res.filter(r => ['sent', 'manual'].includes(r.status));
+                    else res = res.filter(r => r.status === filters.status);
+                }
+                
+                if (filters.rating && filters.rating !== 'Tout') res = res.filter(r => r.rating === parseInt(filters.rating.toString().replace(' ★', '')));
                 return res;
             }
             if (!supabase) return [];
@@ -241,9 +246,17 @@ export const api = {
                 query = query.or('archived.is.null,archived.eq.false');
             }
 
-            if (filters.status) query = query.eq('status', filters.status);
-            if (filters.source) query = query.eq('source', filters.source.toLowerCase());
-            if (filters.rating) {
+            if (filters.status) {
+                if (filters.status === 'todo') {
+                    query = query.in('status', ['pending', 'draft']);
+                } else if (filters.status === 'done') {
+                    query = query.in('status', ['sent', 'manual']);
+                } else if (filters.status !== 'Tout') {
+                    query = query.eq('status', filters.status);
+                }
+            }
+            if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
+            if (filters.rating && filters.rating !== 'Tout') {
                 const rating = parseInt(filters.rating.toString().replace(' ★', ''));
                 if (!isNaN(rating)) query = query.eq('rating', rating);
             }
@@ -255,6 +268,37 @@ export const api = {
             
             const { data } = await query.order('received_at', { ascending: false });
             return (data || []).map(r => ({...r, body: r.text}));
+        },
+        getCounts: async (): Promise<{ todo: number, done: number }> => {
+            if (isDemoMode()) {
+                return {
+                    todo: mockReviews.filter(r => !r.archived && ['pending', 'draft'].includes(r.status)).length,
+                    done: mockReviews.filter(r => !r.archived && ['sent', 'manual'].includes(r.status)).length
+                };
+            }
+            if (!supabase) return { todo: 0, done: 0 };
+            const org = await api.organization.get();
+            const locIds = org?.locations.map(l => l.id) || [];
+            
+            if (locIds.length === 0) return { todo: 0, done: 0 };
+
+            // Count TODO
+            const { count: todo } = await supabase
+                .from('reviews')
+                .select('*', { count: 'exact', head: true })
+                .in('location_id', locIds)
+                .in('status', ['pending', 'draft'])
+                .or('archived.is.null,archived.eq.false');
+
+            // Count DONE
+            const { count: done } = await supabase
+                .from('reviews')
+                .select('*', { count: 'exact', head: true })
+                .in('location_id', locIds)
+                .in('status', ['sent', 'manual'])
+                .or('archived.is.null,archived.eq.false');
+
+            return { todo: todo || 0, done: done || 0 };
         },
         reply: async (reviewId: string, text: string) => {
             if (isDemoMode()) {
@@ -340,8 +384,6 @@ export const api = {
     analytics: {
         getOverview: async (period = '30j'): Promise<AnalyticsSummary> => {
             if (isDemoMode()) return DEMO_STATS;
-            // In a real scenario, this should invoke a Supabase RPC or function that filters out archived reviews.
-            // For now we return the mock or basic implementation.
             return DEMO_STATS; 
         }
     },

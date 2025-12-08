@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { Review } from '../types';
 import { api } from '../lib/api';
 import { Button, Badge, useToast } from './ui';
-import { X, Send, SkipForward, Wand2, CheckCircle2, MessageSquare, Star, ArrowRight, Keyboard, Zap } from 'lucide-react';
+import { X, Send, SkipForward, Wand2, CheckCircle2, MessageSquare, Star, ArrowRight, ArrowLeft, RefreshCw, Zap, Edit2 } from 'lucide-react';
 
 interface InboxFocusModeProps {
     reviews: Review[];
@@ -34,7 +35,8 @@ export const InboxFocusMode: React.FC<InboxFocusModeProps> = ({ reviews, onClose
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSend();
-            // ArrowRight to skip? Maybe too risky.
+            if (e.key === 'ArrowRight' && (e.metaKey || e.ctrlKey)) handleSkip();
+            if (e.key === 'ArrowLeft' && (e.metaKey || e.ctrlKey)) handlePrev();
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
@@ -42,7 +44,7 @@ export const InboxFocusMode: React.FC<InboxFocusModeProps> = ({ reviews, onClose
 
     const generateDraft = async (review: Review) => {
         // If already has a draft, use it
-        if (review.ai_reply?.text) {
+        if (review.ai_reply?.text && !isGenerating) {
             setReplyText(review.ai_reply.text);
             return;
         }
@@ -70,6 +72,13 @@ export const InboxFocusMode: React.FC<InboxFocusModeProps> = ({ reviews, onClose
         }
     };
 
+    const handlePrev = () => {
+        if (currentIndex > 0) {
+            setCurrentIndex(prev => prev - 1);
+            setReplyText('');
+        }
+    };
+
     const handleSend = async () => {
         if (!replyText.trim() || isSending) return;
         setIsSending(true);
@@ -92,6 +101,17 @@ export const InboxFocusMode: React.FC<InboxFocusModeProps> = ({ reviews, onClose
         handleNext();
     };
 
+    const handleRegenerate = () => {
+        if (!currentReview) return;
+        // Force regeneration ignoring existing draft
+        setIsGenerating(true);
+        setReplyText('');
+        api.ai.generateReply(currentReview, { tone: 'professionnel', length: 'short' })
+            .then(text => setReplyText(text))
+            .catch(() => toast.error("Erreur IA"))
+            .finally(() => setIsGenerating(false));
+    };
+
     if (finished || queue.length === 0) {
         return (
             <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center text-white animate-in fade-in duration-300">
@@ -109,10 +129,10 @@ export const InboxFocusMode: React.FC<InboxFocusModeProps> = ({ reviews, onClose
 
     if (!currentReview) return null;
 
-    const progress = Math.round(((currentIndex) / queue.length) * 100);
+    const progress = Math.round(((currentIndex + 1) / queue.length) * 100);
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-md flex flex-col h-screen overflow-hidden">
+        <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col h-screen overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800">
                 <div className="flex items-center gap-4">
@@ -129,106 +149,119 @@ export const InboxFocusMode: React.FC<InboxFocusModeProps> = ({ reviews, onClose
                 </button>
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full p-4 md:p-8 gap-6 overflow-hidden">
-                
-                {/* Left: Review Card */}
-                <div className="flex-1 flex flex-col justify-center max-w-2xl mx-auto w-full">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 relative overflow-hidden animate-in slide-in-from-right-8 duration-300 key={currentReview.id}">
-                        {/* Rating Badge */}
-                        <div className="absolute top-0 right-0 bg-amber-100 text-amber-700 px-4 py-2 rounded-bl-2xl font-bold flex items-center gap-1">
-                            <Star className="h-4 w-4 fill-current" /> {currentReview.rating}/5
-                        </div>
-
-                        <div className="flex items-center gap-4 mb-6">
-                            <div className="h-14 w-14 bg-indigo-100 rounded-full flex items-center justify-center text-xl font-bold text-indigo-700 ring-4 ring-indigo-50">
-                                {currentReview.author_name.charAt(0)}
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-900">{currentReview.author_name}</h3>
-                                <div className="flex gap-2 text-sm text-slate-500 items-center">
-                                    <span className="capitalize font-medium">{currentReview.source}</span>
-                                    <span>•</span>
-                                    <span>{new Date(currentReview.received_at).toLocaleDateString()}</span>
+            {/* Main Content Area - Tinder Style Centered Card */}
+            <div className="flex-1 flex items-center justify-center p-4 overflow-y-auto">
+                <div className="w-full max-w-3xl flex flex-col gap-4 animate-in slide-in-from-right-8 duration-300 key={currentReview.id}">
+                    
+                    {/* Review Card */}
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 relative overflow-hidden border border-slate-200">
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 bg-indigo-100 rounded-full flex items-center justify-center text-lg font-bold text-indigo-700 ring-4 ring-indigo-50">
+                                    {currentReview.author_name.charAt(0)}
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900">{currentReview.author_name}</h3>
+                                    <div className="flex gap-2 text-xs text-slate-500 items-center">
+                                        <span className="capitalize font-medium">{currentReview.source}</span>
+                                        <span>•</span>
+                                        <span>{new Date(currentReview.received_at).toLocaleDateString()}</span>
+                                    </div>
                                 </div>
                             </div>
+                            <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-3 py-1 rounded-lg border border-amber-100">
+                                <Star className="h-4 w-4 fill-current" /> 
+                                <span className="font-bold">{currentReview.rating}/5</span>
+                            </div>
                         </div>
 
-                        <div className="relative">
-                            <MessageSquare className="absolute -top-2 -left-2 h-8 w-8 text-slate-100 -z-10" />
-                            <p className="text-lg text-slate-800 leading-relaxed font-medium mb-6 italic">
+                        <div className="relative mb-6">
+                            <MessageSquare className="absolute -top-3 -left-3 h-8 w-8 text-slate-100 -z-10" />
+                            <p className="text-base text-slate-800 leading-relaxed font-medium italic pl-2 border-l-4 border-indigo-100">
                                 "{currentReview.body}"
                             </p>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100">
-                            {currentReview.analysis?.themes?.map(t => (
-                                <Badge key={t} variant="neutral" className="bg-slate-100 text-slate-600 border-slate-200 uppercase text-[10px]">
-                                    {t}
-                                </Badge>
-                            ))}
+                        {/* Analysis Tags */}
+                        <div className="flex flex-wrap gap-2 mb-6">
                             {currentReview.analysis?.sentiment && (
                                 <Badge variant={currentReview.analysis.sentiment === 'positive' ? 'success' : currentReview.analysis.sentiment === 'negative' ? 'error' : 'warning'}>
                                     {currentReview.analysis.sentiment}
                                 </Badge>
                             )}
+                            {currentReview.analysis?.themes?.map(t => (
+                                <Badge key={t} variant="neutral" className="bg-slate-100 text-slate-600 border-slate-200 uppercase text-[10px]">
+                                    {t}
+                                </Badge>
+                            ))}
+                        </div>
+
+                        {/* AI Response Area */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 relative group">
+                            {isGenerating ? (
+                                <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center text-indigo-600 rounded-xl">
+                                    <Wand2 className="h-6 w-6 animate-spin mb-2" />
+                                    <span className="text-xs font-bold uppercase tracking-widest animate-pulse">Rédaction IA...</span>
+                                </div>
+                            ) : (
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <span className="text-[10px] bg-white border border-slate-200 px-2 py-1 rounded text-slate-400 flex items-center gap-1">
+                                        <Edit2 className="h-3 w-3" /> Modifiable
+                                    </span>
+                                </div>
+                            )}
+                            
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Votre Réponse</label>
+                            <textarea 
+                                value={replyText}
+                                onChange={(e) => setReplyText(e.target.value)}
+                                className="w-full bg-transparent border-none p-0 text-slate-700 text-sm focus:ring-0 resize-none min-h-[100px] leading-relaxed"
+                                placeholder="L'IA prépare la réponse..."
+                            />
                         </div>
                     </div>
-                </div>
 
-                {/* Right: Action Panel */}
-                <div className="flex-1 flex flex-col justify-center max-w-xl mx-auto w-full">
-                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-                        
-                        {/* AI Loading State */}
-                        {isGenerating && (
-                            <div className="absolute inset-0 bg-slate-800/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-indigo-400">
-                                <Wand2 className="h-8 w-8 animate-spin mb-2" />
-                                <span className="text-sm font-bold uppercase tracking-widest animate-pulse">Rédaction IA...</span>
-                            </div>
-                        )}
-
-                        <div className="flex justify-between items-center mb-4">
-                            <h4 className="text-indigo-400 font-bold text-sm flex items-center gap-2 uppercase tracking-wide">
-                                <Wand2 className="h-4 w-4" /> 
-                                Réponse suggérée
-                            </h4>
-                            <span className="text-[10px] text-slate-500 flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-700 hidden sm:flex">
-                                <Keyboard className="h-3 w-3" /> CMD+ENTER pour envoyer
-                            </span>
-                        </div>
-
-                        <textarea 
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            className="w-full h-48 bg-slate-900 border-slate-700 text-slate-100 rounded-xl p-4 mb-6 focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none font-medium leading-relaxed text-base"
-                            placeholder="L'IA prépare la réponse..."
-                        />
-
-                        <div className="flex gap-3">
+                    {/* Actions Bar */}
+                    <div className="flex items-center justify-between gap-4 p-4 bg-slate-800 rounded-xl border border-slate-700 shadow-xl">
+                        <div className="flex gap-2">
                             <Button 
                                 variant="secondary" 
+                                size="sm"
+                                onClick={handlePrev}
+                                disabled={currentIndex === 0}
+                                className="bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                                variant="secondary" 
+                                size="sm"
                                 onClick={handleSkip} 
-                                className="flex-1 bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white"
+                                className="bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600 hover:text-white"
                             >
                                 <SkipForward className="h-4 w-4 mr-2" /> Passer
                             </Button>
-                            <Button 
-                                variant="primary" 
-                                onClick={handleSend} 
-                                isLoading={isSending} 
-                                disabled={!replyText.trim()}
-                                className="flex-[2] bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50"
-                            >
-                                <Send className="h-4 w-4 mr-2" /> Envoyer et Suivant
-                            </Button>
                         </div>
-                    </div>
-                    
-                    <div className="mt-4 text-center">
-                        <button onClick={() => generateDraft(currentReview)} className="text-xs text-slate-500 hover:text-indigo-400 transition-colors flex items-center justify-center gap-1 mx-auto">
-                            <Wand2 className="h-3 w-3" /> Régénérer une autre réponse
-                        </button>
+
+                        <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={handleRegenerate}
+                            className="text-slate-400 hover:text-indigo-400 hover:bg-transparent"
+                        >
+                            <RefreshCw className={`h-4 w-4 mr-2 ${isGenerating ? 'animate-spin' : ''}`} /> Régénérer
+                        </Button>
+
+                        <Button 
+                            variant="primary" 
+                            size="lg"
+                            onClick={handleSend} 
+                            isLoading={isSending} 
+                            disabled={!replyText.trim()}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50 min-w-[140px]"
+                        >
+                            <Send className="h-4 w-4 mr-2" /> Envoyer
+                        </Button>
                     </div>
                 </div>
             </div>
