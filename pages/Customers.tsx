@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Customer, PipelineStage } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input, useToast, Select } from '../components/ui';
-import { Users, Search, Download, Star, Filter, Heart, AlertTriangle, X, Mail, MessageCircle, DollarSign, Calendar, LayoutGrid, List, Sparkles, Wand2, ArrowRight, Zap, UploadCloud, FileText, CheckCircle2, Phone, Info } from 'lucide-react';
+import { Users, Search, Download, Star, Filter, Heart, AlertTriangle, X, Mail, MessageCircle, DollarSign, Calendar, LayoutGrid, List, Sparkles, Wand2, ArrowRight, Zap, UploadCloud, FileText, CheckCircle2, Phone, Info, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // --- UTILS ---
 
@@ -19,10 +19,10 @@ const getStageLabel = (stage: PipelineStage) => {
 
 const getCustomerStatusLabel = (status: string) => {
     switch (status) {
-        case 'promoter': return { label: 'Ambassadeur', variant: 'success' as const };
-        case 'detractor': return { label: 'Insatisfait', variant: 'error' as const };
-        case 'passive': return { label: 'Neutre', variant: 'neutral' as const };
-        default: return { label: 'Inconnu', variant: 'neutral' as const };
+        case 'promoter': return { label: 'Ambassadeur', variant: 'success' as const, tooltip: 'Client très satisfait (5★). Recommande activement.' };
+        case 'detractor': return { label: 'Insatisfait', variant: 'error' as const, tooltip: 'Client mécontent (1-3★). Risque de départ.' };
+        case 'passive': return { label: 'Neutre', variant: 'neutral' as const, tooltip: 'Client satisfait (4★) mais volatil.' };
+        default: return { label: 'Nouveau', variant: 'neutral' as const, tooltip: 'Pas encore assez de données.' };
     }
 };
 
@@ -30,6 +30,18 @@ const formatCurrency = (amount?: number) => {
     if (amount === undefined || amount === null) return '-';
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
 };
+
+const HeaderWithTooltip = ({ label, tooltip, icon: Icon }: { label: string, tooltip: string, icon?: any }) => (
+    <div className="flex items-center gap-1 group relative cursor-help">
+        {Icon && <Icon className="h-3 w-3 text-slate-400" />}
+        <span className="border-b border-dotted border-slate-300 group-hover:border-slate-500 transition-colors">{label}</span>
+        <HelpCircle className="h-3 w-3 text-slate-300 opacity-50 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center font-normal leading-relaxed">
+            {tooltip}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+        </div>
+    </div>
+);
 
 const KanbanColumn: React.FC<{ stageId: PipelineStage, customers: Customer[], onSelect: (c: Customer) => void }> = ({ stageId, customers, onSelect }) => {
     const { label, color } = getStageLabel(stageId);
@@ -216,15 +228,18 @@ export const CustomersPage = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
+  const [viewMode, setViewMode] = useState<'list' | 'board'>('list'); // Default to list for better management
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   
-  // Filters
-  const [filterSentiment, setFilterSentiment] = useState('all');
-  const [filterLtv, setFilterLtv] = useState('all');
+  // Advanced Filters
+  const [activeFilter, setActiveFilter] = useState<'all' | 'promoter' | 'detractor' | 'vip' | 'inactive'>('all');
+  
+  // Pagination
+  const ITEMS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const toast = useToast();
 
@@ -241,18 +256,30 @@ export const CustomersPage = () => {
           result = result.filter(c => c.name.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q));
       }
 
-      // Filter Sentiment
-      if (filterSentiment !== 'all') {
-          result = result.filter(c => c.status === filterSentiment);
-      }
-
-      // Filter LTV
-      if (filterLtv === 'high') {
-          result = result.filter(c => (c.ltv_estimate || 0) > 200);
+      // Filter Logic
+      switch (activeFilter) {
+          case 'promoter':
+              result = result.filter(c => c.status === 'promoter');
+              break;
+          case 'detractor':
+              result = result.filter(c => c.status === 'detractor');
+              break;
+          case 'vip':
+              result = result.filter(c => (c.ltv_estimate || 0) > 200);
+              break;
+          case 'inactive':
+              // Inactive = Last interaction > 90 days ago
+              const limitDate = new Date();
+              limitDate.setDate(limitDate.getDate() - 90);
+              result = result.filter(c => new Date(c.last_interaction) < limitDate);
+              break;
+          default:
+              break;
       }
 
       setFilteredCustomers(result);
-  }, [search, customers, filterSentiment, filterLtv]);
+      setCurrentPage(1); // Reset page on filter change
+  }, [search, customers, activeFilter]);
 
   const loadCustomers = async () => {
       setLoading(true);
@@ -314,7 +341,6 @@ export const CustomersPage = () => {
   const handleStageChange = async (newStage: PipelineStage) => {
       if (!selectedCustomer) return;
       
-      // Optimistic Update
       const updated = { ...selectedCustomer, stage: newStage };
       setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
       setSelectedCustomer(updated);
@@ -347,6 +373,12 @@ export const CustomersPage = () => {
 
   const PIPELINE_STAGES: PipelineStage[] = ['new', 'risk', 'loyal', 'churned'];
 
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
+  const displayedCustomers = viewMode === 'list' 
+        ? filteredCustomers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+        : filteredCustomers; // Board view shows all (or needs column-based pagination which is complex, we keep all for board)
+
   return (
     <div className="max-w-7xl mx-auto h-[calc(100vh-8rem)] flex flex-col animate-in fade-in duration-500">
       
@@ -363,11 +395,11 @@ export const CustomersPage = () => {
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             <div className="flex bg-slate-100 p-1 rounded-lg mr-2">
-                <button onClick={() => setViewMode('board')} className={`p-2 rounded transition-all ${viewMode === 'board' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
-                    <LayoutGrid className="h-4 w-4" />
-                </button>
                 <button onClick={() => setViewMode('list')} className={`p-2 rounded transition-all ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
                     <List className="h-4 w-4" />
+                </button>
+                <button onClick={() => setViewMode('board')} className={`p-2 rounded transition-all ${viewMode === 'board' ? 'bg-white shadow text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <LayoutGrid className="h-4 w-4" />
                 </button>
             </div>
             <Button variant="outline" size="sm" icon={UploadCloud} onClick={() => setShowImportModal(true)} className="flex-1 md:flex-none">Import</Button>
@@ -375,26 +407,36 @@ export const CustomersPage = () => {
         </div>
       </div>
 
-      {/* FILTERS */}
-      <div className="flex gap-3 mb-6 shrink-0 overflow-x-auto pb-2 w-full no-scrollbar items-center">
+      {/* FILTERS & SEARCH */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6 shrink-0 justify-between items-center">
+          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-auto no-scrollbar">
+              {[
+                  { id: 'all', label: 'Tous' },
+                  { id: 'promoter', label: 'Ambassadeurs', icon: Heart },
+                  { id: 'detractor', label: 'À surveiller', icon: AlertTriangle },
+                  { id: 'vip', label: 'VIP (>200€)', icon: DollarSign },
+                  { id: 'inactive', label: 'Inactifs', icon: Calendar }
+              ].map(f => (
+                  <button
+                      key={f.id}
+                      onClick={() => setActiveFilter(f.id as any)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold uppercase tracking-wide transition-all whitespace-nowrap border ${activeFilter === f.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
+                  >
+                      {f.icon && <f.icon className="h-3 w-3" />}
+                      {f.label}
+                  </button>
+              ))}
+          </div>
+
           <div className="relative w-full md:w-64 shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input 
-                placeholder="Nom, email..." 
+                placeholder="Rechercher (Nom, email...)" 
                 className="pl-9 w-full bg-white" 
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
           </div>
-          <Select value={filterSentiment} onChange={e => setFilterSentiment(e.target.value)} className="w-40 shrink-0 bg-white">
-              <option value="all">Tous Status</option>
-              <option value="promoter">Ambassadeurs</option>
-              <option value="detractor">Critiques</option>
-          </Select>
-          <Select value={filterLtv} onChange={e => setFilterLtv(e.target.value)} className="w-40 shrink-0 bg-white">
-              <option value="all">Valeur: Tous</option>
-              <option value="high">VIP (&gt; 200€)</option>
-          </Select>
       </div>
 
       {/* CONTENT AREA */}
@@ -416,14 +458,14 @@ export const CustomersPage = () => {
               </div>
           )}
 
-          {/* LIST VIEW (Optimized) */}
+          {/* LIST VIEW (Table) */}
           {viewMode === 'list' && (
               <Card className="h-full overflow-hidden flex flex-col border-slate-200 shadow-sm">
-                  <div className="flex-1 overflow-auto bg-slate-50/30">
+                  <div className="flex-1 overflow-auto bg-white">
                       
                       {/* Mobile Card View */}
                       <div className="md:hidden divide-y divide-slate-100">
-                          {filteredCustomers.map(customer => {
+                          {displayedCustomers.map(customer => {
                               const status = getCustomerStatusLabel(customer.status);
                               return (
                                   <div key={customer.id} onClick={() => setSelectedCustomer(customer)} className="p-4 bg-white hover:bg-slate-50 active:bg-slate-100 cursor-pointer">
@@ -464,14 +506,20 @@ export const CustomersPage = () => {
                           <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                               <tr>
                                   <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Client</th>
-                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Statut</th>
-                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Note Moyenne</th>
-                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider" title="Valeur estimée">Valeur Client</th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                      <HeaderWithTooltip label="Statut" tooltip="Analyse basée sur les avis. Ambassadeur = 5★, Insatisfait = 1-3★." icon={Info} />
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                      <HeaderWithTooltip label="Note Interne" tooltip="Moyenne de tous les avis déposés par ce client." icon={Star} />
+                                  </th>
+                                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                      <HeaderWithTooltip label="Valeur Client" tooltip="Estimation du chiffre d'affaires total généré par ce client." icon={DollarSign} />
+                                  </th>
                                   <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Dernier Avis</th>
                               </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-slate-50">
-                              {filteredCustomers.map(customer => {
+                              {displayedCustomers.map(customer => {
                                   const status = getCustomerStatusLabel(customer.status);
                                   return (
                                       <tr 
@@ -493,7 +541,7 @@ export const CustomersPage = () => {
                                               </div>
                                           </td>
                                           <td className="px-6 py-4 whitespace-nowrap">
-                                              <Badge variant={status.variant} className="uppercase text-[10px]">{status.label}</Badge>
+                                              <Badge variant={status.variant} className="uppercase text-[10px]" title={status.tooltip}>{status.label}</Badge>
                                           </td>
                                           <td className="px-6 py-4 whitespace-nowrap">
                                               <div className="flex items-center gap-1 font-bold text-slate-700">
@@ -513,6 +561,33 @@ export const CustomersPage = () => {
                           </tbody>
                       </table>
                   </div>
+                  
+                  {/* Pagination Footer */}
+                  {filteredCustomers.length > ITEMS_PER_PAGE && (
+                      <div className="p-4 border-t border-slate-200 bg-white flex justify-between items-center">
+                          <span className="text-xs text-slate-500">
+                              Page {currentPage} sur {totalPages} ({filteredCustomers.length} clients)
+                          </span>
+                          <div className="flex gap-2">
+                              <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                  disabled={currentPage === 1}
+                              >
+                                  <ChevronLeft className="h-4 w-4" /> Précédent
+                              </Button>
+                              <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                  disabled={currentPage === totalPages}
+                              >
+                                  Suivant <ChevronRight className="h-4 w-4" />
+                              </Button>
+                          </div>
+                      </div>
+                  )}
               </Card>
           )}
       </div>
@@ -568,7 +643,7 @@ export const CustomersPage = () => {
                       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 relative overflow-hidden">
                           <div className="absolute top-0 right-0 p-2 opacity-5"><DollarSign className="h-16 w-16" /></div>
                           <span className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1">
-                              Valeur Client (LTV)
+                              Valeur Client
                           </span>
                           <div className="text-2xl font-bold text-slate-900">{formatCurrency(selectedCustomer.ltv_estimate)}</div>
                       </div>

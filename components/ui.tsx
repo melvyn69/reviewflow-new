@@ -1,4 +1,5 @@
 
+
 import React, { InputHTMLAttributes, SelectHTMLAttributes, useContext, useState, useEffect, useMemo } from 'react';
 import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle, Lock, Sparkles, ChevronRight } from 'lucide-react';
 
@@ -272,14 +273,14 @@ export const CardContent: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ cl
 );
 
 // --- BADGE ---
-interface BadgeProps {
+interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: 'default' | 'success' | 'warning' | 'error' | 'neutral' | 'pro';
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, className = '', onClick }) => {
+export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, className = '', onClick, ...props }) => {
   const variants = {
     default: "bg-indigo-50 text-indigo-700 border-indigo-200",
     success: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -292,6 +293,7 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, cla
     <span 
       onClick={onClick}
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${variants[variant]} ${className} ${onClick ? 'cursor-pointer hover:opacity-80' : ''}`}
+      {...props}
     >
       {variant === 'pro' && <Sparkles className="h-3 w-3 mr-1 fill-white" />}
       {children}
