@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Organization } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle, useNavigate } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Linkedin, Star, Lock, Hammer, Globe, Code } from 'lucide-react';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Linkedin, Star, Lock, Hammer, Globe, Code, ArrowRight } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
@@ -204,9 +204,6 @@ export const CollectPage = () => {
       try {
           await api.google.syncReviewsForLocation(selectedLocation.id, selectedLocation.external_reference);
           toast.success("Avis synchronisés !");
-          // Refresh iframe by forcing a re-render is usually automatic if key changes, 
-          // but here we just synced DB. The iframe fetches on mount. 
-          // A simple way to refresh the iframe is to toggle a key or let user know.
           const iframe = document.getElementById('widget-preview-iframe') as HTMLIFrameElement;
           if (iframe) iframe.src = iframe.src; 
       } catch (e) {
@@ -238,7 +235,6 @@ export const CollectPage = () => {
       }
   }
 
-  // Validation: Check if Funnel is properly configured (Google URL present)
   const isFunnelConfigured = selectedLocation && selectedLocation.google_review_url && isValidUrl(selectedLocation.google_review_url);
 
   const handleCopyLink = () => {
@@ -332,7 +328,7 @@ export const CollectPage = () => {
           // Share Logic
           if (sharePlatform) {
               const text = "Aidez-nous à nous améliorer ! Scannez ce code pour donner votre avis. ⭐️";
-              const url = encodeURIComponent(reviewLink); // Sharing the LINK, not the image directly (limitation of web share)
+              const url = encodeURIComponent(reviewLink);
               
               if (sharePlatform === 'facebook') {
                   window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${encodeURIComponent(text)}`, '_blank');
@@ -414,10 +410,10 @@ export const CollectPage = () => {
   const handleCopyWidgetCode = () => {
       const code = `<iframe src="${getWidgetUrl()}" width="100%" height="400" frameborder="0"></iframe>`;
       navigator.clipboard.writeText(code);
-      toast.success("Code copié !");
+      toast.success("Code copié dans le presse-papier !");
   };
 
-  // --- RENDER HELPERS --- (Existing PrintableAsset code omitted for brevity as it is unchanged)
+  // --- RENDER HELPERS ---
   const PrintableAsset = () => {
       if (supportType === 'raw') {
           return (
@@ -550,7 +546,7 @@ export const CollectPage = () => {
       {/* CONTENT: QR & PRINT */}
       {activeTab === 'qr' && (
           <div className="space-y-8">
-              {/* Existing QR Code Content (Unchanged) */}
+              {/* Existing QR Code Content */}
               <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-6 shadow-sm">
                   <h3 className="text-lg font-bold text-indigo-900 mb-4 flex items-center gap-2">
                       <Lightbulb className="h-5 w-5 text-amber-500" />
@@ -769,7 +765,7 @@ export const CollectPage = () => {
           </div>
       )}
 
-      {/* WIDGETS TAB - Enhanced with Pro Features */}
+      {/* WIDGETS TAB - Enhanced with Pro Features & Instructions */}
       {activeTab === 'widgets' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
               <div className="space-y-6">
@@ -815,15 +811,6 @@ export const CollectPage = () => {
                           </div>
                       </CardContent>
                   </Card>
-                  <Card>
-                      <CardHeader><CardTitle>Code d'intégration</CardTitle></CardHeader>
-                      <CardContent>
-                          <div className="bg-slate-900 rounded p-3 text-xs text-green-400 font-mono overflow-x-auto relative group">
-                              {`<iframe src="${getWidgetUrl()}" width="100%" height="400" frameborder="0"></iframe>`}
-                          </div>
-                          <Button size="sm" variant="ghost" className="mt-2 w-full" onClick={handleCopyWidgetCode} icon={Copy}>Copier Code</Button>
-                      </CardContent>
-                  </Card>
                   
                   {/* Integration Request Box */}
                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 shadow-sm">
@@ -842,8 +829,9 @@ export const CollectPage = () => {
                   </div>
               </div>
               
-              <div className="lg:col-span-2">
-                  <Card className="h-full bg-slate-50 flex flex-col p-8 relative">
+              <div className="lg:col-span-2 space-y-6">
+                  {/* Live Preview */}
+                  <Card className="flex flex-col p-8 relative min-h-[500px] bg-slate-50">
                       <div className="absolute top-4 right-4 z-10">
                           <Button size="xs" variant="secondary" onClick={handleSyncReviews} isLoading={syncing} icon={RefreshCw} className="bg-white shadow-sm hover:bg-slate-50">
                               Actualiser les avis
@@ -858,9 +846,69 @@ export const CollectPage = () => {
                             className="border-none shadow-xl rounded-xl bg-white transition-all duration-300" 
                           />
                       </div>
-                      <div className="text-center mt-4 text-xs text-slate-400 flex items-center justify-center gap-1">
-                          <Eye className="h-3 w-3" /> Aperçu en temps réel
+                      <div className="text-center mt-6 flex flex-col items-center">
+                          <div className="text-xs text-slate-400 flex items-center justify-center gap-1 mb-1">
+                              <Eye className="h-3 w-3" /> Aperçu en temps réel
+                          </div>
+                          <p className="text-[10px] text-green-600 flex items-center gap-1 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                              <RefreshCw className="h-3 w-3" />
+                              Mise à jour automatique en temps réel dès synchronisation Google.
+                          </p>
                       </div>
+                  </Card>
+
+                  {/* Integration Code & Guide */}
+                  <Card>
+                      <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
+                          <CardTitle className="text-base flex items-center gap-2">
+                              <Code className="h-5 w-5 text-indigo-600" />
+                              Installation
+                          </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-6">
+                          <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-2">1. Copiez le code d'intégration</label>
+                              <div className="bg-slate-900 rounded-lg p-4 text-xs text-green-400 font-mono overflow-x-auto relative group shadow-inner">
+                                  {`<iframe src="${getWidgetUrl()}" width="100%" height="400" frameborder="0" title="Avis Clients"></iframe>`}
+                                  <Button 
+                                      size="xs" 
+                                      variant="ghost" 
+                                      className="absolute top-2 right-2 text-white bg-white/10 hover:bg-white/20 border-transparent" 
+                                      onClick={handleCopyWidgetCode} 
+                                      icon={Copy}
+                                  >
+                                      Copier
+                                  </Button>
+                              </div>
+                          </div>
+
+                          <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                              <label className="block text-sm font-bold text-slate-700 mb-3">2. Guide d'intégration</label>
+                              <div className="space-y-4">
+                                  <div className="flex gap-3">
+                                      <div className="h-6 w-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs shrink-0">W</div>
+                                      <div>
+                                          <div className="font-bold text-slate-900 text-sm">WordPress</div>
+                                          <p className="text-xs text-slate-600 mt-0.5">Ajoutez un bloc "HTML Personnalisé" à l'endroit souhaité et collez le code.</p>
+                                      </div>
+                                  </div>
+                                  <div className="flex gap-3">
+                                      <div className="h-6 w-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs shrink-0">S</div>
+                                      <div>
+                                          <div className="font-bold text-slate-900 text-sm">Shopify</div>
+                                          <p className="text-xs text-slate-600 mt-0.5">Ajoutez une section "Custom Liquid" ou "HTML" dans l'éditeur de thème.</p>
+                                      </div>
+                                  </div>
+                                  <div className="flex gap-3">
+                                      <div className="h-6 w-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">W</div>
+                                      <div>
+                                          <div className="font-bold text-slate-900 text-sm">Wix / Webflow</div>
+                                          <p className="text-xs text-slate-600 mt-0.5">Utilisez l'élément "Embed" ou "Code" et collez l'iframe.</p>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      </CardContent>
                   </Card>
               </div>
           </div>
