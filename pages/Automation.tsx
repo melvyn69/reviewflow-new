@@ -1,11 +1,9 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
 import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select, ProLock } from '../components/ui';
-import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star, Share2, Rocket } from 'lucide-react';
+import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star, Share2, Rocket, Plane, Clock, Info, ShieldCheck, Filter } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -13,7 +11,7 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 const WorkflowTemplateCard = ({ title, description, icon: Icon, color, onClick }: any) => (
     <div 
         onClick={onClick}
-        className="flex flex-col p-4 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+        className="flex flex-col p-4 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group h-full"
     >
         <div className={`h-10 w-10 rounded-lg ${color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
             <Icon className="h-5 w-5 text-white" />
@@ -23,7 +21,6 @@ const WorkflowTemplateCard = ({ title, description, icon: Icon, color, onClick }
     </div>
 );
 
-// ... WorkflowEditor component remains identical ...
 const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule | null, onSave: (w: WorkflowRule) => void, onCancel: () => void }) => {
     const [name, setName] = useState(workflow?.name || 'Nouveau Workflow');
     const [trigger, setTrigger] = useState<TriggerType>(workflow?.trigger || 'review_created');
@@ -82,8 +79,11 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
 
     return (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-            <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-slate-900">{workflow ? 'Modifier le Workflow' : 'Créer un Workflow'}</h2>
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm sticky top-0 z-20">
+                <h2 className="text-lg md:text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-slate-400" />
+                    {workflow ? 'Modifier le Workflow' : 'Créer un Workflow'}
+                </h2>
                 <div className="flex gap-2">
                     <Button variant="ghost" onClick={onCancel}>Annuler</Button>
                     <Button icon={Save} onClick={handleSave} isLoading={saving}>Enregistrer</Button>
@@ -114,7 +114,7 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
             <Card>
                 <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold text-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Settings className="h-4 w-4 text-indigo-600" /> CONDITIONS (SI)
+                        <Filter className="h-4 w-4 text-indigo-600" /> CONDITIONS (SI)
                     </div>
                     <Button size="xs" variant="outline" icon={Plus} onClick={handleAddCondition}>Ajouter</Button>
                 </div>
@@ -204,7 +204,7 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                 </button>
                             </div>
 
-                            <div className="pl-4 border-l-2 border-indigo-200">
+                            <div className="pl-0 md:pl-4 md:border-l-2 border-indigo-200">
                                 {(action.type === 'generate_ai_reply' || action.type === 'auto_reply') && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
@@ -221,16 +221,29 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                         </div>
                                         {action.type === 'auto_reply' && (
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-500 mb-1">Délai avant envoi</label>
+                                                <label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" /> Délai avant envoi
+                                                </label>
                                                 <Select 
                                                     value={action.config.delay_minutes || 0}
                                                     onChange={(e) => updateAction(action.id, 'config', { delay_minutes: parseInt(e.target.value) })}
                                                 >
-                                                    <option value={0}>Immédiat</option>
-                                                    <option value={15}>15 minutes</option>
+                                                    <option value={0}>Immédiat (Risque de robotisation)</option>
+                                                    <option value={15}>15 minutes (Rapide)</option>
                                                     <option value={60}>1 heure</option>
                                                     <option value={120}>2 heures</option>
+                                                    <option value={1440}>J+1 (24h) - Recommandé</option>
+                                                    <option value={2880}>J+2 (48h)</option>
+                                                    <option value={4320}>J+3 (72h)</option>
                                                 </Select>
+                                            </div>
+                                        )}
+                                        {action.type === 'auto_reply' && (
+                                            <div className="sm:col-span-2 mt-1 flex gap-2 items-start p-2 bg-blue-50 text-blue-700 rounded text-xs border border-blue-100">
+                                                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                                                <p>
+                                                    <strong>Conseil Pro :</strong> Relancer le client à <strong>J+1</strong> est idéal pour rester frais dans sa mémoire sans être intrusif. Pour la gestion de crise, une réponse rapide (1h) est préférable.
+                                                </p>
                                             </div>
                                         )}
                                     </div>
@@ -263,7 +276,7 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                                         <div className="flex items-start gap-2 bg-purple-50 p-3 rounded-lg border border-purple-100 text-purple-800 text-xs mb-3">
                                             <Rocket className="h-4 w-4 shrink-0 mt-0.5" />
                                             <div>
-                                                <strong>Auto-Post IA :</strong> Le nouveau moteur "Social Booster" générera automatiquement un visuel et une légende pour vos réseaux.
+                                                <strong>Auto-Post IA :</strong> Le moteur "Social Booster" générera automatiquement un visuel et une légende pour vos réseaux.
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -331,7 +344,6 @@ export const AutomationPage = () => {
       setLoading(false);
   };
 
-  // ... (Keep existing handlers: handleDelete, handleSaveWorkflow, handleToggle, handleRunManually, applyTemplate)
   const handleDelete = async (id: string) => {
       if(confirm("Supprimer ce workflow ?")) {
           await api.automation.deleteWorkflow(id);
@@ -389,7 +401,7 @@ export const AutomationPage = () => {
 
   const TEMPLATES = [
       {
-          title: "Win-Back VIP",
+          title: "Fidélisation VIP",
           description: "Générer une réponse enthousiaste et taguer les avis 5 étoiles pour fidélisation.",
           icon: Gift,
           color: "bg-purple-500",
@@ -411,9 +423,9 @@ export const AutomationPage = () => {
           ]
       },
       {
-          title: "Gestion de Crise",
-          description: "Alerte email immédiate et brouillon d'excuse pour tout avis négatif.",
-          icon: AlertTriangle,
+          title: "Récupération Client",
+          description: "Alerte email immédiate et brouillon d'excuse pour tout avis négatif (Win-back).",
+          icon: ShieldCheck,
           color: "bg-red-500",
           conditions: [{ id: generateId(), field: 'rating', operator: 'lte', value: 2 }],
           actions: [
@@ -424,8 +436,8 @@ export const AutomationPage = () => {
       {
           title: "Pilote Automatique",
           description: "Répondre automatiquement aux avis positifs sans texte (Note seule).",
-          icon: CheckCircle2,
-          color: "bg-green-500",
+          icon: Plane,
+          color: "bg-blue-500",
           conditions: [
               { id: generateId(), field: 'rating', operator: 'gte', value: 4 },
               { id: generateId(), field: 'content', operator: 'equals', value: '' } // Contenu vide
@@ -441,7 +453,7 @@ export const AutomationPage = () => {
   // PAYWALL - PRO (GROWTH) PLAN ONLY
   if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
       return (
-          <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8">
+          <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8 p-4">
               <div className="text-center mb-8">
                   <h1 className="text-3xl font-bold text-slate-900 mb-2">Automatisation Intelligente</h1>
                   <p className="text-slate-500">Pilotez votre e-réputation sans lever le petit doigt.</p>
@@ -472,24 +484,29 @@ export const AutomationPage = () => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 p-4 pb-24">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              <Zap className="h-8 w-8 text-indigo-600" />
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-3">
+              <div className="bg-indigo-600 p-2 rounded-lg text-white">
+                  <Zap className="h-6 w-6" />
+              </div>
               Automatisation
               <Badge variant="pro">GROWTH</Badge>
           </h1>
-          <p className="text-slate-500">Gagnez du temps avec des scénarios intelligents (y compris Autopost IA).</p>
+          <p className="text-slate-500 mt-1">Configurez le pilote automatique pour votre e-réputation.</p>
         </div>
-        <div className="flex gap-3">
-            <Button variant="secondary" icon={Play} onClick={handleRunManually} isLoading={isRunning}>Tester</Button>
-            <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }}>Créer Manuellement</Button>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <Button variant="primary" icon={Plane} onClick={handleRunManually} isLoading={isRunning} className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-200 w-full sm:w-auto justify-center">
+                Actionner l'auto maintenant
+            </Button>
+            <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }} className="w-full sm:w-auto justify-center">Créer Manuellement</Button>
         </div>
       </div>
 
       {/* Templates Gallery */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <h3 className="font-bold text-lg text-slate-900 mt-8 mb-4">Modèles Prêts à l'emploi</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {TEMPLATES.map((tpl, i) => (
               <WorkflowTemplateCard key={i} {...tpl} onClick={() => applyTemplate(tpl)} />
           ))}
@@ -498,54 +515,83 @@ export const AutomationPage = () => {
       {/* Existing Workflows */}
       <div className="space-y-4">
           <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2 mt-8 mb-4">
-              <Zap className="h-5 w-5 text-indigo-600" />
+              <Plane className="h-5 w-5 text-indigo-600" />
               Vos Scénarios Actifs
           </h3>
           
           {workflows.length === 0 && (
               <div className="p-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <p className="text-slate-500 mb-4">Aucune règle active.</p>
+                  <Plane className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500 mb-2">Aucune règle active.</p>
                   <p className="text-xs text-slate-400">Cliquez sur un modèle ci-dessus pour commencer.</p>
               </div>
           )}
 
           {workflows.map(wf => (
-              <Card key={wf.id} className="hover:shadow-md transition-shadow group">
-                  <CardContent className="p-5 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                          <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${wf.enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                              <Zap className="h-6 w-6" />
-                          </div>
-                          <div>
-                              <h3 className="font-bold text-slate-900 text-lg">{wf.name}</h3>
-                              <div className="flex flex-wrap gap-2 mt-1">
-                                  {wf.conditions.map((c, i) => (
-                                      <Badge key={i} variant="neutral" className="text-[10px]">
-                                          {c.field} {c.operator === 'equals' ? '=' : c.operator} {c.value}
-                                      </Badge>
-                                  ))}
-                                  <ArrowRight className="h-3 w-3 text-slate-300 self-center" />
-                                  {wf.actions.map((a, i) => (
-                                      <Badge key={i} variant="default" className="text-[10px]">
-                                          {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type === 'post_social' ? 'Booster Social' : a.type}
-                                      </Badge>
-                                  ))}
+              <div key={wf.id} className={`relative overflow-hidden rounded-xl border-2 transition-all duration-300 group ${wf.enabled ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100/50' : 'border-slate-200 bg-slate-50'}`}>
+                  {/* Autopilot Header Strip */}
+                  <div className={`px-4 py-2 flex items-center justify-between text-xs font-bold uppercase tracking-widest ${wf.enabled ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                      <div className="flex items-center gap-2">
+                          <Plane className={`h-4 w-4 ${wf.enabled ? 'animate-pulse' : ''}`} />
+                          {wf.enabled ? 'Pilote Automatique : ACTIF' : 'Pilote Automatique : DÉSACTIVÉ'}
+                      </div>
+                      <div className="flex items-center gap-2">
+                          {wf.enabled && <span className="h-2 w-2 rounded-full bg-green-400 animate-ping" />}
+                      </div>
+                  </div>
+
+                  <div className="p-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
+                          <div className="flex items-start gap-4 w-full">
+                              <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 ${wf.enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-400'}`}>
+                                  {wf.enabled ? <Zap className="h-7 w-7" /> : <Plane className="h-7 w-7" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2 flex-wrap">
+                                      {wf.name}
+                                  </h3>
+                                  <div className="flex flex-wrap gap-2 mt-3">
+                                      {/* Conditions */}
+                                      {wf.conditions.map((c, i) => (
+                                          <Badge key={i} variant="neutral" className="text-[10px] bg-slate-100 border-slate-200 text-slate-600 px-2 py-1">
+                                              {c.field === 'rating' ? `${c.value} ★` : c.field}
+                                          </Badge>
+                                      ))}
+                                      <ArrowRight className="h-3 w-3 text-slate-300 self-center hidden sm:block" />
+                                      {/* Actions */}
+                                      {wf.actions.map((a, i) => (
+                                          <Badge key={i} variant="default" className="text-[10px] border-indigo-100 bg-indigo-50 text-indigo-700 px-2 py-1">
+                                              {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type === 'post_social' ? 'Booster Social' : a.type}
+                                          </Badge>
+                                      ))}
+                                  </div>
                               </div>
                           </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-6">
-                          <div className="flex items-center gap-2">
-                              <span className={`text-sm font-medium ${wf.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{wf.enabled ? 'Actif' : 'Pause'}</span>
+
+                          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-3 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0 bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-lg">
+                              <span className={`text-[10px] font-bold uppercase tracking-wider ${wf.enabled ? 'text-green-600' : 'text-slate-400'}`}>
+                                  {wf.enabled ? 'ON' : 'OFF'}
+                              </span>
                               <Toggle checked={wf.enabled} onChange={() => handleToggle(wf)} />
                           </div>
-                          <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button size="xs" variant="ghost" icon={Settings} onClick={() => { setEditingWorkflow(wf); setIsEditing(true); }}>Éditer</Button>
-                              <button onClick={() => handleDelete(wf.id)} className="p-2 text-slate-400 hover:text-red-500 rounded"><Trash2 className="h-4 w-4" /></button>
-                          </div>
                       </div>
-                  </CardContent>
-              </Card>
+
+                      <div className="flex flex-wrap justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+                          <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                              onClick={handleRunManually}
+                              isLoading={isRunning}
+                              icon={Plane}
+                          >
+                              Actionner l'auto maintenant
+                          </Button>
+                          <Button size="sm" variant="ghost" icon={Settings} onClick={() => { setEditingWorkflow(wf); setIsEditing(true); }}>Configurer</Button>
+                          <button onClick={() => handleDelete(wf.id)} className="p-2 text-slate-400 hover:text-red-500 rounded transition-colors bg-slate-50 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                  </div>
+              </div>
           ))}
       </div>
     </div>
