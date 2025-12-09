@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
-import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, Copy, HelpCircle, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, HelpCircle, ArrowLeft, ShieldAlert, Zap } from 'lucide-react';
 import { useNavigate, useLocation } from '../components/ui';
 
 interface AuthPageProps {
@@ -325,22 +325,25 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                 </button>
                 </p>
                 
-                {/* Developer Mode Shortcut (Hidden in Prod usually but useful here) */}
-                <div className="mt-6 pt-6 border-t border-slate-100 flex gap-2 justify-center">
-                    <button 
-                        onClick={handleDemoLogin}
-                        className="text-[10px] uppercase tracking-wider font-bold text-slate-300 hover:text-indigo-500 transition-colors flex items-center gap-1"
-                    >
-                        <HelpCircle className="h-3 w-3" />
-                        Demo Mode
-                    </button>
-                    <button 
-                        onClick={handleGodModeLogin}
-                        className="text-[10px] uppercase tracking-wider font-bold text-slate-300 hover:text-red-500 transition-colors flex items-center gap-1"
-                    >
-                        <ShieldAlert className="h-3 w-3" />
-                        God Mode
-                    </button>
+                {/* Developer Mode Shortcuts */}
+                <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col gap-3">
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Accès Rapide (Dev)</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={handleDemoLogin}
+                            className="flex items-center justify-center gap-2 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-all text-xs font-bold shadow-sm"
+                        >
+                            <HelpCircle className="h-4 w-4 text-blue-500" />
+                            Mode Démo
+                        </button>
+                        <button 
+                            onClick={handleGodModeLogin}
+                            className="flex items-center justify-center gap-2 p-3 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 hover:text-red-900 transition-all text-xs font-bold shadow-sm"
+                        >
+                            <ShieldAlert className="h-4 w-4 text-red-600" />
+                            God Mode
+                        </button>
+                    </div>
                 </div>
             </div>
           )}
