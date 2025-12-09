@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Competitor, Organization } from '../types';
@@ -151,7 +152,7 @@ export const CompetitorsPage = () => {
         try {
             const organization = await api.organization.get();
             setOrg(organization);
-            if (organization?.subscription_plan === 'pro') {
+            if (organization?.subscription_plan === 'pro' || organization?.subscription_plan === 'elite') {
                 const data = await api.competitors.list();
                 setCompetitors(data || []);
                 const reports = await api.competitors.getReports();
@@ -308,7 +309,7 @@ export const CompetitorsPage = () => {
 
     if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
-    // PAYWALL
+    // PAYWALL - Block Free & Starter
     if (!org || org.subscription_plan === 'free' || org.subscription_plan === 'starter') {
         return (
             <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8 px-4">
@@ -352,7 +353,7 @@ export const CompetitorsPage = () => {
                     <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                         <Target className="h-8 w-8 text-red-600 shrink-0" />
                         Veille Concurrentielle
-                        <Badge variant="pro">GROWTH</Badge>
+                        <Badge variant="pro">PRO</Badge>
                     </h1>
                     <p className="text-slate-500">Surveillez votre marché et anticipez les mouvements adverses.</p>
                 </div>

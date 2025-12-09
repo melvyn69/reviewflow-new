@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
@@ -621,8 +622,27 @@ export const api = {
         },
         createPortalSession: async () => {
             if (isDemoMode()) return '#';
-            const { data } = await supabase!.functions.invoke('create_portal');
+            const { data } = await supabase!.functions.invoke('create_portal', { body: { returnUrl: window.location.origin + '/#/billing' } });
             return data?.url;
+        },
+        getUsage: async () => {
+            if (isDemoMode()) return 34; // Mock usage
+            const org = await api.organization.get();
+            if (!org) return 0;
+            
+            // Get first day of current month
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0,0,0,0);
+
+            // Count AI Usage records for this org since start of month
+            const { count } = await supabase!
+                .from('ai_usage')
+                .select('*', { count: 'exact', head: true })
+                .eq('organization_id', org.id)
+                .gte('created_at', startOfMonth.toISOString());
+            
+            return count || 0;
         }
     },
     widgets: {

@@ -1,5 +1,6 @@
 
 
+
 export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
@@ -226,7 +227,7 @@ export interface Organization {
     address?: string;
     industry?: IndustryType;
     subscription_plan: 'free' | 'starter' | 'pro' | 'elite';
-    subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing';
+    subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing' | 'unpaid';
     current_period_end?: string;
     cancel_at_period_end?: boolean;
     payment_method_brand?: string;

@@ -1,6 +1,6 @@
 
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import Stripe from 'https://esm.sh/stripe@14.21.0'
 
 declare const Deno: any;
 
@@ -15,14 +15,8 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')
-
-    if (!stripeKey) {
-        throw new Error("STRIPE_SECRET_KEY manquante");
-    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
-    const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' as any })
 
     // 1. Auth Check
     const authHeader = req.headers.get('Authorization')!
@@ -31,30 +25,26 @@ Deno.serve(async (req: Request) => {
 
     if (authError || !user) throw new Error('Unauthorized')
 
-    // 2. Get Stripe Customer ID from Org
+    // 2. Get Org ID
     const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
     if (!userProfile?.organization_id) throw new Error('No organization linked')
 
-    const { data: org } = await supabase.from('organizations').select('stripe_customer_id').eq('id', userProfile.organization_id).single()
-    
-    if (!org?.stripe_customer_id) {
-        // Pas encore de client Stripe => renvoyer liste vide
-        return new Response(JSON.stringify({ invoices: [] }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
+    // 3. Fetch Invoices from Supabase DB (Replicated via Webhook)
+    const { data: invoices, error } = await supabase
+        .from('billing_invoices')
+        .select('*')
+        .eq('organization_id', userProfile.organization_id)
+        .order('date', { ascending: false });
 
-    // 3. Fetch Invoices from Stripe
-    const invoices = await stripe.invoices.list({
-      customer: org.stripe_customer_id,
-      limit: 10,
-    });
+    if (error) throw error;
 
-    // 4. Format for Frontend
-    const formattedInvoices = invoices.data.map((inv: any) => ({
+    // 4. Format for Frontend (Ensure consistent shape with old API)
+    const formattedInvoices = (invoices || []).map((inv: any) => ({
         id: inv.id,
-        date: new Date(inv.created * 1000).toLocaleDateString(),
-        amount: new Intl.NumberFormat('fr-FR', { style: 'currency', currency: inv.currency }).format(inv.total / 100),
+        date: new Date(inv.date).toLocaleDateString(),
+        amount: new Intl.NumberFormat('fr-FR', { style: 'currency', currency: inv.currency || 'eur' }).format(inv.amount / 100),
         status: inv.status,
-        pdf_url: inv.invoice_pdf,
+        pdf_url: inv.pdf_url,
         number: inv.number
     }));
 

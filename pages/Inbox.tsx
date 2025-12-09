@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Review, ReviewStatus, InternalNote, SavedReply, Location, ReviewTimelineEvent, Organization } from '../types';
@@ -569,7 +570,7 @@ export const InboxPage = () => {
   };
 
   const handleShareClick = () => {
-      const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'enterprise';
+      const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'elite';
       if (!isPro) {
           toast.info("Le partage social est une fonctionnalité Premium. Passez au plan Growth pour débloquer.");
           setTimeout(() => navigate('/billing'), 1500);
@@ -578,7 +579,7 @@ export const InboxPage = () => {
       setShowShareModal(true);
   };
 
-  const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'enterprise';
+  const isPro = org?.subscription_plan === 'pro' || org?.subscription_plan === 'elite';
 
   return (
     <div className="flex h-[calc(100vh-8rem)] -m-4 md:-m-8 overflow-hidden bg-white">

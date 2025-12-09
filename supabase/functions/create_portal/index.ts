@@ -1,4 +1,5 @@
 
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
 
@@ -37,10 +38,12 @@ Deno.serve(async (req: Request) => {
 
     const { data: org } = await supabase.from('organizations').select('stripe_customer_id').eq('id', userProfile.organization_id).single()
     
-    if (!org?.stripe_customer_id) throw new Error('Aucun abonnement actif trouvé (Stripe Customer ID manquant)')
+    if (!org?.stripe_customer_id) throw new Error('Aucun abonnement actif trouvé (Stripe Customer ID manquant). Veuillez souscrire à un plan.')
 
     // 3. Create Portal Session
-    const { returnUrl } = await req.json().catch(() => ({ returnUrl: 'https://reviewflow.vercel.app' }))
+    // We expect the frontend to pass the return URL, otherwise default
+    const body = await req.json().catch(() => ({}));
+    const returnUrl = body.returnUrl || 'https://reviewflow.vercel.app/#/billing';
 
     const session = await stripe.billingPortal.sessions.create({
       customer: org.stripe_customer_id,

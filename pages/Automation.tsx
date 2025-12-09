@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
@@ -492,7 +494,7 @@ export const AutomationPage = () => {
                   <Zap className="h-6 w-6" />
               </div>
               Automatisation
-              <Badge variant="pro">GROWTH</Badge>
+              <Badge variant="pro">PRO</Badge>
           </h1>
           <p className="text-slate-500 mt-1">Configurez le pilote automatique pour votre e-réputation.</p>
         </div>
