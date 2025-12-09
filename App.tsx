@@ -21,13 +21,13 @@ import { SuperAdminPage } from './pages/SuperAdmin';
 import { CompetitorsPage } from './pages/Competitors';
 import { BookDemoPage } from './pages/BookDemo';
 import { OnboardingPage } from './pages/Onboarding';
-import { ProgressPage } from './pages/Progress';
 import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
 import { SocialModelCreatePage } from './pages/SocialModelCreate';
 import { PublicProfilePage } from './pages/PublicProfile';
 import { DevelopersPage } from './pages/Developers';
+import { MarketingPage } from './pages/Marketing'; // NEW IMPORT
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
 import { User } from './types';
@@ -145,6 +145,7 @@ function AppRoutes() {
                     <Routes>
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
+                        <Route path="marketing" element={<MarketingPage />} />
                         <Route path="social" element={<SocialPage />} /> 
                         <Route path="social/models/create" element={<SocialModelCreatePage />} />
                         
@@ -162,7 +163,6 @@ function AppRoutes() {
                         <Route path="developers" element={<DevelopersPage />} />
                         <Route path="help" element={<HelpPage />} />
                         <Route path="playground" element={<PlaygroundPage />} />
-                        <Route path="progress" element={<ProgressPage />} />
                         
                         {/* Sensitive Routes - Admin Only */}
                         <Route 

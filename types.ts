@@ -61,6 +61,63 @@ export interface CampaignLog {
     scheduled_at?: string;
 }
 
+export interface MultiChannelCampaign {
+    id: string;
+    name: string;
+    channels: ('sms' | 'email' | 'social')[];
+    budget_total: number;
+    budget_split: {
+        sms: number; // percentage 0-100
+        email: number;
+        social: number;
+    };
+    content: {
+        sms: string;
+        email_subject: string;
+        email_body: string;
+        social_caption: string;
+    };
+    stats: {
+        cost: number;
+        impressions: number;
+        conversions: number;
+        roi: number;
+    };
+    created_at: string;
+    status: 'draft' | 'active' | 'completed';
+}
+
+export interface BlogPost {
+    id: string;
+    title: string;
+    slug: string;
+    content: string;
+    status: 'draft' | 'published';
+    meta_title?: string;
+    meta_description?: string;
+    tags: string[];
+    published_at?: string;
+    image_url?: string;
+}
+
+export interface SeoAudit {
+    url: string;
+    scanned_at: string;
+    metrics: {
+        title: string;
+        description: string;
+        h1: string;
+        load_time_ms: number;
+        mobile_friendly: boolean;
+    };
+    keywords: string[];
+    ai_analysis: {
+        strengths: string[];
+        weaknesses: string[];
+        opportunities: string[];
+    };
+}
+
 export interface AppNotification {
     id: string;
     type: 'info' | 'success' | 'warning' | 'error';

@@ -8,7 +8,7 @@ import {
     User, Organization, Review, AnalyticsSummary, WorkflowRule, 
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
     CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial,
-    ClientProgress, Badge, Milestone, AiCoachMessage
+    ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign
 } from '../types';
 import { supabase } from './supabase';
 import { hasAccess } from './features'; // Import helper
@@ -212,6 +212,81 @@ export const api = {
         getOverview: async (period?: string) => {
             await delay(500);
             return INITIAL_ANALYTICS;
+        }
+    },
+    marketing: {
+        getBlogPosts: async (): Promise<BlogPost[]> => {
+            await delay(500);
+            // Mock blog posts
+            return [
+                {
+                    id: 'b1', title: '5 Conseils pour booster vos avis Google', slug: 'booster-avis-google',
+                    content: 'Le secret réside dans le timing...', status: 'published',
+                    meta_title: '5 Conseils Avis Google - Guide 2025', meta_description: 'Découvrez comment obtenir plus d\'avis 5 étoiles.',
+                    tags: ['SEO', 'Avis'], published_at: new Date().toISOString()
+                },
+                {
+                    id: 'b2', title: 'Pourquoi répondre aux avis négatifs ?', slug: 'repondre-avis-negatifs',
+                    content: 'Ne les ignorez pas, c\'est une opportunité.', status: 'draft',
+                    meta_title: '', meta_description: '',
+                    tags: ['E-réputation'], published_at: undefined
+                }
+            ];
+        },
+        saveBlogPost: async (post: BlogPost) => {
+            await delay(800);
+            return post;
+        },
+        generateSeoMeta: async (content: string) => {
+            await delay(1500);
+            // Simulate AI
+            return {
+                meta_title: "Titre Optimisé SEO | Votre Marque",
+                meta_description: "Ceci est une méta-description générée par IA, optimisée pour le taux de clic et contenant les mots-clés pertinents extraits du contenu.",
+                slug: "titre-optimise-seo"
+            };
+        },
+        analyzeCompetitorSeo: async (url: string): Promise<SeoAudit> => {
+            await delay(3000);
+            return {
+                url,
+                scanned_at: new Date().toISOString(),
+                metrics: {
+                    title: "Titre du site concurrent - Mots clés",
+                    description: "Description méta trouvée sur le site concurrent.",
+                    h1: "Le H1 principal de la page",
+                    load_time_ms: 450,
+                    mobile_friendly: true
+                },
+                keywords: ["restaurant paris", "meilleur burger", "terrasse"],
+                ai_analysis: {
+                    strengths: ["Vitesse de chargement excellente", "Structure Hn propre"],
+                    weaknesses: ["Méta description trop courte", "Manque de balises alt sur les images"],
+                    opportunities: ["Se positionner sur 'burger vegan'"]
+                }
+            };
+        },
+        generateRichSnippet: async (data: any) => {
+            await delay(500);
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "LocalBusiness",
+                "name": data.name,
+                "aggregateRating": {
+                    "@type": "AggregateRating",
+                    "ratingValue": data.rating,
+                    "reviewCount": data.count
+                }
+            }, null, 2);
+        },
+        generateCampaignContent: async (prompt: string, budget: number) => {
+            await delay(2500);
+            return {
+                sms: `🔥 ${prompt} ! Profitez-en vite. Code: SUMMER20. Stop au 36111.`,
+                email_subject: `Ne ratez pas ${prompt} 🎁`,
+                email_body: `<p>Bonjour,</p><p>C'est le moment de profiter de <strong>${prompt}</strong>.</p>`,
+                social_caption: `C'est parti pour ${prompt} ! 🚀 Venez nous voir. #Promo #${prompt.replace(/\s/g, '')}`
+            };
         }
     },
     automation: {

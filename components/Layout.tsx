@@ -29,7 +29,8 @@ import {
   ChevronDown,
   Terminal,
   Lock,
-  Trophy
+  Trophy,
+  Megaphone
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
@@ -181,6 +182,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           {/* Main Navigation */}
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
+          <SidebarItem to="/marketing" icon={Megaphone} label="Marketing & SEO" onClick={onClose} />
           <SidebarItem to="/progress" icon={Trophy} label="Progression" onClick={onClose} />
           
           <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isLocked={check('social_studio')} />
