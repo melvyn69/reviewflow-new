@@ -156,8 +156,8 @@ const LocationModal = ({ location, onClose, onSave }: { location?: Location | nu
 
 // --- AI IDENTITY FORM ---
 const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: BrandSettings) => void }) => {
-    // Defensive check: ensure brand is not undefined inside the component
-    const safeBrand = brand || {
+    // Defines defaults to prevent undefined crashes if brand object is partial
+    const defaultBrand: BrandSettings = {
         enabled: false,
         tone: 'professionnel',
         description: '',
@@ -166,8 +166,14 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
         language_style: 'formal',
         signature: '',
         forbidden_words: [],
-        response_examples: ''
+        response_examples: '',
+        primary_color: '',
+        secondary_color: '',
+        logo_url: ''
     };
+
+    // Robust merge: incoming brand + defaults
+    const safeBrand = { ...defaultBrand, ...brand };
 
     const [settings, setSettings] = useState<BrandSettings>(safeBrand);
     const [isSaving, setIsSaving] = useState(false);
