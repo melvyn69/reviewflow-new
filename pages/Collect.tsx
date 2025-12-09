@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
-import { Organization } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle, useNavigate } from '../components/ui';
-import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Linkedin, Star, Lock, Hammer, Globe, Code, ArrowRight } from 'lucide-react';
+import { Organization, Offer, CampaignLog } from '../types';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, useToast, Badge, Toggle } from '../components/ui';
+import { QrCode, Download, Send, Smartphone, Mail, Copy, Printer, CheckCircle2, Layout, Sliders, Eye, Share2, Instagram, Facebook, Sparkles, Palette, UploadCloud, Image as ImageIcon, Users, RefreshCw, X, FileText, Monitor, Sticker, CreditCard, AlertTriangle, Settings, Lightbulb, Megaphone, ExternalLink, Hammer, Star, Trash2 } from 'lucide-react';
 import { INITIAL_ORG } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
+import { useNavigate } from '../components/ui';
 
 // URL Validation Helper
 const isValidUrl = (string: string) => {
@@ -24,7 +25,7 @@ const ProControl = ({ children, label, isPro, onClick }: any) => (
     <div className={`relative ${!isPro ? 'opacity-60' : ''}`}>
         <label className="block text-xs font-bold text-slate-500 mb-1.5 flex justify-between items-center">
             {label}
-            {!isPro && <Badge variant="neutral" className="h-4 px-1 flex items-center gap-0.5 bg-slate-100 text-slate-500 border-slate-200 cursor-pointer" onClick={onClick}><Lock className="h-2 w-2" /> PRO</Badge>}
+            {!isPro && <Badge variant="neutral" className="h-4 px-1 flex items-center gap-0.5 bg-slate-100 text-slate-500 border-slate-200 cursor-pointer" onClick={onClick}><Settings className="h-2 w-2" /> PRO</Badge>}
         </label>
         <div className="relative">
             {children}
@@ -651,4 +652,171 @@ export const CollectPage = () => {
                                               <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                                           </label>
                                           {logoUrl && (
-                                              <button onClick={() => setLogoUrl(null)} className="p-2 text-red
+                                              <button onClick={() => setLogoUrl(null)} className="p-2 text-red-500 hover:bg-red-50 rounded border border-red-200">
+                                                  <Trash2 className="h-4 w-4" />
+                                              </button>
+                                          )}
+                                      </div>
+                                  </div>
+                              </div>
+
+                              <ProControl label="Suivi par employé" isPro={isPro} onClick={handleProFeatureClick}>
+                                  <Select 
+                                      value={selectedStaffId} 
+                                      onChange={e => setSelectedStaffId(e.target.value)}
+                                      disabled={!isPro}
+                                  >
+                                      <option value="all">Organisation Générale</option>
+                                      {org.staff_members?.map(s => (
+                                          <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                                      ))}
+                                  </Select>
+                              </ProControl>
+                          </CardContent>
+                      </Card>
+                  </div>
+
+                  {/* CENTER: PREVIEW */}
+                  <div className="lg:col-span-5 flex flex-col justify-center items-center bg-slate-100 rounded-2xl border border-slate-200 p-8 min-h-[500px]">
+                      <div ref={printRef} className="scale-90 md:scale-100 transition-transform origin-center">
+                          <PrintableAsset />
+                      </div>
+                  </div>
+
+                  {/* RIGHT: DOWNLOADS */}
+                  <div className="lg:col-span-3 space-y-4">
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm sticky top-24">
+                          <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                              <Download className="h-4 w-4 text-indigo-600" /> Export
+                          </h4>
+                          
+                          <Button className="w-full mb-3 shadow-md bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleDownloadPDF}>
+                              Télécharger PDF (Print)
+                          </Button>
+                          <Button variant="outline" className="w-full mb-3 text-slate-600" onClick={() => handleDownloadSupportImage()}>
+                              Télécharger PNG (Web)
+                          </Button>
+                          
+                          <div className="border-t border-slate-100 pt-3 mt-3">
+                              <p className="text-xs font-bold text-slate-500 uppercase mb-2">Réseaux Sociaux</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                  <Button variant="ghost" size="sm" className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => handleDownloadSupportImage('facebook')}>
+                                      <Facebook className="h-4 w-4 mr-1" /> Post
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="w-full bg-sky-50 text-sky-700 hover:bg-sky-100" onClick={() => handleDownloadSupportImage('linkedin')}>
+                                      <Share2 className="h-4 w-4 mr-1" /> Share
+                                  </Button>
+                              </div>
+                          </div>
+
+                          <div className="border-t border-slate-100 pt-3 mt-3">
+                              <p className="text-xs font-bold text-slate-500 uppercase mb-2">Lien direct</p>
+                              <div className="flex gap-2">
+                                  <Input value={reviewLink} readOnly className="text-xs bg-slate-50 h-8" />
+                                  <Button size="xs" variant="outline" className="h-8 w-8 p-0" onClick={handleCopyLink}>
+                                      <Copy className="h-3 w-3" />
+                                  </Button>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* OTHER TABS */}
+      {activeTab === 'campaigns' && (
+          <div className="p-12 text-center text-slate-500 bg-slate-50 rounded-xl">
+              <Megaphone className="h-12 w-12 mx-auto mb-4 text-slate-300" />
+              <h3 className="text-lg font-medium text-slate-900">Campagnes Marketing</h3>
+              <p className="max-w-md mx-auto mt-2">Envoyez des SMS et Emails pour solliciter des avis ou fidéliser vos clients. (Voir onglet Offres pour le détail)</p>
+              <Button className="mt-6" onClick={() => navigate('/offers')}>Gérer les campagnes</Button>
+          </div>
+      )}
+
+      {activeTab === 'widgets' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                  <Card>
+                      <CardHeader>
+                          <CardTitle className="flex items-center gap-2"><Layout className="h-5 w-5 text-indigo-600"/> Configuration du Widget</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 mb-1">Type</label>
+                                  <Select value={widgetType} onChange={e => setWidgetType(e.target.value as any)}>
+                                      <option value="carousel">Carrousel</option>
+                                      <option value="list">Liste (Mur)</option>
+                                      <option value="badge">Badge Flottant</option>
+                                  </Select>
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-slate-500 mb-1">Thème</label>
+                                  <Select value={widgetTheme} onChange={e => setWidgetTheme(e.target.value as any)}>
+                                      <option value="light">Clair</option>
+                                      <option value="dark">Sombre</option>
+                                  </Select>
+                              </div>
+                          </div>
+
+                          <ProControl label="Personnalisation Avancée" isPro={isPro} onClick={handleProFeatureClick}>
+                              <div className="space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                  <div>
+                                      <label className="block text-xs font-medium text-slate-500 mb-1">Couleur Principale</label>
+                                      <div className="flex items-center gap-2">
+                                          <input type="color" value={widgetPrimaryColor} onChange={e => setWidgetPrimaryColor(e.target.value)} className="h-8 w-12 p-0 border-0 rounded cursor-pointer" disabled={!isPro} />
+                                          <span className="text-xs font-mono text-slate-600">{widgetPrimaryColor}</span>
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                      <span className="text-xs font-medium text-slate-700">Afficher la date</span>
+                                      <Toggle checked={widgetShowDate} onChange={setWidgetShowDate} disabled={!isPro} />
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                      <span className="text-xs font-medium text-slate-700">Bordure</span>
+                                      <Toggle checked={widgetShowBorder} onChange={setWidgetShowBorder} disabled={!isPro} />
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-medium text-slate-700 mb-1">Arrondi ({widgetBorderRadius}px)</label>
+                                      <input type="range" min="0" max="24" value={widgetBorderRadius} onChange={e => setWidgetBorderRadius(parseInt(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" disabled={!isPro} />
+                                  </div>
+                              </div>
+                          </ProControl>
+
+                          <div className="bg-slate-900 text-slate-300 p-4 rounded-lg font-mono text-xs overflow-x-auto relative group">
+                              <button onClick={handleCopyWidgetCode} className="absolute top-2 right-2 p-1.5 bg-white/10 hover:bg-white/20 rounded text-white transition-colors" title="Copier">
+                                  <Copy className="h-3 w-3" />
+                              </button>
+                              {`<iframe src="${getWidgetUrl()}" width="100%" height="400" frameborder="0"></iframe>`}
+                          </div>
+                      </CardContent>
+                  </Card>
+              </div>
+
+              <div className="bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-center p-8 relative overflow-hidden min-h-[500px]">
+                  <div className="absolute top-4 right-4 z-10">
+                      <Button size="xs" variant="secondary" onClick={handleSyncReviews} isLoading={syncing} icon={RefreshCw}>Actualiser Avis</Button>
+                  </div>
+                  <iframe 
+                      id="widget-preview-iframe"
+                      src={getWidgetUrl()} 
+                      className="w-full h-full bg-transparent" 
+                      style={{ minHeight: '450px' }}
+                      title="Widget Preview"
+                  />
+              </div>
+          </div>
+      )}
+
+      {activeTab === 'social' && (
+          <div className="p-12 text-center text-slate-500 bg-slate-50 rounded-xl">
+              <Share2 className="h-12 w-12 mx-auto mb-4 text-slate-300" />
+              <h3 className="text-lg font-medium text-slate-900">Réseaux Sociaux</h3>
+              <p className="max-w-md mx-auto mt-2">Gérez vos publications et transformez vos avis en posts Instagram.</p>
+              <Button className="mt-6" onClick={() => navigate('/social')}>Accéder au Social Studio</Button>
+          </div>
+      )}
+    </div>
+  );
+};

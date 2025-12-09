@@ -7,7 +7,7 @@ import {
 import { 
     User, Organization, Review, AnalyticsSummary, Competitor, 
     SocialPost, WorkflowRule, ReportConfig, Customer, Offer, 
-    StaffMember, CampaignLog, AppNotification, SocialTemplate
+    StaffMember, CampaignLog, AppNotification, SocialTemplate, BillingInvoice
 } from '../types';
 
 const isDemoMode = () => !supabase || localStorage.getItem('is_demo_mode') === 'true';
@@ -610,7 +610,7 @@ export const api = {
         console.log("Seeding database...");
     },
     billing: {
-        getInvoices: async () => {
+        getInvoices: async (): Promise<BillingInvoice[]> => {
             if (isDemoMode()) return [];
             const { data } = await supabase!.functions.invoke('get_invoices');
             return data?.invoices || [];
@@ -626,7 +626,7 @@ export const api = {
             return data?.url;
         },
         getUsage: async () => {
-            if (isDemoMode()) return 34; // Mock usage
+            if (isDemoMode()) return 34;
             const org = await api.organization.get();
             if (!org) return 0;
             

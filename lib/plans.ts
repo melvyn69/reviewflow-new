@@ -35,7 +35,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     starter: {
         id: 'starter',
         name: 'Starter',
-        price: '49€',
+        price: '29€',
         ai_limit: 150,
         locations_limit: 1,
         features: [
@@ -51,7 +51,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     pro: {
         id: 'pro',
         name: 'Pro',
-        price: '89€',
+        price: '79€',
         ai_limit: 500,
         locations_limit: 3,
         highlight: true,
@@ -70,7 +70,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
         id: 'elite',
         name: 'Elite',
         price: 'Sur Devis',
-        ai_limit: 10000, // Virtually unlimited for UI display
+        ai_limit: 999999, // Virtually unlimited for UI display
         locations_limit: 999,
         features: [
             "Établissements Illimités",

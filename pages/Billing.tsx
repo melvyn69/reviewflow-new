@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, Smartphone, Building2, Loader2, AlertCircle, Clock, Calendar } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization, BillingInvoice } from '../types';
 import { PLANS, getPlanDetails, PlanId } from '../lib/plans';

@@ -1,5 +1,4 @@
 
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14.21.0'
@@ -141,8 +140,6 @@ serve(async (req) => {
                       subject: '❌ Échec du paiement de votre abonnement',
                       html: `<p>Le paiement pour <strong>${org.name}</strong> a échoué. Votre abonnement risque d'être suspendu. <a href="https://reviewflow.vercel.app/#/billing">Mettre à jour</a></p>`
                   });
-                  // Log alert in billing_alerts if table exists
-                  // await supabase.from('billing_alerts').insert({...}) 
               }
           }
           log('PAYMENT_FAILED', { customerId, reason: invoice.billing_reason });

@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
@@ -464,6 +462,7 @@ export const AutomationPage = () => {
               <ProLock 
                   title="Débloquez l'Automatisation"
                   description="Créez des règles personnalisées pour répondre automatiquement, alerter votre équipe ou trier vos avis."
+                  onUpgrade={() => navigate('/billing')}
               >
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-8 filter blur-sm pointer-events-none opacity-50">
                       {TEMPLATES.map((tpl, i) => (

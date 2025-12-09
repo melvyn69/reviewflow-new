@@ -226,13 +226,14 @@ export interface Organization {
     address?: string;
     industry?: IndustryType;
     subscription_plan: 'free' | 'starter' | 'pro' | 'elite';
-    subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing';
+    subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing' | 'unpaid';
     current_period_end?: string;
     cancel_at_period_end?: boolean;
     payment_method_brand?: string;
     payment_method_last4?: string;
     created_at: string;
     locations: Location[];
+    ai_usage_count?: number;
     integrations: {
         google: boolean;
         facebook: boolean;

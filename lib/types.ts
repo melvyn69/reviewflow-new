@@ -1,6 +1,4 @@
 
-
-
 export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
@@ -232,6 +230,7 @@ export interface Organization {
     cancel_at_period_end?: boolean;
     payment_method_brand?: string;
     payment_method_last4?: string;
+    stripe_customer_id?: string;
     created_at: string;
     locations: Location[];
     integrations: {
@@ -250,7 +249,6 @@ export interface Organization {
     saved_replies?: SavedReply[];
     staff_members?: StaffMember[];
     offers?: Offer[];
-    stripe_customer_id?: string;
     workflows?: WorkflowRule[];
     google_access_token?: string;
     google_refresh_token?: string;

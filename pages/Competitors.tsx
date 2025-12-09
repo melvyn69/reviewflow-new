@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
+import { useNavigate } from '../components/ui';
 
 // --- SONAR RADAR COMPONENT ---
 const SonarRadar = ({ competitors, industry, className = "" }: { competitors: any[], industry: string, className?: string }) => {
@@ -142,6 +143,7 @@ export const CompetitorsPage = () => {
     
     const toast = useToast();
     const dashboardRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         loadData();
@@ -320,6 +322,7 @@ export const CompetitorsPage = () => {
                 <ProLock 
                     title="Débloquez le Radar Concurrentiel"
                     description="Suivez jusqu'à 10 concurrents, analysez leurs faiblesses et recevez des alertes."
+                    onUpgrade={() => navigate('/billing')}
                 >
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-8 filter blur-sm opacity-50">
                         {[1, 2, 3].map(i => <div key={i} className="h-40 bg-slate-100 rounded-xl"></div>)}
