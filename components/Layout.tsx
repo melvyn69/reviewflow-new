@@ -26,7 +26,8 @@ import {
   Share2,
   ChevronRight,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  Terminal
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
@@ -192,6 +193,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.org')}</div>
           <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />
           <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={onClose} />
+          
+          <div className="px-3 mt-4 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Avancé</div>
+          <SidebarItem to="/developers" icon={Terminal} label="Dev & API" onClick={onClose} isPro={isLocked} />
           <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />
           
           {user?.role === 'super_admin' && (

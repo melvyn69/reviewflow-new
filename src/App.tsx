@@ -26,6 +26,7 @@ import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
 import { SocialModelCreatePage } from './pages/SocialModelCreate';
 import { PublicProfilePage } from './pages/PublicProfile';
+import { DevelopersPage } from './pages/Developers';
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
 import { User } from './types';
@@ -157,6 +158,7 @@ function AppRoutes() {
                         <Route path="customers" element={<CustomersPage />} />
                         <Route path="offers" element={<OffersPage />} />
                         <Route path="reports" element={<ReportsPage />} />
+                        <Route path="developers" element={<DevelopersPage />} />
                         <Route path="help" element={<HelpPage />} />
                         <Route path="playground" element={<PlaygroundPage />} />
                         

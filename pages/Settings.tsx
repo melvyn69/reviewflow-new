@@ -1068,33 +1068,7 @@ export const SettingsPage = () => {
                         </CardContent>
                     </Card>
 
-                    {/* DEVELOPER SETTINGS */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Card className="border-indigo-100">
-                            <CardHeader className="bg-indigo-50/50 pb-3">
-                                <CardTitle className="flex items-center gap-2 text-indigo-900">
-                                    <Key className="h-4 w-4" /> Clés API
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-6">
-                                <p className="text-sm text-slate-500 mb-4">Utilisez ces clés pour accéder à l'API Reviewflow depuis vos applications.</p>
-                                <div className="space-y-3">
-                                    {org.api_keys?.map((key) => (
-                                        <div key={key.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
-                                            <div>
-                                                <div className="font-mono text-xs font-bold text-slate-700">{key.name}</div>
-                                                <div className="text-[10px] text-slate-400 font-mono">sk_live_...{key.key.slice(-4)}</div>
-                                            </div>
-                                            <Button size="xs" variant="ghost" className="text-red-500 hover:bg-red-50"><Trash2 className="h-3 w-3" /></Button>
-                                        </div>
-                                    ))}
-                                    <Button size="sm" variant="outline" className="w-full border-dashed" onClick={() => toast.info("Génération de clé...")}>
-                                        <Plus className="h-3 w-3 mr-2" /> Générer une nouvelle clé
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-
                         <Card className="border-slate-200">
                             <CardHeader className="bg-slate-50/50 pb-3">
                                 <CardTitle className="flex items-center gap-2 text-slate-800">
