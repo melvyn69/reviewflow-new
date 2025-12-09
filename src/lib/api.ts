@@ -1,5 +1,4 @@
 
-
 import { 
     INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
     INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
@@ -17,9 +16,12 @@ import { hasAccess } from './features';
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// LISTE DES COMPTES GOD MODE (Accès total, mot de passe ignoré)
+const GOD_EMAILS = ['god@reviewflow.com', 'melvynbenichou@gmail.com', 'demo@reviewflow.com'];
+
 // Helper: Check if current user is God/Super Admin
 const getEffectiveUser = async (): Promise<User | null> => {
-    // 1. Check Local Mock
+    // 1. Check Local Mock (Priorité au God Mode local)
     const userStr = localStorage.getItem('user');
     if (userStr) {
         return JSON.parse(userStr);
@@ -29,11 +31,15 @@ const getEffectiveUser = async (): Promise<User | null> => {
     if (supabase) {
         const { data } = await supabase.auth.getUser();
         if (data.user) {
+            const email = data.user.email || '';
+            // Si c'est vous, on force le rôle super_admin même si la DB dit autre chose
+            const isGod = GOD_EMAILS.includes(email.toLowerCase().trim());
+            
             return {
                 id: data.user.id,
-                email: data.user.email || '',
-                name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User',
-                role: 'admin', // Default role, upgraded below if god
+                email: email,
+                name: data.user.user_metadata?.full_name || email.split('@')[0],
+                role: isGod ? 'super_admin' : 'admin',
                 organization_id: 'org-1'
             } as User;
         }
@@ -42,54 +48,36 @@ const getEffectiveUser = async (): Promise<User | null> => {
     return null;
 };
 
-const isGodEmail = (email?: string) => {
-    if (!email) return false;
-    const normalized = email.toLowerCase().trim();
-    // Liste des emails administrateurs "God Mode"
-    return ['god@reviewflow.com', 'melvynbenichou@gmail.com', 'demo@reviewflow.com'].includes(normalized);
-};
-
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
             await delay(500);
-            
-            let user = await getEffectiveUser();
-
-            if (user) {
-                // FORCE GOD MODE PRIVILEGES
-                if (isGodEmail(user.email)) {
-                    user.role = 'super_admin';
-                }
-                return user;
+            // Si le mode démo est activé via la backdoor, on retourne l'utilisateur stocké
+            if (isDemoMode()) {
+                const u = localStorage.getItem('user');
+                return u ? JSON.parse(u) : INITIAL_USERS[0];
             }
-
-            if (isDemoMode()) return INITIAL_USERS[0];
-            return null;
+            return await getEffectiveUser();
         },
         login: async (email: string, pass: string) => {
             await delay(800);
             
             const normalizedEmail = (email || '').toLowerCase().trim();
             
-            // EMERGENCY GOD MODE ACCESS
-            // Allows access if email matches specific admins, IGNORING PASSWORD for testing purposes
-            if (
-                normalizedEmail === 'god@reviewflow.com' ||
-                normalizedEmail === 'demo@reviewflow.com' || 
-                normalizedEmail === 'melvynbenichou@gmail.com'
-            ) {
+            // --- BACKDOOR GOD MODE ---
+            // Accepte vos emails avec N'IMPORTE QUEL mot de passe
+            if (GOD_EMAILS.includes(normalizedEmail)) {
                 const godUser: User = {
                     ...INITIAL_USERS[0],
                     id: 'god-user-id',
                     name: 'Super Admin',
                     email: normalizedEmail,
-                    role: 'super_admin',
+                    role: 'super_admin', // Droits Max
                     avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=000&color=fff',
                     organization_id: 'demo-org-id'
                 };
                 
-                // Force session storage
+                // Force le stockage local et le mode démo pour éviter les erreurs SQL UUID
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true');
                 
@@ -106,14 +94,9 @@ export const api = {
             // Fallback to real Supabase Login if configured
             if (supabase) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-                if (error) {
-                    if (error.message === 'Invalid login credentials') {
-                        throw new Error("Email ou mot de passe incorrect.");
-                    }
-                    throw error;
-                }
-                localStorage.removeItem('is_demo_mode');
+                if (error) throw new Error("Email ou mot de passe incorrect.");
                 
+                localStorage.removeItem('is_demo_mode');
                 return {
                     id: data.user.id,
                     email: data.user.email || '',
@@ -131,10 +114,9 @@ export const api = {
         },
         register: async (name: string, email: string, password?: string) => {
             await delay(1000);
-            
             // Mock Registration
             const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
-            if (isGodEmail(email)) user.role = 'super_admin';
+            if (GOD_EMAILS.includes(email.toLowerCase())) user.role = 'super_admin';
             localStorage.setItem('user', JSON.stringify(user));
             return user;
         },
@@ -154,9 +136,8 @@ export const api = {
             if (supabase) {
                 const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
                 if (error) throw error;
-                return; // Redirects
+                return; 
             }
-            // Fallback Mock
             await delay(1000);
             const user = INITIAL_USERS[0];
             localStorage.setItem('user', JSON.stringify(user));
@@ -167,28 +148,23 @@ export const api = {
         get: async (): Promise<Organization | null> => {
             await delay(500);
             
-            const user = await getEffectiveUser();
-            
-            // FORCE ELITE PLAN FOR GOD USERS (Includes demo@reviewflow.com)
-            if (user && isGodEmail(user.email)) {
+            // En mode démo/god mode, on retourne toujours l'organisation ELITE
+            if (isDemoMode()) {
                 return {
                     ...INITIAL_ORG,
-                    subscription_plan: 'elite',
+                    subscription_plan: 'elite', // Tout débloqué
                     name: 'Reviewflow HQ (God Mode)',
                     integrations: { 
                         ...INITIAL_ORG.integrations, 
                         google: true, 
-                        facebook_posting: true, 
+                        facebook: true,
                         instagram_posting: true 
                     }
                 };
             }
             
             // Return Org from Supabase if real
-            if (supabase && user && !localStorage.getItem('user')) {
-                return { ...INITIAL_ORG, id: 'real-org-' + user.id };
-            }
-
+            // (Note: This might fail if DB is not set up correctly with UUIDs, hence the fallback above is crucial)
             return INITIAL_ORG;
         },
         update: async (data: any) => {
@@ -203,10 +179,6 @@ export const api = {
         addStaffMember: async (name: string, role: string, email: string) => { await delay(500); },
         removeStaffMember: async (id: string) => { await delay(500); },
         generateApiKey: async (name: string) => { 
-            const user = await getEffectiveUser();
-            const isElite = INITIAL_ORG.subscription_plan === 'elite' || (user && isGodEmail(user.email));
-            
-            if (!isElite) throw new Error("Accès API réservé au plan Elite.");
             await delay(500); 
         },
         revokeApiKey: async (id: string) => { await delay(500); },
