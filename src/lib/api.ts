@@ -41,7 +41,9 @@ const getEffectiveUser = async (): Promise<User | null> => {
 };
 
 const isGodEmail = (email?: string) => {
-    return email === 'god@reviewflow.com' || email === 'melvynbenichou@gmail.com';
+    if (!email) return false;
+    const normalized = email.toLowerCase().trim();
+    return normalized === 'god@reviewflow.com' || normalized === 'melvynbenichou@gmail.com';
 };
 
 export const api = {
@@ -65,15 +67,17 @@ export const api = {
         login: async (email: string, pass: string) => {
             await delay(800);
             
-            // GOD MODE LOGIN (Explicit Mock)
-            if ((email === 'god@reviewflow.com' && pass === 'godmode') || 
-                (email === 'melvynbenichou@gmail.com' && pass === 'password')) {
+            const normalizedEmail = email.toLowerCase().trim();
+            
+            // GOD MODE LOGIN (Explicit Mock - Case Insensitive)
+            if ((normalizedEmail === 'god@reviewflow.com' && pass === 'godmode') || 
+                (normalizedEmail === 'melvynbenichou@gmail.com' && pass === 'password')) {
                 
                 const godUser: User = {
                     ...INITIAL_USERS[0],
                     id: 'god-user-id',
                     name: 'Melvyn Benichou',
-                    email: email,
+                    email: normalizedEmail,
                     role: 'super_admin',
                     avatar: 'https://ui-avatars.com/api/?name=Melvyn+Benichou&background=0D9488&color=fff'
                 };
@@ -82,7 +86,7 @@ export const api = {
                 return godUser;
             }
 
-            if (email === 'demo@reviewflow.com' || email === 'admin@admin.com') {
+            if (normalizedEmail === 'demo@reviewflow.com' || normalizedEmail === 'admin@admin.com') {
                 localStorage.setItem('user', JSON.stringify(INITIAL_USERS[0]));
                 localStorage.setItem('is_demo_mode', 'true');
                 return INITIAL_USERS[0];
@@ -91,7 +95,13 @@ export const api = {
             // Fallback to real Supabase Login if configured
             if (supabase) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-                if (error) throw error;
+                if (error) {
+                    // Friendly error message mapping
+                    if (error.message === 'Invalid login credentials') {
+                        throw new Error("Email ou mot de passe incorrect (Supabase).");
+                    }
+                    throw error;
+                }
                 // We don't store user in localStorage for real auth, Supabase handles session
                 localStorage.removeItem('is_demo_mode');
                 
@@ -104,7 +114,7 @@ export const api = {
                 } as User;
             }
 
-            throw new Error("Identifiants incorrects.");
+            throw new Error("Identifiants incorrects. Utilisez demo@reviewflow.com / demo pour tester.");
         },
         logout: async () => {
             localStorage.removeItem('user');
@@ -194,7 +204,6 @@ export const api = {
         deleteWebhook: async () => { await delay(500); },
         simulatePlanChange: async () => { await delay(1000); }
     },
-    // ... (Keep other methods mostly as is, they rely on organization.get or auth.getUser which are now fixed)
     reviews: {
         list: async (filters: any): Promise<Review[]> => {
             await delay(600);
