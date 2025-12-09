@@ -2,12 +2,13 @@
 import { 
     INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
     INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
-    INITIAL_SOCIAL_POSTS, INITIAL_USERS 
+    INITIAL_SOCIAL_POSTS, INITIAL_USERS, INITIAL_BADGES, INITIAL_MILESTONES
 } from './db';
 import { 
     User, Organization, Review, AnalyticsSummary, WorkflowRule, 
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
-    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial
+    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial,
+    ClientProgress, Badge, Milestone, AiCoachMessage
 } from '../types';
 import { supabase } from './supabase';
 import { hasAccess } from './features'; // Import helper
@@ -175,6 +176,36 @@ export const api = {
                 return "Vous pouvez générer votre QR code dans le menu 'Collecte d'avis'. Il est disponible en plusieurs formats (PDF, PNG).";
             }
             return "Je suis l'assistant Reviewflow. Je peux vous aider sur la configuration, la gestion des avis ou les automatisations. Que voulez-vous savoir ?";
+        },
+        getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
+            // MOCKED: In production, this would call supabase/functions/ai_coach
+            if (supabase) {
+                try {
+                    const { data, error } = await supabase.functions.invoke('ai_coach', { body: { progress } });
+                    if (!error && data) return data;
+                } catch(e) { console.warn("Supabase coach error, falling back to mock"); }
+            }
+            
+            await delay(1500);
+            // Fallback Mock Logic
+            if (progress.score < 30) {
+                return {
+                    title: "Démarrage en douceur",
+                    message: "Vous avez fait le plus dur : commencer ! Pour décoller, connectez votre fiche Google Business dès maintenant.",
+                    focus_area: "setup"
+                };
+            } else if (progress.score < 60) {
+                return {
+                    title: "Bonne dynamique !",
+                    message: "Vos avis sont traités, c'est super. Pour aller plus loin, essayez d'activer l'automatisation pour les avis 5 étoiles.",
+                    focus_area: "setup"
+                };
+            }
+            return {
+                title: "Expert en action 🚀",
+                message: "Votre compte tourne à plein régime. Avez-vous pensé à utiliser Social Studio pour transformer vos meilleurs avis en posts Instagram ?",
+                focus_area: "social"
+            };
         }
     },
     analytics: {
@@ -449,6 +480,37 @@ export const api = {
                     duration: '3:00'
                 }
             ];
+        }
+    },
+    progression: {
+        get: async (): Promise<ClientProgress> => {
+            await delay(500);
+            return {
+                score: 45,
+                level: 'Beginner',
+                steps: {
+                    google_connected: true,
+                    establishment_configured: true,
+                    funnel_active: false,
+                    first_review_replied: true,
+                    widget_installed: false,
+                    automation_active: false,
+                    social_active: false
+                },
+                next_actions: [
+                    { id: '1', title: 'Activer le Funnel', description: 'Interceptez les avis négatifs avant Google.', action_link: '/collect', impact: 'high' },
+                    { id: '2', title: 'Installer le Widget', description: 'Affichez votre note sur votre site.', action_link: '/widget', impact: 'medium' },
+                    { id: '3', title: 'Automatisation', description: 'Répondez automatiquement aux 5 étoiles.', action_link: '/automation', impact: 'medium' }
+                ]
+            };
+        },
+        getBadges: async (): Promise<Badge[]> => {
+            await delay(500);
+            return INITIAL_BADGES;
+        },
+        getMilestones: async (): Promise<Milestone[]> => {
+            await delay(500);
+            return INITIAL_MILESTONES;
         }
     }
 };

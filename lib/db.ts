@@ -1,5 +1,5 @@
 
-import { Review, User, Organization, AnalyticsSummary, WorkflowRule, ReportConfig, Competitor, SocialPost } from '../types';
+import { Review, User, Organization, AnalyticsSummary, WorkflowRule, ReportConfig, Competitor, SocialPost, Badge, Milestone } from '../types';
 
 // --- INITIAL SEED DATA ---
 
@@ -325,6 +325,20 @@ export const INITIAL_SOCIAL_POSTS: SocialPost[] = [
         status: 'published',
         published_url: 'https://facebook.com'
     }
+];
+
+export const INITIAL_BADGES: Badge[] = [
+    { id: 'b1', name: 'Nouveau', description: 'Compte créé', icon: 'User', unlocked: true, unlocked_at: '2023-01-01', condition_description: "Créer un compte" },
+    { id: 'b2', name: 'Actif', description: 'Premier avis répondu', icon: 'MessageSquare', unlocked: true, unlocked_at: '2023-01-05', condition_description: "Répondre à 1 avis" },
+    { id: 'b3', name: 'Maître des Avis', description: '50 avis répondus', icon: 'Star', unlocked: false, condition_description: "Répondre à 50 avis" },
+    { id: 'b4', name: 'Automatisé', description: 'Premier workflow actif', icon: 'Zap', unlocked: true, unlocked_at: '2023-02-10', condition_description: "Activer une automatisation" },
+    { id: 'b5', name: 'Social Star', description: 'Premier post publié', icon: 'Share2', unlocked: false, condition_description: "Publier un post social" },
+];
+
+export const INITIAL_MILESTONES: Milestone[] = [
+    { id: 'm1', title: 'Compte Créé', description: 'Bienvenue sur Reviewflow', completed_at: '2023-01-01', type: 'setup' },
+    { id: 'm2', title: 'Google Connecté', description: 'Importation des avis activée', completed_at: '2023-01-01', type: 'setup' },
+    { id: 'm3', title: 'Première Réponse', description: 'Félicitations pour votre réactivité', completed_at: '2023-01-05', type: 'achievement' }
 ];
 
 export const db = {};

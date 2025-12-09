@@ -1,21 +1,31 @@
 
-
 import React, { useState } from 'react';
 import { useNavigate } from '../components/ui';
 import { api } from '../lib/api';
 import { Button, Input, Select, useToast, Card } from '../components/ui';
-import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut, Link as LinkIcon, Search } from 'lucide-react';
+import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut, Link as LinkIcon, Search, HelpCircle, Star, Smartphone, Layout } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
 import { BUSINESS_SECTORS } from '../lib/constants';
 
-const GoogleIcon = () => (
-    <svg viewBox="0 0 48 48" className="w-5 h-5 mr-2">
-        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-        <path fill="#34A853" d="M24 48c6.48 0 11.95-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-    </svg>
+const InfoTooltip = ({ text }: { text: string }) => (
+    <div className="group relative inline-block ml-2 align-middle">
+        <HelpCircle className="h-4 w-4 text-slate-400 hover:text-indigo-500 cursor-help" />
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-slate-800 text-white text-xs p-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center leading-relaxed">
+            {text}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+        </div>
+    </div>
 );
+
+const STEPS = [
+    { id: 1, title: 'Entreprise', icon: Building2 },
+    { id: 2, title: 'Google', icon: Globe },
+    { id: 3, title: 'Marque', icon: Sparkles },
+    { id: 4, title: 'Funnel', icon: Star },
+    { id: 5, title: 'Widget', icon: Layout },
+    { id: 6, title: 'Auto', icon: Zap },
+    { id: 7, title: 'Mobile', icon: Smartphone }
+];
 
 export const OnboardingPage = () => {
     const [step, setStep] = useState(1);
@@ -31,6 +41,10 @@ export const OnboardingPage = () => {
     const [googleConnected, setGoogleConnected] = useState(false);
     const [tone, setTone] = useState('professionnel');
     const [style, setStyle] = useState('formal');
+
+    const [funnelActive, setFunnelActive] = useState(false);
+    const [widgetActive, setWidgetActive] = useState(false);
+    const [autoActive, setAutoActive] = useState(false);
 
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
@@ -61,34 +75,30 @@ export const OnboardingPage = () => {
     const handleNext = async () => {
         setLoading(true);
         try {
-            // Save current step data
+            // Step 1: Create Organization
             if (step === 1) {
                 if (!companyName) {
                     toast.error("Veuillez renseigner le nom de l'établissement.");
                     setLoading(false);
                     return;
                 }
-
-                // Check if user already has an org
                 let currentOrg = await api.organization.get();
                 if (currentOrg) {
                     await api.organization.update({ name: companyName, industry: industry as any });
                 } else {
-                    // Create new org if none exists
                     currentOrg = await api.organization.create(companyName, industry);
                 }
-
-                // Create default location with GMB Link immediately
                 if (currentOrg) {
                     await api.locations.create({
                         name: companyName,
-                        google_review_url: googleUrl, // Optional
+                        google_review_url: googleUrl,
                         city: "Siège", 
                         country: "France"
                     });
                 }
-
-            } else if (step === 3) {
+            } 
+            // Step 3: Brand Voice
+            else if (step === 3) {
                 await api.organization.update({ 
                     brand: { 
                         enabled: true,
@@ -100,10 +110,15 @@ export const OnboardingPage = () => {
                         knowledge_base: ''
                     } 
                 });
-                toast.success("Configuration terminée !");
+            }
+            // Step 7: Finish
+            else if (step === 7) {
                 navigate('/dashboard');
                 return;
             }
+            
+            // Artificial delay for checklist feeling
+            await new Promise(r => setTimeout(r, 500));
             setStep(step + 1);
         } catch (e: any) {
             toast.error("Une erreur est survenue: " + e.message);
@@ -116,7 +131,6 @@ export const OnboardingPage = () => {
         setLoading(true);
         try {
             await api.auth.connectGoogleBusiness();
-            // In a real flow, this redirects. For mock, we simulate success.
             setGoogleConnected(true);
             toast.success("Compte Google connecté !");
         } catch (e) {
@@ -139,52 +153,54 @@ export const OnboardingPage = () => {
                 </Button>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full max-w-md mb-8 flex gap-2">
-                {[1, 2, 3].map(i => (
-                    <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors duration-500 ${i <= step ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
-                ))}
+            {/* Stepper */}
+            <div className="w-full max-w-2xl mb-8">
+                <div className="flex justify-between relative">
+                    <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-200 -z-10"></div>
+                    {STEPS.map((s) => (
+                        <div key={s.id} className="flex flex-col items-center gap-2 bg-slate-50 px-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${s.id <= step ? 'bg-indigo-600 text-white shadow-lg scale-110' : 'bg-white border-2 border-slate-200 text-slate-400'}`}>
+                                {s.id < step ? <Check className="h-4 w-4" /> : s.id}
+                            </div>
+                            <span className={`text-[10px] font-medium uppercase tracking-wider ${s.id === step ? 'text-indigo-600' : 'text-slate-400'}`}>{s.title}</span>
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            <Card className="w-full max-w-md overflow-hidden shadow-xl border-slate-200">
+            <Card className="w-full max-w-lg overflow-hidden shadow-xl border-slate-200">
                 <div className="p-8">
                     <div className="text-center mb-8">
-                        <div className="h-12 w-12 bg-indigo-100 rounded-xl flex items-center justify-center mx-auto mb-4 text-indigo-600">
-                            {step === 1 && <Building2 className="h-6 w-6" />}
-                            {step === 2 && <Globe className="h-6 w-6" />}
-                            {step === 3 && <Sparkles className="h-6 w-6" />}
+                        <div className="h-14 w-14 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-indigo-600 shadow-sm border border-indigo-100">
+                            {React.createElement(STEPS[step - 1].icon, { className: "h-7 w-7" })}
                         </div>
-                        <h1 className="text-2xl font-bold text-slate-900">{t('onboarding.welcome')}</h1>
-                        <p className="text-slate-500 mt-2 text-sm">{t('onboarding.subtitle')}</p>
+                        <h1 className="text-2xl font-bold text-slate-900">
+                            {step === 1 && "Commençons par les bases"}
+                            {step === 2 && "Centralisez vos avis"}
+                            {step === 3 && "Donnez une voix à votre IA"}
+                            {step === 4 && "Interceptez les avis négatifs"}
+                            {step === 5 && "Affichez votre succès"}
+                            {step === 6 && "Automatisez la fidélisation"}
+                            {step === 7 && "Restez connecté"}
+                        </h1>
+                        <p className="text-slate-500 mt-2 text-sm">Étape {step} sur 7</p>
                     </div>
 
                     {/* STEP 1: COMPANY */}
                     {step === 1 && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-8">
-                            
-                            {/* Company Search Block */}
                             <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
                                 <label className="block text-xs font-bold text-indigo-900 mb-2 flex items-center gap-1">
                                     <Search className="h-3 w-3" /> Trouver mon entreprise (France)
                                 </label>
                                 <div className="flex gap-2">
-                                    <Input 
-                                        placeholder="Nom ou SIRET..." 
-                                        value={searchQuery}
-                                        onChange={e => setSearchQuery(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                                        className="bg-white h-9 text-sm"
-                                    />
+                                    <Input placeholder="Nom ou SIRET..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} className="bg-white h-9 text-sm" />
                                     <Button size="sm" onClick={handleSearch} isLoading={searching}>Chercher</Button>
                                 </div>
                                 {searchResults.length > 0 && (
                                     <div className="mt-2 bg-white rounded border border-indigo-100 max-h-40 overflow-y-auto shadow-sm">
                                         {searchResults.map((r, i) => (
-                                            <div 
-                                                key={i} 
-                                                className="p-3 border-b border-slate-50 last:border-0 hover:bg-indigo-50 cursor-pointer text-xs"
-                                                onClick={() => handleSelectCompany(r)}
-                                            >
+                                            <div key={i} className="p-3 border-b border-slate-50 last:border-0 hover:bg-indigo-50 cursor-pointer text-xs" onClick={() => handleSelectCompany(r)}>
                                                 <div className="font-bold text-slate-800">{r.legal_name}</div>
                                                 <div className="text-slate-500">{r.address} - {r.city}</div>
                                             </div>
@@ -192,83 +208,46 @@ export const OnboardingPage = () => {
                                     </div>
                                 )}
                             </div>
-
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement <span className="text-red-500">*</span></label>
-                                <Input 
-                                    placeholder="Ex: Le Petit Bistro" 
-                                    value={companyName}
-                                    onChange={e => setCompanyName(e.target.value)}
-                                />
+                                <Input placeholder="Ex: Le Petit Bistro" value={companyName} onChange={e => setCompanyName(e.target.value)} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Secteur d'activité</label>
                                 <Select value={industry} onChange={e => setIndustry(e.target.value)}>
-                                    {BUSINESS_SECTORS.map(sec => (
-                                        <option key={sec.value} value={sec.value}>{sec.label}</option>
-                                    ))}
+                                    {BUSINESS_SECTORS.map(sec => <option key={sec.value} value={sec.value}>{sec.label}</option>)}
                                 </Select>
                             </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Lien Google Avis (Optionnel)</label>
-                                <div className="relative">
-                                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    <Input 
-                                        placeholder="https://g.page/r/..." 
-                                        className="pl-9"
-                                        value={googleUrl}
-                                        onChange={e => setGoogleUrl(e.target.value)}
-                                    />
-                                </div>
-                            </div>
                         </div>
                     )}
 
-                    {/* STEP 2: CONNECT */}
+                    {/* STEP 2: GOOGLE */}
                     {step === 2 && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-right-8">
-                            <div className={`p-4 border rounded-xl flex items-center justify-between transition-all ${googleConnected ? 'border-green-200 bg-green-50' : 'border-slate-200 hover:border-indigo-300'}`}>
-                                <div className="flex items-center">
-                                    <div className="h-10 w-10 bg-white rounded-lg flex items-center justify-center shadow-sm border border-slate-100 mr-3">
-                                        <GoogleIcon />
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-slate-900 text-sm">Google Business (Recommandé)</div>
-                                        <div className="text-xs text-slate-500">{googleConnected ? 'Connecté avec succès' : 'Sync auto des réponses'}</div>
-                                    </div>
-                                </div>
-                                {googleConnected ? (
-                                    <Check className="h-5 w-5 text-green-600" />
-                                ) : (
-                                    <Button size="sm" variant="outline" onClick={handleConnectGoogle} isLoading={loading}>Connexion</Button>
-                                )}
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-8 text-center">
+                            <p className="text-sm text-slate-600">Connectez votre fiche pour que l'IA puisse lire et répondre à vos avis.</p>
+                            <Button size="lg" variant="outline" onClick={handleConnectGoogle} isLoading={loading} className={`w-full h-16 text-lg ${googleConnected ? 'border-green-500 bg-green-50 text-green-700' : ''}`}>
+                                {googleConnected ? <><Check className="mr-2" /> Compte Connecté</> : 'Connecter Google Business'}
+                            </Button>
+                            <div className="text-xs text-slate-400 flex items-center justify-center gap-1">
+                                <InfoTooltip text="Cette connexion permet de synchroniser les avis toutes les heures." /> 
+                                Pourquoi ? Cela active 80% des fonctionnalités.
                             </div>
-                            
-                            <p className="text-xs text-center text-slate-400">
-                                En connectant votre compte, vous acceptez l'importation de vos avis publics pour analyse.
-                            </p>
                         </div>
                     )}
 
-                    {/* STEP 3: AI BRANDING */}
+                    {/* STEP 3: BRANDING */}
                     {step === 3 && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-right-8">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-2">Ton des réponses IA</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     {['professionnel', 'amical', 'enthousiaste', 'empathique'].map(t => (
-                                        <button 
-                                            key={t}
-                                            onClick={() => setTone(t)}
-                                            className={`p-3 text-sm rounded-lg border transition-all ${tone === t ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium' : 'border-slate-200 hover:border-slate-300 text-slate-600'}`}
-                                        >
+                                        <button key={t} onClick={() => setTone(t)} className={`p-3 text-sm rounded-lg border transition-all ${tone === t ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium' : 'border-slate-200 hover:border-slate-300 text-slate-600'}`}>
                                             <span className="capitalize">{t}</span>
                                         </button>
                                     ))}
                                 </div>
                             </div>
-                            
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-2">Style de langage</label>
                                 <Select value={style} onChange={e => setStyle(e.target.value)}>
@@ -276,10 +255,71 @@ export const OnboardingPage = () => {
                                     <option value="casual">Tutoiement (Familier)</option>
                                 </Select>
                             </div>
+                        </div>
+                    )}
 
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs text-slate-500 flex gap-2">
-                                <Zap className="h-4 w-4 text-amber-500 shrink-0" />
-                                <span>L'IA utilisera ces paramètres pour générer des brouillons de réponse automatiquement.</span>
+                    {/* STEP 4: FUNNEL */}
+                    {step === 4 && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-8 text-center">
+                            <p className="text-sm text-slate-600 mb-4">Le "Funnel" intercepte les avis négatifs (1-3 étoiles) via un formulaire privé, et redirige les positifs vers Google.</p>
+                            <div 
+                                onClick={() => setFunnelActive(!funnelActive)}
+                                className={`p-6 rounded-2xl border-2 cursor-pointer transition-all ${funnelActive ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300'}`}
+                            >
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="font-bold text-slate-900">Activer le filtre anti-avis négatifs</span>
+                                    <div className={`w-12 h-6 rounded-full p-1 transition-colors ${funnelActive ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                                        <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${funnelActive ? 'translate-x-6' : ''}`}></div>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-left text-slate-500">Augmente votre note moyenne de +0.5★ en 30 jours.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 5: WIDGET */}
+                    {step === 5 && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-8 text-center">
+                            <p className="text-sm text-slate-600 mb-4">Affichez vos meilleurs avis sur votre site web pour rassurer vos visiteurs.</p>
+                            <Button 
+                                variant={widgetActive ? 'primary' : 'outline'} 
+                                onClick={() => setWidgetActive(true)}
+                                className="w-full h-14"
+                            >
+                                {widgetActive ? "Widget Configuré" : "Installer le widget (Envoyer code par email)"}
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* STEP 6: AUTOMATION */}
+                    {step === 6 && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-8 text-center">
+                            <p className="text-sm text-slate-600 mb-4">Ne perdez plus de temps à répondre aux avis "5 étoiles sans commentaire".</p>
+                            <div 
+                                onClick={() => setAutoActive(!autoActive)}
+                                className={`p-6 rounded-2xl border-2 cursor-pointer transition-all ${autoActive ? 'border-green-500 bg-green-50' : 'border-slate-200 hover:border-green-300'}`}
+                            >
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="font-bold text-slate-900">Activer le Pilote Automatique</span>
+                                    <div className={`w-12 h-6 rounded-full p-1 transition-colors ${autoActive ? 'bg-green-500' : 'bg-slate-300'}`}>
+                                        <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${autoActive ? 'translate-x-6' : ''}`}></div>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-left text-slate-500">Répond automatiquement aux avis 5★ (avec votre ton).</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* STEP 7: MOBILE APP */}
+                    {step === 7 && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-8 text-center">
+                            <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl">
+                                <h3 className="font-bold text-lg mb-2">Restez notifié en temps réel</h3>
+                                <p className="text-sm text-slate-300 mb-4">Installez la PWA sur votre mobile pour répondre aux avis d'où vous voulez.</p>
+                                <div className="flex justify-center gap-4 text-xs opacity-70">
+                                    <span>iOS: Partager {'>'} Sur l'écran d'accueil</span>
+                                    <span>Android: Menu {'>'} Installer l'app</span>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -292,13 +332,13 @@ export const OnboardingPage = () => {
                             <div></div>
                         )}
                         <Button onClick={handleNext} isLoading={loading} disabled={step === 1 && !companyName}>
-                            {step === 3 ? t('onboarding.finish') : t('onboarding.next')} <ArrowRight className="ml-2 h-4 w-4" />
+                            {step === 7 ? t('onboarding.finish') : t('onboarding.next')} <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     </div>
                 </div>
             </Card>
             
-            {step < 3 && (
+            {step < 7 && (
                 <button onClick={() => navigate('/dashboard')} className="mt-6 text-xs text-slate-400 hover:text-slate-600 underline">
                     {t('onboarding.skip')}
                 </button>

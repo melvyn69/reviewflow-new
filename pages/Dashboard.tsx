@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { AnalyticsSummary, Review, SetupStatus, User } from '../types';
+import { AnalyticsSummary, Review, SetupStatus, User, ClientProgress, AiCoachMessage } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
 import { 
   TrendingUp, 
@@ -24,12 +24,16 @@ import {
   Search,
   X,
   RefreshCw,
-  Settings
+  Settings,
+  Trophy,
+  Lightbulb,
+  AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 import { useTranslation } from '../lib/i18n';
 
-// --- CONFETTI COMPONENT ---
+// --- COMPONENTS ---
+
 const Confetti = () => (
     <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
         {[...Array(50)].map((_, i) => (
@@ -41,6 +45,97 @@ const Confetti = () => (
         ))}
     </div>
 );
+
+const CoachWidget = ({ progress, coachMessage }: { progress: ClientProgress, coachMessage?: AiCoachMessage }) => {
+    if (!coachMessage) return <Skeleton className="h-40 w-full rounded-2xl" />;
+
+    return (
+        <Card className="bg-gradient-to-r from-indigo-900 to-purple-900 text-white border-none shadow-xl relative overflow-hidden">
+            {/* Decor */}
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+                <Trophy className="h-32 w-32" />
+            </div>
+            <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+
+            <CardContent className="p-6 md:p-8 relative z-10 flex flex-col md:flex-row gap-6 items-center">
+                <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-white/20 p-1.5 rounded-lg backdrop-blur-sm">
+                            <Sparkles className="h-4 w-4 text-yellow-300" />
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">Coach ReviewFlow</span>
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">{coachMessage.title}</h3>
+                    <p className="text-indigo-100 text-sm leading-relaxed max-w-xl">
+                        {coachMessage.message}
+                    </p>
+                </div>
+                
+                <div className="flex flex-col items-center gap-2 shrink-0 bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10 min-w-[140px]">
+                    <span className="text-xs font-bold text-indigo-200 uppercase">Score Global</span>
+                    <div className="text-4xl font-black text-white">{progress.score}%</div>
+                    <div className="w-full bg-slate-700/50 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-green-400 h-full transition-all duration-1000" style={{ width: `${progress.score}%` }}></div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const ActionCenter = ({ actions }: { actions: ClientProgress['next_actions'] }) => {
+    const navigate = useNavigate();
+    
+    if (actions.length === 0) return null;
+
+    return (
+        <Card className="border-indigo-100 bg-indigo-50/30">
+            <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base text-indigo-900">
+                    <Zap className="h-5 w-5 text-amber-500 fill-amber-500" />
+                    Actions Recommandées
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-3">
+                    {actions.map(action => (
+                        <div key={action.id} className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all cursor-pointer" onClick={() => navigate(action.action_link)}>
+                            <div className="flex items-start gap-3">
+                                <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${action.impact === 'high' ? 'bg-red-500 animate-pulse' : 'bg-indigo-500'}`}></div>
+                                <div>
+                                    <h4 className="font-bold text-sm text-slate-800 group-hover:text-indigo-700 transition-colors">{action.title}</h4>
+                                    <p className="text-xs text-slate-500">{action.description}</p>
+                                </div>
+                            </div>
+                            <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const AlertBanner = ({ progress }: { progress: ClientProgress }) => {
+    const navigate = useNavigate();
+    
+    // Critical blocking steps
+    if (!progress.steps.google_connected) {
+        return (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between mb-6 animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                    <div>
+                        <h4 className="font-bold text-amber-900 text-sm">Connexion Google manquante</h4>
+                        <p className="text-xs text-amber-800">Vous ne pouvez pas recevoir d'avis sans connecter votre fiche.</p>
+                    </div>
+                </div>
+                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-none" onClick={() => navigate('/settings?tab=integrations')}>Connecter</Button>
+            </div>
+        );
+    }
+    return null;
+};
 
 const KPI = ({ title, value, change, icon: Icon, trend, loading }: any) => (
   <Card className="hover:shadow-md transition-shadow">
@@ -99,132 +194,16 @@ const ActivityFeed = () => {
     )
 }
 
-const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
-    const navigate = useNavigate();
-    // Initialiser l'état masqué depuis le localStorage pour qu'il persiste au rechargement
-    const [hidden, setHidden] = useState(() => {
-        return localStorage.getItem('setup_completed_hidden') === 'true';
-    });
-    
-    const isComplete = status?.completionPercentage === 100;
-
-    // Effet pour fermer automatiquement après 5 secondes si c'est complété
-    useEffect(() => {
-        if (isComplete && !hidden) {
-            const timer = setTimeout(() => {
-                setHidden(true);
-                localStorage.setItem('setup_completed_hidden', 'true');
-            }, 5000); // 5 secondes de délai
-            return () => clearTimeout(timer);
-        }
-    }, [isComplete, hidden]);
-
-    const handleManualClose = () => {
-        setHidden(true);
-        localStorage.setItem('setup_completed_hidden', 'true');
-    };
-    
-    if (!status || hidden) return null;
-
-    const steps = [
-        {
-            id: 'google',
-            label: 'Connecter Google Business Profile',
-            desc: 'Pour récupérer vos avis existants.',
-            done: status.googleConnected,
-            action: () => navigate('/settings?tab=integrations'),
-            btn: 'Connecter'
-        },
-        {
-            id: 'brand',
-            label: 'Définir votre Identité IA',
-            desc: 'Configurez le ton et le style de vos réponses.',
-            done: status.brandVoiceConfigured,
-            action: () => navigate('/settings?tab=brand'),
-            btn: 'Configurer'
-        },
-        {
-            id: 'first_reply',
-            label: 'Répondre à un premier avis',
-            desc: 'Testez la génération de réponse IA.',
-            done: status.firstReviewReplied,
-            action: () => navigate('/inbox'),
-            btn: 'Aller aux avis'
-        }
-    ];
-
-    return (
-        <Card className={`mb-8 border-indigo-100 overflow-hidden relative shadow-md transition-all duration-1000 ${isComplete ? 'border-green-200 bg-green-50/30' : ''}`}>
-            {isComplete && <Confetti />}
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-100">
-                <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-1000 ease-out" style={{ width: `${status.completionPercentage}%` }}></div>
-            </div>
-            
-            <CardContent className="p-0">
-                <div className="p-6 flex justify-between items-center bg-white/50 backdrop-blur-sm">
-                    <div>
-                        <h3 className="font-bold text-lg text-indigo-900 flex items-center gap-2">
-                            {isComplete ? <Sparkles className="h-5 w-5 text-green-500 animate-pulse" /> : <Rocket className="h-5 w-5 text-indigo-600" />}
-                            {isComplete ? 'Félicitations ! Setup Terminé' : 'Démarrage Rapide'}
-                        </h3>
-                        <p className="text-slate-500 text-sm mt-1">
-                            {isComplete ? "Tout est prêt. Cette fenêtre se fermera automatiquement." : "Complétez ces étapes pour profiter à 100% de l'IA."}
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="text-right hidden sm:block">
-                            <span className={`text-3xl font-extrabold ${isComplete ? 'text-green-600' : 'text-indigo-600'}`}>{status.completionPercentage}%</span>
-                            <span className="text-xs text-slate-400 block uppercase tracking-wide font-bold">Complété</span>
-                        </div>
-                        {isComplete && (
-                            <button onClick={handleManualClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full">
-                                <X className="h-5 w-5" />
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {!isComplete && (
-                    <div className="divide-y divide-slate-50 border-t border-slate-100">
-                        {steps.map((step, i) => (
-                            <div key={step.id} className={`p-4 flex items-center gap-4 transition-colors ${step.done ? 'bg-slate-50/50' : 'bg-white hover:bg-slate-50'}`}>
-                                <div className={`h-8 w-8 rounded-full flex items-center justify-center border-2 shrink-0 ${step.done ? 'bg-green-100 border-green-200 text-green-600' : 'bg-white border-slate-200 text-slate-400'}`}>
-                                    {step.done ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold text-sm">{i + 1}</span>}
-                                </div>
-                                <div className="flex-1">
-                                    <h4 className={`font-medium text-sm ${step.done ? 'text-slate-500 line-through' : 'text-slate-900'}`}>{step.label}</h4>
-                                    <p className="text-xs text-slate-500">{step.desc}</p>
-                                </div>
-                                <Button 
-                                    size="xs" 
-                                    variant={step.done ? "ghost" : "outline"} 
-                                    onClick={step.action} 
-                                    className={`whitespace-nowrap ${!step.done ? 'bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-sm' : ''}`}
-                                >
-                                    {step.done ? 'Modifier' : step.btn} 
-                                    {!step.done && <ArrowRight className="ml-1 h-3 w-3" />}
-                                    {step.done && <Settings className="ml-1 h-3 w-3" />}
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
 export const DashboardPage = () => {
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
-  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [urgentReviews, setUrgentReviews] = useState<Review[]>([]);
   const [period, setPeriod] = useState('30j');
-  const [seeding, setSeeding] = useState(false);
-  const [realLocationId, setRealLocationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [skipOnboarding, setSkipOnboarding] = useState(false);
+  
+  // NEW STATES
+  const [progress, setProgress] = useState<ClientProgress | null>(null);
+  const [coachMessage, setCoachMessage] = useState<AiCoachMessage | undefined>(undefined);
   
   const toast = useToast();
   const navigate = useNavigate();
@@ -233,34 +212,25 @@ export const DashboardPage = () => {
   useEffect(() => {
     loadData();
     api.auth.getUser().then(setUser);
-    const skipped = localStorage.getItem('skip_onboarding');
-    if (skipped) setSkipOnboarding(true);
   }, [period]);
 
   const loadData = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    if (!isRefresh) setLoading(true);
     
     try {
-      // Execute independently to avoid one failure blocking everything
-      const org = await api.organization.get().catch(() => null);
-      
-      let analyticsData, reviewsData, status;
-      
-      if (org) {
-          analyticsData = await api.analytics.getOverview(period).catch(() => null);
-          reviewsData = await api.reviews.list({}).catch(() => []);
-          status = await api.onboarding.checkStatus().catch(() => null);
-          
-          if (org.locations?.length > 0) {
-              setRealLocationId(org.locations[0].id);
-          }
-      }
+      const [analyticsData, reviewsData, progressData] = await Promise.all([
+          api.analytics.getOverview(period).catch(() => null),
+          api.reviews.list({}).catch(() => []),
+          api.progression.get().catch(() => null)
+      ]);
 
       setStats(analyticsData);
-      setSetupStatus(status);
+      setProgress(progressData);
       
-      // Filter for "Urgent": Low rating + Pending/Draft
+      if (progressData) {
+          api.ai.getCoachAdvice(progressData).then(setCoachMessage);
+      }
+      
       const urgent = (reviewsData || [])
         .filter(r => r.rating <= 3 && (r.status === 'pending' || r.status === 'draft'))
         .slice(0, 5);
@@ -269,38 +239,9 @@ export const DashboardPage = () => {
       if (isRefresh) toast.success("Données actualisées !");
     } catch (e) {
       console.error("Dashboard Load Error", e);
-      if (isRefresh) toast.error("Erreur lors de l'actualisation");
     } finally {
         setLoading(false);
-        setRefreshing(false);
     }
-  };
-
-  const handleSeedData = async () => {
-      setSeeding(true);
-      try {
-          await api.seedCloudDatabase();
-          toast.success("Données envoyées avec succès !");
-          await loadData();
-      } catch (error: any) {
-          toast.error("Erreur: " + error.message);
-      } finally {
-          setSeeding(false);
-      }
-  };
-
-  const handleSkip = () => {
-      setSkipOnboarding(true);
-      localStorage.setItem('skip_onboarding', 'true');
-  };
-
-  const openFunnel = () => {
-      if (realLocationId) {
-          window.open(`#/feedback/${realLocationId}`, '_blank');
-      } else {
-          toast.error("Aucun établissement configuré.");
-          navigate('/settings?tab=locations');
-      }
   };
 
   const getGreeting = () => {
@@ -310,45 +251,10 @@ export const DashboardPage = () => {
       return t('dashboard.greeting_evening');
   };
 
-  // Logic for empty state or new account
-  const isGoogleConnected = setupStatus?.googleConnected;
-  
-  if (!loading && !isGoogleConnected && !skipOnboarding) {
-      return (
-          <Card className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-none shadow-2xl overflow-hidden relative min-h-[70vh] flex items-center justify-center">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-              <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-              
-              <CardContent className="p-8 md:p-12 text-center relative z-10 max-w-2xl">
-                  <div className="bg-white/20 p-5 rounded-3xl w-24 h-24 flex items-center justify-center mx-auto mb-8 backdrop-blur-md shadow-inner ring-1 ring-white/30">
-                      <Rocket className="h-12 w-12 text-white" />
-                  </div>
-                  <h2 className="text-5xl font-extrabold mb-6 tracking-tight">Bienvenue sur Reviewflow</h2>
-                  <p className="text-indigo-100 text-xl mb-12 leading-relaxed">
-                      L'IA est prête à booster votre e-réputation. <br/> Connectez votre fiche Google pour commencer la magie.
-                  </p>
-                  <div className="flex flex-col sm:flex-row justify-center gap-6">
-                      <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-7 text-lg shadow-xl hover:scale-105 transition-transform font-bold" onClick={() => navigate('/settings?tab=integrations')}>
-                          <UploadCloud className="mr-3 h-6 w-6" /> Connecter Google Business
-                      </Button>
-                      <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 py-7 text-lg backdrop-blur-sm" onClick={handleSeedData} isLoading={seeding}>
-                          Mode Démo
-                      </Button>
-                  </div>
-                  <div className="mt-8">
-                      <button onClick={handleSkip} className="text-sm text-indigo-200 hover:text-white underline">
-                          Accéder au dashboard sans connexion (Mode manuel)
-                      </button>
-                  </div>
-              </CardContent>
-          </Card>
-      );
-  }
-
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
       
-      {/* Header with Greeting and Actions */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">
@@ -361,66 +267,29 @@ export const DashboardPage = () => {
                 variant="ghost" 
                 size="sm" 
                 onClick={() => loadData(true)} 
-                isLoading={refreshing}
                 className="text-slate-400 hover:text-indigo-600"
-                title="Actualiser les données"
             >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className="h-4 w-4" />
             </Button>
-            <div className="flex bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
-                {['7j', '30j', 'Trimestre'].map((p) => (
-                    <button 
-                        key={p}
-                        onClick={() => setPeriod(p)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === p ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                    >
-                        {p}
-                    </button>
-                ))}
-            </div>
+            {/* Removed period selector for clarity in this view, simpler is better */}
         </div>
       </div>
 
-      {/* Quick Actions Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button onClick={() => navigate('/collect')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all text-left group">
-              <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <QrCode className="h-5 w-5" />
-              </div>
-              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.qrcode')}</div>
-              <div className="text-xs text-slate-500">{t('dashboard.actions.print')}</div>
-          </button>
-          
-          <button onClick={() => navigate('/inbox')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left group">
-              <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <MessageSquare className="h-5 w-5" />
-              </div>
-              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.reply')}</div>
-              <div className="text-xs text-slate-500">{t('dashboard.actions.inbox')}</div>
-          </button>
-          
-          <button onClick={() => navigate('/social')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-pink-300 hover:shadow-md transition-all text-left group">
-              <div className="bg-pink-50 text-pink-600 w-10 h-10 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="font-bold text-slate-900 text-sm">{t('dashboard.actions.social')}</div>
-              <div className="text-xs text-slate-500">{t('dashboard.actions.create')}</div>
-          </button>
-      </div>
-
-      <SetupProgress status={setupStatus} />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPI title={t('kpi.rating')} value={stats?.average_rating ? stats.average_rating + '/5' : '-'} change="+0.1" icon={Star} trend="up" loading={loading} />
-        <KPI title={t('kpi.response')} value={stats?.response_rate + '%'} change="+5%" icon={MessageSquare} trend="up" loading={loading} />
-        <KPI title={t('kpi.nps')} value={stats?.nps_score} change="+2" icon={Clock} trend="up" loading={loading} />
-        <KPI title={t('kpi.sentiment')} value={(stats ? Math.round(stats.sentiment_distribution.positive * 100) : 0) + '%'} change="+4%" icon={Activity} trend="up" loading={loading} />
-      </div>
+      {progress && <AlertBanner progress={progress} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-            {/* Urgent Tasks */}
-            <Card className="border-l-4 border-l-amber-400">
+          <div className="lg:col-span-2 space-y-8">
+              {/* AI COACH WIDGET */}
+              {progress && <CoachWidget progress={progress} coachMessage={coachMessage} />}
+
+              {/* KPIS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <KPI title={t('kpi.rating')} value={stats?.average_rating ? stats.average_rating + '/5' : '-'} change="+0.1" icon={Star} trend="up" loading={loading} />
+                <KPI title={t('kpi.response')} value={stats?.response_rate + '%'} change="+5%" icon={MessageSquare} trend="up" loading={loading} />
+              </div>
+
+              {/* Urgent Tasks */}
+              <Card className="border-l-4 border-l-amber-400">
                 <CardHeader className="border-b border-slate-100 pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                         <AlertCircle className="h-5 w-5 text-amber-500" />
@@ -463,48 +332,43 @@ export const DashboardPage = () => {
                         </div>
                     )}
                 </CardContent>
-            </Card>
+              </Card>
+          </div>
 
-            {/* AI Insights Summary */}
-            {stats && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Card className="bg-green-50/50 border-green-100">
-                        <CardContent className="p-5">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                                <h4 className="text-sm font-bold text-green-900 uppercase tracking-wide">{t('dashboard.strengths')}</h4>
-                            </div>
-                            <p className="text-sm text-green-800 leading-relaxed">{stats.strengths_summary || t('dashboard.analyzing')}</p>
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-red-50/50 border-red-100">
-                        <CardContent className="p-5">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="h-2 w-2 rounded-full bg-red-500"></div>
-                                <h4 className="text-sm font-bold text-red-900 uppercase tracking-wide">{t('dashboard.weaknesses')}</h4>
-                            </div>
-                            <p className="text-sm text-red-800 leading-relaxed">{stats.problems_summary || t('dashboard.analyzing')}</p>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-        </div>
+          <div className="space-y-6">
+              {/* ACTION CENTER */}
+              {progress && <ActionCenter actions={progress.next_actions} />}
 
-        <div className="space-y-6">
-            {/* Live Feed */}
-            <Card className="h-full flex flex-col border-slate-200 shadow-sm">
+              {/* QUICK ACTIONS */}
+              <div className="grid grid-cols-2 gap-4">
+                  <button onClick={() => navigate('/collect')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all text-center flex flex-col items-center gap-2 group">
+                      <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <QrCode className="h-5 w-5" />
+                      </div>
+                      <span className="font-bold text-slate-900 text-xs">{t('dashboard.actions.qrcode')}</span>
+                  </button>
+                  <button onClick={() => navigate('/inbox')} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-center flex flex-col items-center gap-2 group">
+                      <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <MessageSquare className="h-5 w-5" />
+                      </div>
+                      <span className="font-bold text-slate-900 text-xs">{t('dashboard.actions.inbox')}</span>
+                  </button>
+              </div>
+
+              {/* ACTIVITY */}
+              <Card className="flex flex-col border-slate-200 shadow-sm flex-1">
                 <CardHeader className="border-b border-slate-100 bg-slate-50/50 py-4">
                     <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
                         <Activity className="h-4 w-4" /> {t('dashboard.activity')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 flex-1 overflow-hidden">
-                    <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
+                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                         <ActivityFeed />
                     </div>
                 </CardContent>
-            </Card>
-        </div>
+              </Card>
+          </div>
       </div>
     </div>
   );

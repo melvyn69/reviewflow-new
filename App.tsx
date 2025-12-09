@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, ToastProvider } from './components/ui';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
 import { AnalyticsPage } from './pages/Analytics';
@@ -22,12 +21,17 @@ import { SuperAdminPage } from './pages/SuperAdmin';
 import { CompetitorsPage } from './pages/Competitors';
 import { BookDemoPage } from './pages/BookDemo';
 import { OnboardingPage } from './pages/Onboarding';
+import { ProgressPage } from './pages/Progress';
 import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
+import { SocialModelCreatePage } from './pages/SocialModelCreate';
 import { PublicProfilePage } from './pages/PublicProfile';
+import { DevelopersPage } from './pages/Developers';
 import { api } from './lib/api';
+import { supabase } from './lib/supabase';
 import { User } from './types';
+import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from './components/ui';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -52,7 +56,6 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // If user is restricted, redirect to dashboard
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -63,9 +66,35 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
 function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     checkUser();
+
+    // Listener for OAuth redirects (Google Login)
+    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        
+        // 🚀 CRITICAL: Capture Tokens immediately on sign-in
+        if (session.provider_token) {
+            await api.organization.saveGoogleTokens();
+        }
+
+        await checkUser();
+        
+        // If we are on login/register/landing, go to dashboard
+        if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
+            navigate('/dashboard');
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        navigate('/');
+      }
+    }) || { data: { subscription: { unsubscribe: () => {} } } };
+
+    return () => {
+      authListener.data.subscription.unsubscribe();
+    };
   }, []);
 
   const checkUser = async () => {
@@ -117,6 +146,12 @@ function AppRoutes() {
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
                         <Route path="social" element={<SocialPage />} /> 
+                        <Route path="social/models/create" element={<SocialModelCreatePage />} />
+                        
+                        {/* Cleanup: Ghost Routes for old "Social Booster" to redirect to Social Studio */}
+                        <Route path="social-booster" element={<Navigate to="/social" replace />} />
+                        <Route path="booster" element={<Navigate to="/social" replace />} />
+
                         <Route path="analytics" element={<AnalyticsPage />} />
                         <Route path="competitors" element={<CompetitorsPage />} />
                         <Route path="automation" element={<AutomationPage />} />
@@ -124,8 +159,10 @@ function AppRoutes() {
                         <Route path="customers" element={<CustomersPage />} />
                         <Route path="offers" element={<OffersPage />} />
                         <Route path="reports" element={<ReportsPage />} />
+                        <Route path="developers" element={<DevelopersPage />} />
                         <Route path="help" element={<HelpPage />} />
                         <Route path="playground" element={<PlaygroundPage />} />
+                        <Route path="progress" element={<ProgressPage />} />
                         
                         {/* Sensitive Routes - Admin Only */}
                         <Route 

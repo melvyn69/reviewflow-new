@@ -28,7 +28,8 @@ import {
   Sparkles,
   ChevronDown,
   Terminal,
-  Lock
+  Lock,
+  Trophy
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
@@ -180,6 +181,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           {/* Main Navigation */}
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
+          <SidebarItem to="/progress" icon={Trophy} label="Progression" onClick={onClose} />
           
           <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isLocked={check('social_studio')} />
           <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
@@ -450,6 +452,15 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
                             className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 mb-1 transition-colors"
                         >
                             <Settings className="h-4 w-4 text-slate-400" /> Paramètres
+                        </button>
+                        <button 
+                            onClick={() => {
+                                setShowUserMenu(false);
+                                navigate('/progress');
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 mb-1 transition-colors"
+                        >
+                            <Trophy className="h-4 w-4 text-slate-400" /> Ma Progression
                         </button>
                         <button 
                             onClick={() => {

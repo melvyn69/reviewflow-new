@@ -524,3 +524,49 @@ export interface ChatMessage {
 }
 
 export type SupportUrgency = 'normal' | 'high' | 'critical';
+
+// --- GAMIFICATION & PROGRESSION ---
+export interface Badge {
+    id: string;
+    name: string;
+    description: string;
+    icon: string; // lucide icon name
+    unlocked: boolean;
+    unlocked_at?: string;
+    condition_description: string;
+}
+
+export interface Milestone {
+    id: string;
+    title: string;
+    description: string;
+    completed_at: string;
+    type: 'setup' | 'achievement';
+}
+
+export interface ClientProgress {
+    score: number; // 0 to 100
+    level: 'Beginner' | 'Pro' | 'Expert';
+    steps: {
+        google_connected: boolean;
+        establishment_configured: boolean;
+        funnel_active: boolean;
+        first_review_replied: boolean;
+        widget_installed: boolean;
+        automation_active: boolean;
+        social_active: boolean;
+    };
+    next_actions: {
+        id: string;
+        title: string;
+        description: string;
+        action_link: string;
+        impact: 'high' | 'medium' | 'low';
+    }[];
+}
+
+export interface AiCoachMessage {
+    title: string;
+    message: string;
+    focus_area: 'response' | 'collection' | 'social' | 'setup';
+}
