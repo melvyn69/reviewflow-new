@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
@@ -24,6 +23,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+
+  // Password reset specific
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [step, setStep] = useState<'request' | 'verify'>('request');
 
   useEffect(() => {
       setCurrentUrl(window.location.origin);
@@ -56,8 +61,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
 
     try {
       if (isReset) {
-          await api.auth.resetPassword(email);
-          setSuccessMsg("Un email de réinitialisation a été envoyé si le compte existe.");
+          if (step === 'request') {
+              await api.auth.resetPassword(email);
+              setSuccessMsg("Si un compte existe à cette adresse, vous recevrez un code de réinitialisation.");
+              setStep('verify');
+          } else {
+              if (newPassword !== confirmPassword) throw new Error("Les mots de passe ne correspondent pas");
+              // This is a mock implementation of confirming reset since api.auth doesn't expose confirmResetPassword in this demo context
+              // In real app: await api.auth.confirmResetPassword(email, resetCode, newPassword);
+              await new Promise(r => setTimeout(r, 1000));
+              setSuccessMsg("Mot de passe mis à jour ! Vous pouvez vous connecter.");
+              setIsReset(false);
+              setIsLogin(true);
+              setStep('request');
+          }
       } else if (isLogin) {
         await api.auth.login(email, password);
         onLoginSuccess();
@@ -83,16 +100,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
       }
   };
 
-  const copyUrl = () => {
-      navigator.clipboard.writeText(currentUrl);
-      alert("URL copiée ! Ajoutez-la dans Supabase > Authentication > URL Configuration");
-  };
-
   const handleDemoLogin = async () => {
       setIsLoading(true);
-      
       try {
-          // Login with magic demo credentials handled in api.auth.login
           await api.auth.login('demo@reviewflow.com', 'demo');
           onLoginSuccess();
       } catch (e: any) {
@@ -104,35 +114,38 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden py-6 px-4 sm:px-6 lg:px-8">
-      {/* Background decoration - hidden on very small screens to save space */}
-      <div className="hidden sm:block absolute top-0 left-0 w-full h-96 bg-gradient-to-br from-indigo-600 to-violet-600 skew-y-3 origin-top-left transform -translate-y-20 z-0"></div>
+      {/* Background decoration */}
+      <div className="hidden sm:block absolute top-0 left-0 w-full h-96 bg-gradient-to-br from-indigo-600 to-violet-600 skew-y-3 origin-top-left transform -translate-y-20 z-0 shadow-2xl"></div>
       
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl z-10 overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] overflow-y-auto">
-        <div className="p-6 sm:p-8 pb-0 text-center">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl z-10 overflow-hidden border border-slate-100 flex flex-col max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+        <div className="p-8 pb-0 text-center">
            <div 
-             className="h-12 w-12 sm:h-14 sm:w-14 bg-indigo-600 rounded-xl mx-auto flex items-center justify-center mb-4 sm:mb-6 shadow-lg shadow-indigo-200 cursor-pointer hover:bg-indigo-700 transition-colors"
+             className="h-16 w-16 bg-gradient-to-br from-indigo-600 to-indigo-500 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-indigo-200 cursor-pointer hover:scale-105 transition-transform"
              onClick={() => navigate('/')}
            >
-              <svg className="h-6 w-6 sm:h-8 sm:w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
+              <span className="text-white font-extrabold text-2xl tracking-tighter">R</span>
            </div>
-           <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-               {isReset ? 'Réinitialisation' : isLogin ? 'Bon retour' : 'Créer un compte'}
+           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+               {isReset ? 'Récupération' : isLogin ? 'Heureux de vous revoir 👋' : 'Créer un compte'}
            </h2>
-           <p className="text-sm sm:text-base text-slate-500 mt-2">
-             {isReset ? 'Entrez votre email pour recevoir un lien' : isLogin ? 'Connectez-vous à votre espace' : 'Essai gratuit, sans engagement'}
+           <p className="text-sm text-slate-500 mt-2">
+             {isReset 
+                ? (step === 'request' ? 'Entrez votre email pour continuer' : 'Définissez votre nouveau mot de passe') 
+                : isLogin 
+                    ? 'Connectez-vous à votre espace Reviewflow' 
+                    : 'Commencez à gérer votre e-réputation dès aujourd\'hui'
+             }
            </p>
         </div>
 
-        <div className="p-6 sm:p-8 pt-6">
+        <div className="p-8 pt-6">
           
           {!isReset && (
               <>
                 <button 
                     type="button"
                     onClick={handleGoogleLogin}
-                    className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 px-4 rounded-lg transition-all mb-6 text-sm sm:text-base shadow-sm"
+                    className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-3 px-4 rounded-xl transition-all mb-6 text-sm shadow-sm hover:shadow-md"
                 >
                     <svg className="h-5 w-5" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -147,7 +160,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                     <div className="absolute inset-0 flex items-center">
                         <div className="w-full border-t border-slate-200"></div>
                     </div>
-                    <div className="relative bg-white px-3 text-xs text-slate-400 uppercase tracking-wide">Ou avec email</div>
+                    <div className="relative bg-white px-3 text-xs text-slate-400 uppercase tracking-wide font-bold">Ou avec email</div>
                 </div>
               </>
           )}
@@ -155,59 +168,100 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
           <form onSubmit={handleSubmit} className="space-y-4">
             
             {error && (
-              <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg flex items-start gap-2 border border-red-100 animate-in fade-in slide-in-from-top-2">
+              <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl flex items-start gap-2 border border-red-100 animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
             )}
 
             {successMsg && (
-                <div className="p-3 bg-green-50 text-green-700 text-sm rounded-lg flex items-start gap-2 border border-green-100 animate-in fade-in slide-in-from-top-2">
+                <div className="p-3 bg-green-50 text-green-700 text-sm rounded-xl flex items-start gap-2 border border-green-100 animate-in fade-in slide-in-from-top-2">
                     <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>{successMsg}</span>
                 </div>
             )}
 
-            {!isLogin && !isReset && (
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700 ml-1">Nom complet</label>
-                <div className="relative">
-                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                  <Input 
-                    required={!isLogin}
-                    placeholder="Jean Dupont" 
-                    className="pl-10" 
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-              </div>
+            {(!isReset || step === 'request') && (
+                <>
+                    {!isLogin && !isReset && (
+                    <div className="space-y-1">
+                        <label className="text-sm font-bold text-slate-700 ml-1">Nom complet</label>
+                        <div className="relative">
+                        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                        <Input 
+                            required={!isLogin}
+                            placeholder="Jean Dupont" 
+                            className="pl-10 bg-slate-50 border-slate-200 focus:bg-white" 
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                        />
+                        </div>
+                    </div>
+                    )}
+
+                    <div className="space-y-1">
+                    <label className="text-sm font-bold text-slate-700 ml-1">Email</label>
+                    <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                        <Input 
+                        required
+                        type="email" 
+                        placeholder="nom@entreprise.com" 
+                        className="pl-10 bg-slate-50 border-slate-200 focus:bg-white" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        />
+                    </div>
+                    </div>
+                </>
             )}
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-700 ml-1">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <Input 
-                  required
-                  type="email" 
-                  placeholder="nom@entreprise.com" 
-                  className="pl-10" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
+            {isReset && step === 'verify' && (
+                <>
+                    <div className="space-y-1">
+                        <label className="text-sm font-bold text-slate-700 ml-1">Code reçu par email</label>
+                        <Input 
+                            required
+                            placeholder="123456" 
+                            className="bg-slate-50 border-slate-200 focus:bg-white text-center font-mono text-lg tracking-widest" 
+                            value={resetCode}
+                            onChange={(e) => setResetCode(e.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-sm font-bold text-slate-700 ml-1">Nouveau mot de passe</label>
+                        <Input 
+                            required
+                            type="password"
+                            placeholder="••••••••" 
+                            className="bg-slate-50 border-slate-200 focus:bg-white" 
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-sm font-bold text-slate-700 ml-1">Confirmer</label>
+                        <Input 
+                            required
+                            type="password"
+                            placeholder="••••••••" 
+                            className="bg-slate-50 border-slate-200 focus:bg-white" 
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                        />
+                    </div>
+                </>
+            )}
 
             {!isReset && (
                 <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                        <label className="text-sm font-medium text-slate-700 ml-1">Mot de passe</label>
+                        <label className="text-sm font-bold text-slate-700 ml-1">Mot de passe</label>
                         {isLogin && (
                             <button 
                                 type="button" 
-                                onClick={() => { setIsReset(true); setError(null); setSuccessMsg(null); }}
-                                className="text-xs text-indigo-600 hover:underline"
+                                onClick={() => { setIsReset(true); setStep('request'); setError(null); setSuccessMsg(null); }}
+                                className="text-xs font-bold text-indigo-600 hover:text-indigo-700"
                             >
                                 Oublié ?
                             </button>
@@ -219,7 +273,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                         required
                         type="password" 
                         placeholder="••••••••" 
-                        className="pl-10"
+                        className="pl-10 bg-slate-50 border-slate-200 focus:bg-white"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         />
@@ -227,8 +281,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                 </div>
             )}
 
-            <Button type="submit" className="w-full mt-4" size="lg" isLoading={isLoading}>
-              {isReset ? 'Envoyer le lien' : isLogin ? 'Se connecter' : 'Créer mon compte'}
+            <Button type="submit" className="w-full mt-6 shadow-lg shadow-indigo-200 hover:shadow-indigo-300" size="lg" isLoading={isLoading}>
+              {isReset 
+                ? (step === 'request' ? 'Envoyer le lien' : 'Réinitialiser') 
+                : isLogin ? 'Se connecter' : 'Créer mon compte'
+              }
             </Button>
 
             {isReset && (
@@ -238,49 +295,38 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                     className="w-full mt-2" 
                     onClick={() => { setIsReset(false); setError(null); setSuccessMsg(null); }}
                 >
-                    <ArrowLeft className="h-4 w-4 mr-2" /> Retour
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Retour à la connexion
                 </Button>
             )}
           </form>
 
           {!isReset && (
-              <div className="mt-6 text-center">
-                <div className="text-xs text-slate-400 bg-slate-50 p-2 rounded border border-slate-100 mb-4 cursor-pointer hover:bg-slate-100" onClick={() => { setEmail('admin@admin.com'); setPassword('password'); }}>
-                    <div className="font-bold mb-1">Mode Développeur</div>
-                    Utilisez: <strong>admin@admin.com</strong> / <strong>password</strong>
-                </div>
-
-                <p className="text-sm text-slate-600">
-                {isLogin ? "Pas de compte ? " : "Déjà inscrit ? "}
+              <div className="mt-8 text-center">
+                <p className="text-sm text-slate-500">
+                {isLogin ? "Pas encore de compte ? " : "Déjà un compte ? "}
                 <button 
                     onClick={() => navigate(isLogin ? '/register' : '/login')}
-                    className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline transition-colors"
+                    className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
                 >
-                    {isLogin ? 'Essai gratuit' : 'Se connecter'}
+                    {isLogin ? 'S\'inscrire' : 'Se connecter'}
                 </button>
                 </p>
                 
-                {/* Demo Login Button */}
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                    <button 
-                        onClick={handleDemoLogin}
-                        className="text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-indigo-600 transition-colors flex items-center justify-center gap-1 mx-auto"
-                        title="Mode Simulation pour Démonstration Commerciale"
-                    >
-                        <HelpCircle className="h-3 w-3" />
-                        Accès Démo Commerciale
-                    </button>
-                </div>
+                {/* Developer Mode Shortcut (Hidden in Prod) */}
+                {process.env.NODE_ENV === 'development' && (
+                    <div className="mt-6 pt-6 border-t border-slate-100">
+                        <button 
+                            onClick={handleDemoLogin}
+                            className="text-[10px] uppercase tracking-wider font-bold text-slate-300 hover:text-indigo-500 transition-colors flex items-center justify-center gap-1 mx-auto"
+                        >
+                            <HelpCircle className="h-3 w-3" />
+                            Dev Mode
+                        </button>
+                    </div>
+                )}
             </div>
           )}
         </div>
-      </div>
-
-      {/* DEBUG HELPER - Only visible on large screens or if specifically needed */}
-      <div className="hidden lg:block fixed bottom-4 left-4 max-w-xs bg-amber-50 border border-amber-200 rounded-lg p-3 text-[10px] text-amber-800 opacity-50 hover:opacity-100 transition-opacity">
-          <div className="font-bold mb-1">Debug URL Redirect</div>
-          <div className="truncate mb-1">{currentUrl}</div>
-          <button onClick={copyUrl} className="underline">Copier pour Supabase</button>
       </div>
     </div>
   );

@@ -1,5 +1,3 @@
-
-
 import React, { InputHTMLAttributes, SelectHTMLAttributes, useContext, useState, useEffect, useMemo } from 'react';
 import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle, Lock, Sparkles, ChevronRight } from 'lucide-react';
 
@@ -221,21 +219,22 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 export const Button: React.FC<ButtonProps> = ({ 
   children, variant = 'primary', size = 'md', icon: Icon, isLoading, className = '', ...props 
 }) => {
-  const baseStyles = "inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none rounded-lg active:scale-[0.98]";
+  // MODERN BUTTON STYLES
+  const baseStyles = "inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none rounded-xl active:scale-[0.98]";
   
   const variants = {
-    primary: "bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm hover:shadow-md border border-transparent",
-    secondary: "bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm",
-    outline: "border border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100",
-    ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-    danger: "bg-red-50 text-red-700 hover:bg-red-100 border border-transparent",
+    primary: "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg shadow-indigo-200 border border-transparent active:bg-indigo-800",
+    secondary: "bg-white text-slate-700 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm active:bg-slate-100",
+    outline: "border border-indigo-200 text-indigo-700 bg-indigo-50/30 hover:bg-indigo-50 active:bg-indigo-100",
+    ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200",
+    danger: "bg-red-50 text-red-700 hover:bg-red-100 border border-transparent active:bg-red-200",
   };
 
   const sizes = {
     xs: "h-7 px-2.5 text-xs",
-    sm: "h-9 px-3 text-xs uppercase tracking-wide font-semibold",
-    md: "h-10 px-4 text-sm",
-    lg: "h-12 px-6 text-base",
+    sm: "h-9 px-3 text-xs uppercase tracking-wide font-bold",
+    md: "h-11 px-5 text-sm",
+    lg: "h-14 px-8 text-base font-semibold",
   };
 
   return (
@@ -254,14 +253,14 @@ export const Button: React.FC<ButtonProps> = ({
 // --- CARD ---
 export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', children, ...props }) => {
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-300 ${className}`} {...props}>
+    <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 ${className}`} {...props}>
       {children}
     </div>
   );
 };
 
 export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', children, ...props }) => (
-  <div className={`px-6 py-4 border-b border-slate-50 ${className}`} {...props}>{children}</div>
+  <div className={`px-6 py-5 border-b border-slate-50 ${className}`} {...props}>{children}</div>
 );
 
 export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({ className = '', children, ...props }) => (
@@ -357,11 +356,11 @@ export const ProLock: React.FC<{
 
 // --- INPUTS ---
 export const Input: React.FC<InputHTMLAttributes<HTMLInputElement>> = ({ className = '', ...props }) => (
-  <input className={`block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2.5 border transition-all ${className}`} {...props} />
+  <input className={`block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-3 border transition-all ${className}`} {...props} />
 );
 
 export const Select: React.FC<SelectHTMLAttributes<HTMLSelectElement>> = ({ className = '', children, ...props }) => (
-  <select className={`block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2.5 border bg-white ${className}`} {...props}>
+  <select className={`block w-full rounded-xl border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-3 border bg-white ${className}`} {...props}>
     {children}
   </select>
 );
@@ -369,7 +368,7 @@ export const Select: React.FC<SelectHTMLAttributes<HTMLSelectElement>> = ({ clas
 export const Toggle: React.FC<{ checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }> = ({ checked, onChange, disabled }) => (
   <button
     type="button"
-    className={`${checked ? 'bg-indigo-600' : 'bg-slate-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2`}
+    className={`${checked ? 'bg-indigo-600' : 'bg-slate-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2`}
     role="switch"
     aria-checked={checked}
     onClick={() => !disabled && onChange(!checked)}
@@ -377,7 +376,7 @@ export const Toggle: React.FC<{ checked: boolean; onChange: (checked: boolean) =
   >
     <span
       aria-hidden="true"
-      className={`${checked ? 'translate-x-4' : 'translate-x-0'} pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+      className={`${checked ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
     />
   </button>
 );

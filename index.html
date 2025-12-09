@@ -2,28 +2,84 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" />
+    <link rel="icon" type="image/svg+xml" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#4f46e5" />
-    <meta name="description" content="Reviewflow - SaaS Gestion d'Avis Clients IA" />
+    <meta name="description" content="Reviewflow - Pilotez votre e-réputation avec l'IA" />
     
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Reviewflow" />
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" />
 
-    <title>Reviewflow | AI Review Management</title>
+    <title>Reviewflow | Intelligence Artificielle pour E-réputation</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+            colors: {
+              brand: {
+                50: '#eef2ff',
+                100: '#e0e7ff',
+                500: '#6366f1',
+                600: '#4f46e5',
+                700: '#4338ca',
+                900: '#312e81',
+              }
+            },
+            animation: {
+              'float': 'float 6s ease-in-out infinite',
+              'float-delayed': 'float 6s ease-in-out 3s infinite',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-20px)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+      
       body {
         font-family: 'Inter', sans-serif;
         background-color: #f8fafc;
         overscroll-behavior-y: none;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Scrollbar Styling */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
       }
       
+      /* Selection Color */
+      ::selection {
+        background-color: #e0e7ff;
+        color: #4338ca;
+      }
+
       /* Confetti Animation */
       .confetti-container {
         position: fixed;
@@ -42,16 +98,9 @@
         background-color: #f2d74e;
         opacity: 0;
       }
-      .confetti:nth-child(1) { left: 10%; animation: fall 2.5s linear infinite; background: #ef2964; }
-      .confetti:nth-child(2) { left: 20%; animation: fall 2.3s linear infinite 0.2s; background: #00c09d; }
-      .confetti:nth-child(3) { left: 30%; animation: fall 2.4s linear infinite 0.4s; background: #2d87b0; }
-      .confetti:nth-child(4) { left: 40%; animation: fall 2.6s linear infinite 0.1s; background: #48485e; }
-      .confetti:nth-child(5) { left: 50%; animation: fall 2.4s linear infinite 0.8s; background: #ef2964; }
-      .confetti:nth-child(6) { left: 60%; animation: fall 2.2s linear infinite 0.4s; background: #fff; }
-      .confetti:nth-child(7) { left: 70%; animation: fall 2.5s linear infinite 1.2s; background: #00c09d; }
-      .confetti:nth-child(8) { left: 80%; animation: fall 2.1s linear infinite 0.3s; background: #2d87b0; }
-      .confetti:nth-child(9) { left: 90%; animation: fall 2.3s linear infinite 0.5s; background: #f2d74e; }
-      .confetti:nth-child(10) { left: 95%; animation: fall 2.4s linear infinite 1.1s; background: #ef2964; }
+      /* Simplified Confetti for performance */
+      .confetti:nth-child(even) { animation: fall 2.5s linear infinite; background: #ef2964; }
+      .confetti:nth-child(odd) { animation: fall 3.2s linear infinite; background: #4f46e5; }
 
       @keyframes fall {
         0% { opacity: 1; top: -10%; transform: translateX(0) rotate(0deg); }
