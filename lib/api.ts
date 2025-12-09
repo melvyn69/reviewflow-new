@@ -63,7 +63,7 @@ export const api = {
             if (isDemoMode()) return;
             await supabase!.auth.resetPasswordForEmail(email);
         },
-        updateProfile: async (updates: Partial<User> & { password?: string }) => {
+        updateProfile: async (updates: Partial<User>) => {
             if (isDemoMode()) {
                 const current = JSON.parse(localStorage.getItem('demo_user') || '{}');
                 localStorage.setItem('demo_user', JSON.stringify({ ...current, ...updates }));
@@ -71,12 +71,32 @@ export const api = {
             }
             const { data: { user } } = await supabase!.auth.getUser();
             if (user) {
-                if (updates.password) {
-                    await supabase!.auth.updateUser({ password: updates.password });
-                    delete updates.password;
-                }
                 await supabase!.from('users').update(updates).eq('id', user.id);
             }
+        },
+        changePassword: async (oldPassword: string, newPassword: string) => {
+            if (isDemoMode()) {
+                // Mock validation in demo mode
+                if (oldPassword !== 'password' && oldPassword !== 'demo') throw new Error("Ancien mot de passe incorrect (Démo: 'password' ou 'demo')");
+                return;
+            }
+            
+            const { data: { user } } = await supabase!.auth.getUser();
+            if (!user || !user.email) throw new Error("Utilisateur non connecté");
+
+            // 1. Verify old password by attempting a sign in (Security check)
+            const { error: signInError } = await supabase!.auth.signInWithPassword({
+                email: user.email,
+                password: oldPassword
+            });
+
+            if (signInError) {
+                throw new Error("L'ancien mot de passe est incorrect.");
+            }
+
+            // 2. Update to new password
+            const { error: updateError } = await supabase!.auth.updateUser({ password: newPassword });
+            if (updateError) throw updateError;
         },
         deleteAccount: async () => {
             if (isDemoMode()) return;

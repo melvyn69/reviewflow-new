@@ -205,7 +205,7 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Liens de Collecte (Review Funnel)</h4>
                                     <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
                                         <label className="block text-xs font-bold text-indigo-900 mb-1">Google Avis (Prioritaire)</label>
-                                        <Input value={formData.google_review_url} onChange={e => setFormData({...formData, google_review_url: e.target.value})} placeholder="https://g.page/r/..." className="bg-white text-xs" />
+                                        <Input value={formData.google_review_url} onChange={e => setFormData({...formData,google_review_url: e.target.value})} placeholder="https://g.page/r/..." className="bg-white text-xs" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
@@ -452,6 +452,48 @@ const InviteModal = ({ onClose, onInvite }: { onClose: () => void, onInvite: (em
     );
 };
 
+// --- DELETE ACCOUNT CONFIRMATION MODAL ---
+const DeleteConfirmationModal = ({ onClose, onConfirm, userEmail }: { onClose: () => void, onConfirm: () => void, userEmail: string }) => {
+    const [input, setInput] = useState('');
+    
+    return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <Card className="w-full max-w-md shadow-2xl border-red-200">
+                <div className="p-6">
+                    <div className="flex items-center gap-3 mb-4 text-red-600">
+                        <div className="p-2 bg-red-100 rounded-full"><AlertTriangle className="h-6 w-6" /></div>
+                        <h3 className="text-lg font-bold">Cette action est définitive</h3>
+                    </div>
+                    
+                    <p className="text-slate-600 text-sm mb-4">
+                        Vous êtes sur le point de supprimer votre compte et toutes les données associées. Il ne sera pas possible de revenir en arrière.
+                        <br/><br/>
+                        Pour confirmer, veuillez taper le mot <strong>SUPPRIMER</strong> ou votre adresse email (<strong>{userEmail}</strong>) ci-dessous :
+                    </p>
+                    
+                    <Input 
+                        value={input} 
+                        onChange={(e) => setInput(e.target.value)} 
+                        placeholder="Tapez SUPPRIMER pour confirmer" 
+                        className="mb-6 border-red-200 focus:border-red-500 focus:ring-red-200"
+                    />
+                    
+                    <div className="flex justify-end gap-3">
+                        <Button variant="ghost" onClick={onClose}>Annuler</Button>
+                        <button 
+                            disabled={input !== 'SUPPRIMER' && input !== userEmail}
+                            onClick={onConfirm}
+                            className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-red-100 transition-all"
+                        >
+                            Confirmer la suppression
+                        </button>
+                    </div>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
 export const SettingsPage = () => {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
@@ -469,6 +511,7 @@ export const SettingsPage = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showMappingModal, setShowMappingModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Form states (Brand)
   const [brandTone, setBrandTone] = useState('');
@@ -492,8 +535,12 @@ export const SettingsPage = () => {
   // Form states (Profile)
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
-  const [userPassword, setUserPassword] = useState('');
   const [userRole, setUserRole] = useState('');
+  
+  // Password Change State
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Form states (Notifications)
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({
@@ -596,23 +643,40 @@ export const SettingsPage = () => {
   // ... [Other handlers remain unchanged] ...
   const handleUpdateProfile = async () => {
       try {
-          await api.auth.updateProfile({ name: userName, email: userEmail, password: userPassword || undefined, role: userRole as User['role'] });
+          await api.auth.updateProfile({ name: userName, email: userEmail, role: userRole as User['role'] });
           toast.success("Profil mis à jour !");
-          setUserPassword(''); 
           if (user?.role !== userRole) window.location.reload();
       } catch(e: any) {
           toast.error("Erreur mise à jour profil : " + e.message);
       }
   };
 
+  const handleChangePassword = async () => {
+      if (!oldPassword || !newPassword || !confirmPassword) {
+          return toast.error("Tous les champs sont requis");
+      }
+      if (newPassword !== confirmPassword) {
+          return toast.error("Les nouveaux mots de passe ne correspondent pas");
+      }
+      
+      try {
+          await api.auth.changePassword(oldPassword, newPassword);
+          toast.success("Votre mot de passe a été mis à jour avec succès !");
+          setOldPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+      } catch (e: any) {
+          toast.error(e.message || "Erreur lors du changement de mot de passe");
+      }
+  };
+
   const handleDeleteAccount = async () => {
-      if (confirm("ÊTES-VOUS SÛR ? Cette action est irréversible. Tapez OK pour confirmer.")) {
-          try {
-              await api.auth.deleteAccount();
-              window.location.href = '/';
-          } catch (e: any) {
-              toast.error("Erreur suppression: " + e.message);
-          }
+      try {
+          await api.auth.deleteAccount();
+          window.location.href = '/';
+      } catch (e: any) {
+          toast.error("Erreur suppression: " + e.message);
+          setShowDeleteModal(false);
       }
   };
 
@@ -885,6 +949,9 @@ export const SettingsPage = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+      
+      {showDeleteModal && <DeleteConfirmationModal onClose={() => setShowDeleteModal(false)} onConfirm={handleDeleteAccount} userEmail={userEmail} />}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Paramètres</h1>
@@ -909,51 +976,93 @@ export const SettingsPage = () => {
         </div>
 
         <div className="p-6 md:p-8">
-            {/* ... [Profile, Organization, Locations tabs remain unchanged] ... */}
+            {/* --- PROFILE TAB (Refactored) --- */}
             {activeTab === 'profile' && (
-                <div className="max-w-xl space-y-6">
-                    {/* ... Same content as original ... */}
-                    <div className="flex items-center gap-4 mb-6">
+                <div className="max-w-2xl space-y-12">
+                    {/* Header */}
+                    <div className="flex items-center gap-4 mb-8">
                         <div className="h-16 w-16 bg-indigo-100 rounded-full flex items-center justify-center text-2xl font-bold text-indigo-600">
                             {userName.charAt(0)}
                         </div>
                         <div>
-                            <h3 className="font-bold text-slate-900">{userName}</h3>
-                            <p className="text-sm text-slate-500 capitalize">{user?.role}</p>
+                            <h3 className="font-bold text-slate-900 text-lg">{userName}</h3>
+                            <p className="text-sm text-slate-500 capitalize">{user?.role} - {userEmail}</p>
                         </div>
                     </div>
                     
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Nom Complet</label>
-                            <Input value={userName} onChange={e => setUserName(e.target.value)} />
+                    {/* 1. General Info */}
+                    <section className="space-y-4">
+                        <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-2">1. Informations Personnelles</h4>
+                        <div className="grid gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Nom Complet</label>
+                                <Input value={userName} onChange={e => setUserName(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                                <Input value={userEmail} onChange={e => setUserEmail(e.target.value)} disabled className="bg-slate-50 text-slate-500 cursor-not-allowed" />
+                                <p className="text-[10px] text-slate-400 mt-1">L'email ne peut pas être modifié.</p>
+                            </div>
+                            <div className="flex justify-end mt-2">
+                                <Button onClick={handleUpdateProfile} size="sm">Enregistrer les modifications</Button>
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                            <Input value={userEmail} onChange={e => setUserEmail(e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe (Laisser vide si inchangé)</label>
-                            <Input type="password" value={userPassword} onChange={e => setUserPassword(e.target.value)} placeholder="••••••••" />
-                        </div>
-                        <Button onClick={handleUpdateProfile}>Enregistrer le profil</Button>
-                    </div>
+                    </section>
 
-                    <div className="mt-12 pt-8 border-t border-red-100">
-                        <h4 className="text-red-700 font-bold text-sm uppercase tracking-wide mb-4 flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4" /> Zone de Danger
+                    {/* 2. Security Section (Password) */}
+                    <section className="space-y-4">
+                        <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-2 flex items-center gap-2">
+                            <Lock className="h-4 w-4" /> 2. Sécurité & Mot de passe
                         </h4>
-                        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-                            <h5 className="font-bold text-red-900 text-sm mb-1">Supprimer mon compte</h5>
-                            <p className="text-red-700 text-xs mb-4">
-                                Cette action est irréversible. Toutes vos données personnelles seront effacées. 
-                                Si vous êtes le dernier administrateur, l'organisation sera également supprimée.
-                            </p>
-                            <Button variant="danger" size="sm" onClick={handleDeleteAccount}>
-                                Supprimer définitivement
-                            </Button>
+                        
+                        <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Ancien mot de passe <span className="text-red-500">*</span></label>
+                                <Input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} placeholder="••••••••" />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-1">Nouveau mot de passe <span className="text-red-500">*</span></label>
+                                    <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••••" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-1">Confirmer <span className="text-red-500">*</span></label>
+                                    <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" />
+                                </div>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                                <Button 
+                                    onClick={handleChangePassword} 
+                                    variant="secondary" 
+                                    size="sm"
+                                    disabled={!oldPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                                >
+                                    Mettre à jour le mot de passe
+                                </Button>
+                            </div>
                         </div>
-                    </div>
+                    </section>
+
+                    {/* 3. Danger Zone */}
+                    <section className="pt-8">
+                        <h4 className="text-red-800 font-bold text-sm uppercase tracking-wide mb-4 flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4" /> 3. Zone de Danger
+                        </h4>
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h5 className="font-bold text-red-900 text-sm mb-1">Supprimer mon compte</h5>
+                                <p className="text-red-800 text-xs max-w-md leading-relaxed">
+                                    Cette action est irréversible. Toutes vos données personnelles, ainsi que l'accès à l'organisation, seront définitivement supprimés.
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setShowDeleteModal(true)}
+                                className="whitespace-nowrap px-4 py-2 border border-red-300 text-red-700 hover:bg-red-100 hover:border-red-400 rounded-lg text-xs font-bold uppercase tracking-wide transition-all shadow-sm"
+                            >
+                                Supprimer mon compte
+                            </button>
+                        </div>
+                    </section>
                 </div>
             )}
 
