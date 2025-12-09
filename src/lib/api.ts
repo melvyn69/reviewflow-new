@@ -1,3 +1,5 @@
+
+
 import { 
     INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
     INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
@@ -44,7 +46,8 @@ const isGodEmail = (email?: string) => {
     if (!email) return false;
     const normalized = email.toLowerCase().trim();
     // Liste des emails administrateurs "God Mode"
-    return ['god@reviewflow.com', 'melvynbenichou@gmail.com'].includes(normalized);
+    // Ajout de demo@reviewflow.com ici pour garantir le plan Elite
+    return ['god@reviewflow.com', 'melvynbenichou@gmail.com', 'demo@reviewflow.com'].includes(normalized);
 };
 
 export const api = {
@@ -70,19 +73,20 @@ export const api = {
             
             const normalizedEmail = email.toLowerCase().trim();
             
-            // GOD MODE LOGIN (Explicit Mock - Case Insensitive)
-            // Accepte 'password' OU 'demo' pour votre compte
+            // GOD MODE LOGIN & DEMO SUPER ADMIN
+            // Le compte demo@reviewflow.com devient maintenant un Super Admin en God Mode
             if (
                 (normalizedEmail === 'god@reviewflow.com' && pass === 'godmode') || 
-                (normalizedEmail === 'melvynbenichou@gmail.com' && (pass === 'password' || pass === 'demo'))
+                (normalizedEmail === 'melvynbenichou@gmail.com' && (pass === 'password' || pass === 'demo')) ||
+                (normalizedEmail === 'demo@reviewflow.com' && pass === 'demo')
             ) {
                 const godUser: User = {
                     ...INITIAL_USERS[0],
                     id: 'god-user-id',
-                    name: 'Melvyn Benichou',
+                    name: 'Super Admin (God Mode)',
                     email: normalizedEmail,
-                    role: 'super_admin',
-                    avatar: 'https://ui-avatars.com/api/?name=Melvyn+Benichou&background=0D9488&color=fff',
+                    role: 'super_admin', // FORCE SUPER ADMIN
+                    avatar: 'https://ui-avatars.com/api/?name=God+Mode&background=000&color=fff',
                     organization_id: 'demo-org-id' 
                 };
                 localStorage.setItem('user', JSON.stringify(godUser));
@@ -90,9 +94,8 @@ export const api = {
                 return godUser;
             }
 
-            // Standard Demo Login
-            if ((normalizedEmail === 'demo@reviewflow.com' && pass === 'demo') || 
-                (normalizedEmail === 'admin@admin.com' && pass === 'admin')) {
+            // Legacy/Standard Admin Login (if needed for testing restriction)
+            if (normalizedEmail === 'admin@admin.com' && pass === 'admin') {
                 localStorage.setItem('user', JSON.stringify(INITIAL_USERS[0]));
                 localStorage.setItem('is_demo_mode', 'true');
                 return INITIAL_USERS[0];
@@ -102,16 +105,13 @@ export const api = {
             if (supabase) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
                 if (error) {
-                    // Friendly error message mapping
                     if (error.message === 'Invalid login credentials') {
                         throw new Error("Email ou mot de passe incorrect.");
                     }
                     throw error;
                 }
-                // We don't store user in localStorage for real auth, Supabase handles session
                 localStorage.removeItem('is_demo_mode');
                 
-                // Return mapped user
                 return {
                     id: data.user.id,
                     email: data.user.email || '',
@@ -167,20 +167,23 @@ export const api = {
             
             const user = await getEffectiveUser();
             
-            // FORCE ELITE PLAN FOR GOD USERS
+            // FORCE ELITE PLAN FOR GOD USERS (Includes demo@reviewflow.com)
             if (user && isGodEmail(user.email)) {
                 return {
                     ...INITIAL_ORG,
                     subscription_plan: 'elite',
                     name: 'Reviewflow HQ (God Mode)',
-                    integrations: { ...INITIAL_ORG.integrations, google: true }
+                    integrations: { 
+                        ...INITIAL_ORG.integrations, 
+                        google: true, 
+                        facebook_posting: true, 
+                        instagram_posting: true 
+                    }
                 };
             }
             
             // Return Org from Supabase if real
             if (supabase && user && !localStorage.getItem('user')) {
-                // Fetch real org logic would go here
-                // For hybrid/transition, we return Mock org but attached to real user
                 return { ...INITIAL_ORG, id: 'real-org-' + user.id };
             }
 
@@ -199,7 +202,6 @@ export const api = {
         removeStaffMember: async (id: string) => { await delay(500); },
         generateApiKey: async (name: string) => { 
             const user = await getEffectiveUser();
-            // Allow if elite plan OR if user is god (double check)
             const isElite = INITIAL_ORG.subscription_plan === 'elite' || (user && isGodEmail(user.email));
             
             if (!isElite) throw new Error("Accès API réservé au plan Elite.");
