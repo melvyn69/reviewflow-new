@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, User, BrandSettings } from '../types';
@@ -33,8 +34,8 @@ import {
 import { useNavigate, useLocation } from '../components/ui';
 
 // --- ICONS FOR BRANDS ---
-const GoogleIcon = () => (
-    <svg viewBox="0 0 48 48" className="w-5 h-5">
+const GoogleIcon = ({ className = "w-full h-full" }: { className?: string }) => (
+    <svg viewBox="0 0 48 48" className={className}>
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
         <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
         <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
@@ -42,12 +43,13 @@ const GoogleIcon = () => (
     </svg>
 );
 
-const IntegrationCard = ({ icon: Icon, title, description, connected, onConnect, comingSoon = false, type = "source", helpLink }: any) => (
+// Composant corrigé : reçoit "icon" qui est un ReactNode (ex: <Globe />)
+const IntegrationCard = ({ icon, title, description, connected, onConnect, comingSoon = false, type = "source", helpLink }: any) => (
     <div className={`p-5 rounded-xl border transition-all duration-300 ${connected ? 'border-green-200 bg-green-50/30' : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm'}`}>
         <div className="flex justify-between items-start mb-3">
             <div className="flex items-center gap-3">
                 <div className="h-10 w-10 bg-white rounded-lg p-2 shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden">
-                    {typeof Icon === 'function' ? <Icon /> : Icon}
+                    {icon}
                 </div>
                 <div>
                     <h4 className="font-bold text-slate-900 text-sm">{title}</h4>
@@ -159,7 +161,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
     
     // Initialisation robuste de l'état
     const [settings, setSettings] = useState<BrandSettings>(() => {
-        // Valeurs par défaut sûres
         const defaults: BrandSettings = {
             enabled: false,
             tone: 'professionnel',
@@ -175,10 +176,9 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
             logo_url: ''
         };
 
-        // Fix: Cast to Partial<BrandSettings> to avoid "Property does not exist on type '{}'" error when brand is undefined/null
         const incoming = (brand || {}) as Partial<BrandSettings>;
 
-        // On fusionne manuellement pour s'assurer qu'aucune valeur NULL n'écrase une valeur par défaut critique (comme les tableaux)
+        // Fusion manuelle sécurisée
         return {
             enabled: incoming.enabled ?? defaults.enabled,
             tone: incoming.tone || defaults.tone,
@@ -187,7 +187,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
             use_emojis: incoming.use_emojis ?? defaults.use_emojis,
             language_style: (incoming.language_style as any) || defaults.language_style,
             signature: incoming.signature || defaults.signature,
-            // Protection CRITIQUE : force un tableau vide si null
             forbidden_words: Array.isArray(incoming.forbidden_words) ? incoming.forbidden_words : [],
             response_examples: incoming.response_examples || defaults.response_examples,
             primary_color: incoming.primary_color || defaults.primary_color,
@@ -198,13 +197,22 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
 
     const [isSaving, setIsSaving] = useState(false);
     const [newForbiddenWord, setNewForbiddenWord] = useState('');
-    
-    // Testing State
     const [testInput, setTestInput] = useState("C'était super, merci pour tout !");
     const [testOutput, setTestOutput] = useState("");
     const [isTesting, setIsTesting] = useState(false);
     
     const toast = useToast();
+
+    // Re-sync si les props changent (ex: chargement asynchrone)
+    useEffect(() => {
+        if (brand) {
+            setSettings(prev => ({
+                ...prev,
+                ...brand,
+                forbidden_words: Array.isArray(brand.forbidden_words) ? brand.forbidden_words : prev.forbidden_words || []
+            }));
+        }
+    }, [brand]);
 
     const handleChange = (field: keyof BrandSettings, value: any) => {
         setSettings(prev => ({ ...prev, [field]: value }));
@@ -221,8 +229,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
         setIsTesting(true);
         setTestOutput("");
         try {
-            // We call the API with the CURRENT settings in the form state, 
-            // so user can test BEFORE saving.
             const response = await api.ai.previewBrandVoice('Avis Client', testInput, settings);
             setTestOutput(response);
         } catch (e: any) {
@@ -251,8 +257,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
 
     return (
         <div className="space-y-6">
-            
-            {/* Master Toggle */}
             <Card className={`border-l-4 transition-colors ${settings.enabled ? 'border-l-green-500 bg-green-50/20' : 'border-l-slate-300'}`}>
                 <div className="p-6 flex justify-between items-center">
                     <div>
@@ -270,8 +274,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
             </Card>
 
             <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8 ${!settings.enabled ? 'opacity-60 pointer-events-none filter blur-[1px]' : ''}`}>
-                
-                {/* LEFT COLUMN: SETTINGS */}
                 <div className="space-y-6">
                     <Card>
                         <CardHeader>
@@ -357,19 +359,15 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
                     </Card>
                 </div>
 
-                {/* RIGHT COLUMN: TEST ZONE */}
                 <div className="space-y-6">
                     <Card className="bg-slate-900 text-white h-full flex flex-col border-slate-800 shadow-xl relative overflow-hidden">
-                        {/* Decoration */}
                         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                        
                         <CardHeader className="border-b border-slate-800 relative z-10">
                             <CardTitle className="flex items-center gap-2 text-white">
                                 <Terminal className="h-5 w-5 text-green-400" /> Laboratoire de Test
                             </CardTitle>
                             <p className="text-xs text-slate-400 mt-1">Testez votre configuration en temps réel avant de sauvegarder.</p>
                         </CardHeader>
-                        
                         <CardContent className="flex-1 flex flex-col space-y-6 p-6 relative z-10">
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">1. Situation (Avis reçu ou message)</label>
@@ -380,7 +378,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
                                     onChange={e => setTestInput(e.target.value)}
                                 />
                             </div>
-
                             <div className="flex justify-center">
                                 <Button 
                                     onClick={handleTestVoice} 
@@ -390,7 +387,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
                                     <Play className="h-4 w-4 mr-2" /> Générer une réponse test
                                 </Button>
                             </div>
-
                             <div className="flex-1">
                                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2">2. Réponse de l'IA (Simulation)</label>
                                 <div className="w-full h-48 p-4 bg-slate-950 border border-slate-800 rounded-xl text-sm font-mono leading-relaxed overflow-y-auto relative">
@@ -411,7 +407,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
                 </div>
             </div>
 
-            {/* Bottom Actions */}
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 z-10 flex justify-end gap-3 md:pl-64">
                 <Button onClick={handleSave} isLoading={isSaving} size="lg" className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
                     Enregistrer les modifications
@@ -425,19 +420,17 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
 export const SettingsPage = () => {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
-  const [activeTab, setActiveTab] = useState('integrations'); // Default to integrations
+  const [activeTab, setActiveTab] = useState('integrations');
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Modals state
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [showMappingModal, setShowMappingModal] = useState(false);
 
   useEffect(() => {
-    // Check URL for tab
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
     if (tabParam) {
@@ -548,11 +541,11 @@ export const SettingsPage = () => {
                     {/* Section 1: Reviews & Google */}
                     <div>
                         <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                            <GoogleIcon /> Avis & Google
+                            <GoogleIcon className="h-5 w-5" /> Avis & Google
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <IntegrationCard 
-                                icon={GoogleIcon}
+                                icon={<GoogleIcon />}
                                 title="Google Business Profile"
                                 description="Connectez votre compte pour centraliser tous vos avis au même endroit, booster votre SEO local et permettre à l'IA d'y répondre automatiquement."
                                 connected={org?.integrations?.google}
@@ -561,7 +554,7 @@ export const SettingsPage = () => {
                                 helpLink="#"
                             />
                             <IntegrationCard 
-                                icon={Globe}
+                                icon={<Globe className="h-5 w-5 text-indigo-600" />}
                                 title="Page Publique SEO"
                                 description="Activez une vitrine web optimisée (sans code) qui affiche vos meilleurs avis et rassure vos futurs clients lorsqu'ils vous recherchent."
                                 connected={true}
@@ -645,7 +638,6 @@ export const SettingsPage = () => {
 
             {/* --- TAB: AI IDENTITY --- */}
             {activeTab === 'ai-identity' && (
-                // On passe 'org.brand' mais le composant AiIdentityForm gère désormais les valeurs nulles
                 <AiIdentityForm brand={org?.brand || {} as any} onSave={handleUpdateBrand} />
             )}
 
@@ -656,7 +648,6 @@ export const SettingsPage = () => {
                         <h3 className="font-bold text-lg">Vos Établissements</h3>
                     </div>
 
-                    {/* Info Box for Import/Map */}
                     <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-start gap-3">
                         <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
                         <div className="text-sm text-blue-800">
@@ -697,7 +688,7 @@ export const SettingsPage = () => {
                                             <div className="flex gap-2 mt-2">
                                                 {loc.external_reference && (
                                                     <span className="text-[10px] text-green-600 flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded border border-green-100">
-                                                        <GoogleIcon /> Synchronisé
+                                                        <GoogleIcon className="h-3 w-3" /> Synchronisé
                                                     </span>
                                                 )}
                                                 {loc.public_profile_enabled && (
@@ -719,7 +710,7 @@ export const SettingsPage = () => {
                 </div>
             )}
 
-            {/* --- TAB: PROFILE (Simplified) --- */}
+            {/* --- TAB: PROFILE --- */}
             {activeTab === 'profile' && user && (
                 <div className="max-w-xl">
                     <Card>
@@ -743,7 +734,7 @@ export const SettingsPage = () => {
                 </div>
             )}
 
-            {/* --- TAB: ORGANIZATION (Simplified) --- */}
+            {/* --- TAB: ORGANIZATION --- */}
             {activeTab === 'organization' && org && (
                 <div className="max-w-xl">
                     <Card>
