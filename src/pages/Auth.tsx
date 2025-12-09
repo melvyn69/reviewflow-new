@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
-import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, HelpCircle, ArrowLeft, ShieldAlert, Zap } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, HelpCircle, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { useNavigate, useLocation } from '../components/ui';
 
 interface AuthPageProps {
@@ -97,30 +97,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
           await api.auth.loginWithGoogle();
       } catch (err: any) {
           setError(err.message || "Erreur de connexion Google");
-          setIsLoading(false);
-      }
-  };
-
-  const handleDemoLogin = async () => {
-      setIsLoading(true);
-      try {
-          await api.auth.login('demo@reviewflow.com', 'demo');
-          onLoginSuccess();
-      } catch (e: any) {
-          setError("Erreur démo: " + e.message);
-      } finally {
-          setIsLoading(false);
-      }
-  };
-
-  const handleGodModeLogin = async () => {
-      setIsLoading(true);
-      try {
-          await api.auth.login('god@reviewflow.com', 'godmode');
-          onLoginSuccess();
-      } catch (e: any) {
-          setError("Erreur God Mode: " + e.message);
-      } finally {
           setIsLoading(false);
       }
   };
@@ -327,25 +303,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
             </div>
           )}
         </div>
-      </div>
-
-      {/* FIXED DEV SHORTCUTS - ALWAYS VISIBLE */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 p-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200 shadow-xl">
-          <p className="text-[10px] uppercase font-bold text-slate-500 text-center tracking-wider">Dev Tools</p>
-          <button 
-              onClick={handleGodModeLogin}
-              className="flex items-center gap-2 p-3 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold shadow-md hover:scale-105 active:scale-95"
-          >
-              <ShieldAlert className="h-4 w-4" />
-              God Mode
-          </button>
-          <button 
-              onClick={handleDemoLogin}
-              className="flex items-center gap-2 p-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all text-xs font-bold shadow-sm"
-          >
-              <HelpCircle className="h-4 w-4 text-blue-500" />
-              Mode Démo
-          </button>
       </div>
     </div>
   );
