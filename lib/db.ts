@@ -1,3 +1,4 @@
+
 import { Review, User, Organization, AnalyticsSummary, WorkflowRule, ReportConfig, Competitor, SocialPost } from '../types';
 
 // --- INITIAL SEED DATA ---
@@ -60,6 +61,17 @@ export const INITIAL_ORG: Organization = {
     facebook_posting: false,
     linkedin_posting: false,
     tiktok_posting: false
+  },
+  brand: {
+    enabled: true,
+    tone: 'professionnel',
+    language_style: 'formal',
+    description: '',
+    knowledge_base: '',
+    use_emojis: true,
+    signature: '',
+    forbidden_words: [],
+    response_examples: ''
   },
   saved_replies: [
       { id: 't1', title: 'Remerciement Simple', content: 'Merci beaucoup pour votre avis ! Nous sommes ravis que vous ayez apprécié votre visite.', category: 'positive' },

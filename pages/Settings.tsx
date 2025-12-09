@@ -156,7 +156,20 @@ const LocationModal = ({ location, onClose, onSave }: { location?: Location | nu
 
 // --- AI IDENTITY FORM ---
 const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: BrandSettings) => void }) => {
-    const [settings, setSettings] = useState<BrandSettings>(brand);
+    // Defensive check: ensure brand is not undefined inside the component
+    const safeBrand = brand || {
+        enabled: false,
+        tone: 'professionnel',
+        description: '',
+        knowledge_base: '',
+        use_emojis: true,
+        language_style: 'formal',
+        signature: '',
+        forbidden_words: [],
+        response_examples: ''
+    };
+
+    const [settings, setSettings] = useState<BrandSettings>(safeBrand);
     const [isSaving, setIsSaving] = useState(false);
     const [newForbiddenWord, setNewForbiddenWord] = useState('');
     
@@ -512,7 +525,7 @@ export const SettingsPage = () => {
                                 icon={GoogleIcon}
                                 title="Google Business Profile"
                                 description="Connectez votre compte pour centraliser tous vos avis au même endroit, booster votre SEO local et permettre à l'IA d'y répondre automatiquement."
-                                connected={org?.integrations.google}
+                                connected={org?.integrations?.google}
                                 onConnect={() => api.auth.connectGoogleBusiness()}
                                 type="Source Principale"
                                 helpLink="#"
@@ -527,7 +540,7 @@ export const SettingsPage = () => {
                                 helpLink="#"
                             />
                         </div>
-                        {org?.integrations.google && (
+                        {org?.integrations?.google && (
                             <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
                                 <div className="text-sm text-blue-800">
                                     <strong>Synchronisation active.</strong> Vos avis sont mis à jour automatiquement toutes les heures.
@@ -549,7 +562,7 @@ export const SettingsPage = () => {
                                 icon={<Facebook className="h-5 w-5 text-blue-600" />}
                                 title="Facebook Page"
                                 description="Publiez vos avis 5 étoiles directement sur votre page pour animer votre communauté."
-                                connected={org?.integrations.facebook_posting}
+                                connected={org?.integrations?.facebook_posting}
                                 onConnect={() => handleConnectSocial('facebook')}
                                 type="Social"
                             />
@@ -557,7 +570,7 @@ export const SettingsPage = () => {
                                 icon={<Instagram className="h-5 w-5 text-pink-600" />}
                                 title="Instagram Business"
                                 description="Créez des visuels stylés à partir de vos avis et postez-les en Story ou Feed."
-                                connected={org?.integrations.instagram_posting}
+                                connected={org?.integrations?.instagram_posting}
                                 onConnect={() => handleConnectSocial('instagram')}
                                 type="Social"
                             />
@@ -565,7 +578,7 @@ export const SettingsPage = () => {
                                 icon={<Linkedin className="h-5 w-5 text-blue-700" />}
                                 title="LinkedIn Page"
                                 description="Idéal pour le B2B : partagez vos succès clients avec votre réseau professionnel."
-                                connected={org?.integrations.linkedin_posting}
+                                connected={org?.integrations?.linkedin_posting}
                                 onConnect={() => handleConnectSocial('linkedin')}
                                 type="Social"
                             />
@@ -601,8 +614,10 @@ export const SettingsPage = () => {
             )}
 
             {/* --- TAB: AI IDENTITY --- */}
-            {activeTab === 'ai-identity' && org?.brand && (
-                <AiIdentityForm brand={org.brand} onSave={handleUpdateBrand} />
+            {activeTab === 'ai-identity' && (
+                // Safe check: if brand is null or undefined, pass a default or handle inside the component
+                // Added a defensive check to ensure org exists before rendering if needed
+                org && <AiIdentityForm brand={org.brand || {} as any} onSave={handleUpdateBrand} />
             )}
 
             {/* --- TAB: LOCATIONS --- */}
