@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, User, BrandSettings } from '../types';
-import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation } from '../components/ui';
+import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle } from '../components/ui';
 import { 
     Building2, 
     Plus, 
@@ -31,6 +31,7 @@ import {
     Play,
     Terminal
 } from 'lucide-react';
+import { useNavigate, useLocation } from '../components/ui';
 
 // --- ICONS FOR BRANDS ---
 const GoogleIcon = () => (
@@ -156,26 +157,45 @@ const LocationModal = ({ location, onClose, onSave }: { location?: Location | nu
 
 // --- AI IDENTITY FORM ---
 const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: BrandSettings) => void }) => {
-    // Defines defaults to prevent undefined crashes if brand object is partial
-    const defaultBrand: BrandSettings = {
-        enabled: false,
-        tone: 'professionnel',
-        description: '',
-        knowledge_base: '',
-        use_emojis: true,
-        language_style: 'formal',
-        signature: '',
-        forbidden_words: [],
-        response_examples: '',
-        primary_color: '',
-        secondary_color: '',
-        logo_url: ''
-    };
+    
+    // Initialisation robuste de l'état
+    const [settings, setSettings] = useState<BrandSettings>(() => {
+        // Valeurs par défaut sûres
+        const defaults: BrandSettings = {
+            enabled: false,
+            tone: 'professionnel',
+            description: '',
+            knowledge_base: '',
+            use_emojis: true,
+            language_style: 'formal',
+            signature: '',
+            forbidden_words: [],
+            response_examples: '',
+            primary_color: '',
+            secondary_color: '',
+            logo_url: ''
+        };
 
-    // Robust merge: incoming brand + defaults
-    const safeBrand = { ...defaultBrand, ...brand };
+        const incoming = brand || {};
 
-    const [settings, setSettings] = useState<BrandSettings>(safeBrand);
+        // On fusionne manuellement pour s'assurer qu'aucune valeur NULL n'écrase une valeur par défaut critique (comme les tableaux)
+        return {
+            enabled: incoming.enabled ?? defaults.enabled,
+            tone: incoming.tone || defaults.tone,
+            description: incoming.description || defaults.description,
+            knowledge_base: incoming.knowledge_base || defaults.knowledge_base,
+            use_emojis: incoming.use_emojis ?? defaults.use_emojis,
+            language_style: (incoming.language_style as any) || defaults.language_style,
+            signature: incoming.signature || defaults.signature,
+            // Protection CRITIQUE : force un tableau vide si null
+            forbidden_words: Array.isArray(incoming.forbidden_words) ? incoming.forbidden_words : [],
+            response_examples: incoming.response_examples || defaults.response_examples,
+            primary_color: incoming.primary_color || defaults.primary_color,
+            secondary_color: incoming.secondary_color || defaults.secondary_color,
+            logo_url: incoming.logo_url || defaults.logo_url
+        };
+    });
+
     const [isSaving, setIsSaving] = useState(false);
     const [newForbiddenWord, setNewForbiddenWord] = useState('');
     
@@ -225,7 +245,7 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
     const removeForbiddenWord = (word: string) => {
         setSettings(prev => ({
             ...prev,
-            forbidden_words: prev.forbidden_words?.filter(w => w !== word)
+            forbidden_words: prev.forbidden_words?.filter(w => w !== word) || []
         }));
     };
 
@@ -322,12 +342,16 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
                                 <Button size="sm" variant="secondary" onClick={addForbiddenWord}>Ajouter</Button>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {settings.forbidden_words?.map(word => (
-                                    <Badge key={word} variant="neutral" className="bg-red-50 text-red-700 border-red-200 flex items-center gap-1">
-                                        {word}
-                                        <button onClick={() => removeForbiddenWord(word)} className="hover:text-red-900"><X className="h-3 w-3" /></button>
-                                    </Badge>
-                                ))}
+                                {settings.forbidden_words && settings.forbidden_words.length > 0 ? (
+                                    settings.forbidden_words.map(word => (
+                                        <Badge key={word} variant="neutral" className="bg-red-50 text-red-700 border-red-200 flex items-center gap-1">
+                                            {word}
+                                            <button onClick={() => removeForbiddenWord(word)} className="hover:text-red-900"><X className="h-3 w-3" /></button>
+                                        </Badge>
+                                    ))
+                                ) : (
+                                    <span className="text-xs text-slate-400 italic">Aucun mot interdit.</span>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -621,9 +645,8 @@ export const SettingsPage = () => {
 
             {/* --- TAB: AI IDENTITY --- */}
             {activeTab === 'ai-identity' && (
-                // Safe check: if brand is null or undefined, pass a default or handle inside the component
-                // Added a defensive check to ensure org exists before rendering if needed
-                org && <AiIdentityForm brand={org.brand || {} as any} onSave={handleUpdateBrand} />
+                // On passe 'org.brand' mais le composant AiIdentityForm gère désormais les valeurs nulles
+                <AiIdentityForm brand={org?.brand || {} as any} onSave={handleUpdateBrand} />
             )}
 
             {/* --- TAB: LOCATIONS --- */}
