@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Review, Organization, SocialPost, SocialAccount, SocialLog, Location } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, useToast, Input, Badge, ProLock, Select, Toggle } from '../components/ui';
+import { RestrictedFeature } from '../components/AccessControl';
 import { 
     Share2, 
     Instagram, 
@@ -46,6 +47,8 @@ import {
 import { toPng } from 'html-to-image';
 import { useLocation, useNavigate } from '../components/ui';
 
+// ... (Rest of the SocialPage component code same as before, but wrapped)
+
 // --- HELPERS ---
 const FORMATS = [
     { id: 'square', name: 'Carré (1:1)', width: 1080, height: 1080 },
@@ -60,8 +63,9 @@ const TEMPLATES = [
     { id: 'paper', name: 'Papier', style: 'bg-[#fdfbf7] text-slate-800 shadow-xl' },
 ];
 
-// --- COMPONENT: DRAG & DROP UPLOADER ---
+// ... ImageUploader Component ...
 const ImageUploader = ({ onUpload, currentImage }: { onUpload: (url: string) => void, currentImage?: string }) => {
+    // ... implementation same as before
     const [dragging, setDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,9 +86,7 @@ const ImageUploader = ({ onUpload, currentImage }: { onUpload: (url: string) => 
         if (!file.type.startsWith('image/')) return alert("Seules les images sont acceptées");
         setUploading(true);
         try {
-            // Compress client-side via canvas
             const compressedFile = await compressImage(file);
-            // Upload
             const url = await api.social.uploadMedia(compressedFile);
             onUpload(url);
         } catch (e) {
@@ -120,7 +122,7 @@ const ImageUploader = ({ onUpload, currentImage }: { onUpload: (url: string) => 
                         const newFile = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
                         resolve(newFile);
                     } else {
-                        resolve(file); // Fallback
+                        resolve(file); 
                     }
                 }, 'image/jpeg', 0.8);
             };
@@ -136,7 +138,6 @@ const ImageUploader = ({ onUpload, currentImage }: { onUpload: (url: string) => 
             onClick={() => fileInputRef.current?.click()}
         >
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
-            
             {uploading ? (
                 <div className="flex flex-col items-center">
                     <div className="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full mb-2"></div>
@@ -181,11 +182,9 @@ export const SocialPage = () => {
     const [activeTab, setActiveTab] = useState<'create' | 'calendar'>('create');
     const [showInfoBanner, setShowInfoBanner] = useState(true);
     
-    // Data Lists
     const [posts, setPosts] = useState<SocialPost[]>([]);
     const [reviews, setReviews] = useState<Review[]>([]);
     
-    // Wizard State
     const [currentStep, setCurrentStep] = useState(1);
     const [wizardData, setWizardData] = useState({
         content: '',
@@ -195,14 +194,12 @@ export const SocialPage = () => {
         time: '10:00'
     });
     
-    // Editor State (for Canvas generation)
     const [selectedReview, setSelectedReview] = useState<Review | null>(null);
     const [template, setTemplate] = useState('minimal');
     const [format, setFormat] = useState('square');
     const canvasRef = useRef<HTMLDivElement>(null);
     const [generatingCanvas, setGeneratingCanvas] = useState(false);
 
-    // Other state
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
     const toast = useToast();
     const navigate = useNavigate();
@@ -216,16 +213,14 @@ export const SocialPage = () => {
         setOrg(organization);
         setLocations(organization?.locations || []);
         
-        // Filter logic
         const locFilter = selectedLocationId === 'all' ? undefined : selectedLocationId;
         
         const [postsData, reviewsData] = await Promise.all([
             api.social.getPosts(locFilter),
-            api.reviews.list({ rating: 5 }) // Filter by location inside list if needed
+            api.reviews.list({ rating: 5 })
         ]);
         
         setPosts(postsData);
-        // Client-side filter for reviews as api.reviews.list might be generic
         setReviews(locFilter ? reviewsData.filter(r => r.location_id === locFilter) : reviewsData);
     };
 
@@ -236,7 +231,6 @@ export const SocialPage = () => {
     const handleGenerateContent = async () => {
         setIsGeneratingAI(true);
         try {
-            // Mock context
             const context = { 
                 rating: 5, 
                 author_name: "Client", 
@@ -256,8 +250,6 @@ export const SocialPage = () => {
         setGeneratingCanvas(true);
         try {
             const dataUrl = await toPng(canvasRef.current, { cacheBust: true, pixelRatio: 2 });
-            // Upload this dataUrl to storage (mocked) to get a persistent URL
-            // Converting dataURL to File object
             const res = await fetch(dataUrl);
             const blob = await res.blob();
             const file = new File([blob], "review-card.png", { type: "image/png" });
@@ -278,12 +270,11 @@ export const SocialPage = () => {
         
         const scheduledDate = new Date(`${wizardData.date}T${wizardData.time}`).toISOString();
         
-        // Create one post per selected platform
         const activePlatforms = Object.entries(wizardData.platforms).filter(([_, active]) => active).map(([p]) => p);
         
         for (const platform of activePlatforms) {
             await api.social.schedulePost({
-                location_id: selectedLocationId === 'all' ? locations[0]?.id : selectedLocationId, // Fallback to first loc
+                location_id: selectedLocationId === 'all' ? locations[0]?.id : selectedLocationId, 
                 platform: platform as any,
                 content: wizardData.content,
                 image_url: wizardData.image_url,
@@ -298,12 +289,11 @@ export const SocialPage = () => {
         loadData();
     };
 
-    // --- CANVAS RENDERER ---
     const CanvasRenderer = () => (
         <div 
             ref={canvasRef}
             className={`w-[1080px] h-[1080px] flex flex-col items-center justify-center p-16 relative ${TEMPLATES.find(t => t.id === template)?.style}`}
-            style={{ transform: 'scale(0.3)', transformOrigin: 'top left', marginBottom: '-700px' }} // Tiny preview hacks
+            style={{ transform: 'scale(0.3)', transformOrigin: 'top left', marginBottom: '-700px' }} 
         >
             <div className="text-6xl font-serif text-center italic">
                 "{selectedReview?.body}"
@@ -348,249 +338,252 @@ export const SocialPage = () => {
                 )}
             </div>
 
-            {/* Consolidation Banner */}
-            {showInfoBanner && (
-                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex justify-between items-start animate-in fade-in slide-in-from-top-2">
-                    <div className="flex gap-4">
-                        <div className="p-2 bg-white rounded-lg border border-indigo-100 shadow-sm text-indigo-600">
-                            <Rocket className="h-5 w-5" />
+            {/* RESTRICTED CONTENT AREA */}
+            <RestrictedFeature feature="social_studio" org={org}>
+                {/* Consolidation Banner */}
+                {showInfoBanner && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex justify-between items-start animate-in fade-in slide-in-from-top-2">
+                        <div className="flex gap-4">
+                            <div className="p-2 bg-white rounded-lg border border-indigo-100 shadow-sm text-indigo-600">
+                                <Rocket className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-indigo-900 text-sm">Le Social Booster fusionne avec Social Studio !</h4>
+                                <p className="text-sm text-indigo-700 mt-1 max-w-2xl leading-relaxed">
+                                    Pour plus de simplicité, nous avons regroupé la publication manuelle et l'automatisation. 
+                                    Retrouvez vos <strong>Autoposts IA</strong> directement dans l'onglet <span className="font-semibold underline cursor-pointer hover:text-indigo-900" onClick={() => navigate('/automation')}>Automatisation</span>.
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h4 className="font-bold text-indigo-900 text-sm">Le Social Booster fusionne avec Social Studio !</h4>
-                            <p className="text-sm text-indigo-700 mt-1 max-w-2xl leading-relaxed">
-                                Pour plus de simplicité, nous avons regroupé la publication manuelle et l'automatisation. 
-                                Retrouvez vos <strong>Autoposts IA</strong> directement dans l'onglet <span className="font-semibold underline cursor-pointer hover:text-indigo-900" onClick={() => navigate('/automation')}>Automatisation</span>.
-                            </p>
-                        </div>
+                        <button onClick={() => setShowInfoBanner(false)} className="text-indigo-400 hover:text-indigo-600 transition-colors">
+                            <X className="h-5 w-5" />
+                        </button>
                     </div>
-                    <button onClick={() => setShowInfoBanner(false)} className="text-indigo-400 hover:text-indigo-600 transition-colors">
-                        <X className="h-5 w-5" />
+                )}
+
+                {/* Tabs */}
+                <div className="flex border-b border-slate-200 items-center">
+                    <button 
+                        onClick={() => setActiveTab('create')} 
+                        className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'create' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Créer un Post
                     </button>
-                </div>
-            )}
-
-            {/* Tabs */}
-            <div className="flex border-b border-slate-200 items-center">
-                <button 
-                    onClick={() => setActiveTab('create')} 
-                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'create' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Créer un Post
-                </button>
-                <button 
-                    onClick={() => setActiveTab('calendar')} 
-                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'calendar' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Planning
-                </button>
-                <div className="ml-auto pr-4">
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/settings?tab=integrations')} className="text-slate-500 hover:text-indigo-600">
-                        <Settings className="h-4 w-4 mr-2" /> Gérer les comptes
-                    </Button>
-                </div>
-            </div>
-
-            {/* --- WIZARD: CREATE --- */}
-            {activeTab === 'create' && (
-                <div className="space-y-8">
-                    {/* Progress */}
-                    <div className="flex justify-between max-w-3xl mx-auto mb-8">
-                        <WizardStep number={1} title="Contenu" active={currentStep === 1} completed={currentStep > 1} />
-                        <WizardStep number={2} title="Média" active={currentStep === 2} completed={currentStep > 2} />
-                        <WizardStep number={3} title="Réseaux" active={currentStep === 3} completed={currentStep > 3} />
-                        <WizardStep number={4} title="Planification" active={currentStep === 4} completed={currentStep > 4} />
+                    <button 
+                        onClick={() => setActiveTab('calendar')} 
+                        className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'calendar' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Planning
+                    </button>
+                    <div className="ml-auto pr-4">
+                        <Button variant="ghost" size="sm" onClick={() => navigate('/settings?tab=integrations')} className="text-slate-500 hover:text-indigo-600">
+                            <Settings className="h-4 w-4 mr-2" /> Gérer les comptes
+                        </Button>
                     </div>
+                </div>
 
-                    <div className="max-w-3xl mx-auto">
-                        <Card className="min-h-[400px] flex flex-col">
-                            <CardContent className="p-8 flex-1">
-                                
-                                {/* STEP 1: CONTENT */}
-                                {currentStep === 1 && (
-                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                                        <div className="flex justify-between items-center">
-                                            <h3 className="text-lg font-bold text-slate-900">Quoi de neuf ?</h3>
-                                            <Button size="xs" variant="secondary" onClick={handleGenerateContent} isLoading={isGeneratingAI} icon={Sparkles}>
-                                                Assistant IA
-                                            </Button>
-                                        </div>
-                                        <textarea 
-                                            className="w-full h-40 p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 resize-none bg-slate-50"
-                                            placeholder="Écrivez votre légende ici..."
-                                            value={wizardData.content}
-                                            onChange={(e) => handleWizardChange('content', e.target.value)}
-                                        />
-                                        <div className="flex gap-2">
-                                            <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #Promotion')}>#Promotion</Badge>
-                                            <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #Event')}>#Event</Badge>
-                                            <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #New')}>#New</Badge>
-                                        </div>
-                                    </div>
-                                )}
+                {/* --- WIZARD: CREATE --- */}
+                {activeTab === 'create' && (
+                    <div className="space-y-8 mt-6">
+                        {/* Progress */}
+                        <div className="flex justify-between max-w-3xl mx-auto mb-8">
+                            <WizardStep number={1} title="Contenu" active={currentStep === 1} completed={currentStep > 1} />
+                            <WizardStep number={2} title="Média" active={currentStep === 2} completed={currentStep > 2} />
+                            <WizardStep number={3} title="Réseaux" active={currentStep === 3} completed={currentStep > 3} />
+                            <WizardStep number={4} title="Planification" active={currentStep === 4} completed={currentStep > 4} />
+                        </div>
 
-                                {/* STEP 2: MEDIA */}
-                                {currentStep === 2 && (
-                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                                        <h3 className="text-lg font-bold text-slate-900">Ajouter un visuel</h3>
-                                        
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {/* Option A: Upload */}
-                                            <div>
-                                                <h4 className="text-sm font-bold text-slate-500 mb-2 uppercase">Importer</h4>
-                                                <ImageUploader 
-                                                    currentImage={wizardData.image_url} 
-                                                    onUpload={(url) => handleWizardChange('image_url', url)} 
-                                                />
+                        <div className="max-w-3xl mx-auto">
+                            <Card className="min-h-[400px] flex flex-col">
+                                <CardContent className="p-8 flex-1">
+                                    
+                                    {/* STEP 1: CONTENT */}
+                                    {currentStep === 1 && (
+                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                            <div className="flex justify-between items-center">
+                                                <h3 className="text-lg font-bold text-slate-900">Quoi de neuf ?</h3>
+                                                <Button size="xs" variant="secondary" onClick={handleGenerateContent} isLoading={isGeneratingAI} icon={Sparkles}>
+                                                    Assistant IA
+                                                </Button>
                                             </div>
-
-                                            {/* Option B: From Review */}
-                                            <div className="border-l border-slate-100 pl-6">
-                                                <h4 className="text-sm font-bold text-slate-500 mb-2 uppercase">Ou créer depuis un avis</h4>
-                                                <div className="space-y-4">
-                                                    <Select 
-                                                        value={selectedReview?.id || ''} 
-                                                        onChange={(e) => setSelectedReview(reviews.find(r => r.id === e.target.value) || null)}
-                                                    >
-                                                        <option value="">Choisir un avis 5★...</option>
-                                                        {reviews.map(r => <option key={r.id} value={r.id}>{r.author_name} - {r.rating}★</option>)}
-                                                    </Select>
-                                                    
-                                                    {selectedReview && (
-                                                        <div className="bg-slate-50 p-2 rounded border border-slate-200 overflow-hidden h-40 relative">
-                                                            {/* Hidden Canvas for generation */}
-                                                            <div className="absolute opacity-0 pointer-events-none">
-                                                                <CanvasRenderer />
-                                                            </div>
-                                                            <div className="text-center pt-8 text-xs text-slate-400">Aperçu généré en arrière-plan</div>
-                                                            <Button size="sm" className="absolute bottom-2 left-2 right-2" onClick={handleCanvasToImage} isLoading={generatingCanvas}>
-                                                                Utiliser cet avis
-                                                            </Button>
-                                                        </div>
-                                                    )}
-                                                </div>
+                                            <textarea 
+                                                className="w-full h-40 p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 resize-none bg-slate-50"
+                                                placeholder="Écrivez votre légende ici..."
+                                                value={wizardData.content}
+                                                onChange={(e) => handleWizardChange('content', e.target.value)}
+                                            />
+                                            <div className="flex gap-2">
+                                                <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #Promotion')}>#Promotion</Badge>
+                                                <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #Event')}>#Event</Badge>
+                                                <Badge variant="neutral" className="cursor-pointer hover:bg-slate-200" onClick={() => handleWizardChange('content', wizardData.content + ' #New')}>#New</Badge>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {/* STEP 3: NETWORKS */}
-                                {currentStep === 3 && (
-                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                                        <h3 className="text-lg font-bold text-slate-900">Choisir les plateformes</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            {[
-                                                { id: 'instagram', icon: Instagram, label: 'Instagram', color: 'text-pink-600' },
-                                                { id: 'facebook', icon: Facebook, label: 'Facebook', color: 'text-blue-600' },
-                                                { id: 'linkedin', icon: Linkedin, label: 'LinkedIn', color: 'text-blue-700' },
-                                            ].map(net => (
-                                                <div 
-                                                    key={net.id}
-                                                    onClick={() => handleWizardChange('platforms', { ...wizardData.platforms, [net.id]: !wizardData.platforms[net.id as keyof typeof wizardData.platforms] })}
-                                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${wizardData.platforms[net.id as keyof typeof wizardData.platforms] ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}
-                                                >
-                                                    <net.icon className={`h-6 w-6 ${net.color}`} />
-                                                    <span className="font-bold text-slate-700">{net.label}</span>
-                                                    {wizardData.platforms[net.id as keyof typeof wizardData.platforms] && <CheckCircle2 className="ml-auto h-5 w-5 text-indigo-600" />}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        
-                                        {!wizardData.image_url && wizardData.platforms.instagram && (
-                                            <div className="bg-amber-50 text-amber-800 p-3 rounded-lg text-sm flex items-center gap-2">
-                                                <AlertCircle className="h-4 w-4" />
-                                                Instagram nécessite une image. Retournez à l'étape 2.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* STEP 4: SCHEDULE */}
-                                {currentStep === 4 && (
-                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                                        <h3 className="text-lg font-bold text-slate-900">Quand publier ?</h3>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
-                                                <Input type="date" value={wizardData.date} onChange={e => handleWizardChange('date', e.target.value)} />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">Heure</label>
-                                                <Input type="time" value={wizardData.time} onChange={e => handleWizardChange('time', e.target.value)} />
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4">
-                                            <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Récapitulatif</h4>
-                                            <div className="flex gap-4 items-start">
-                                                {wizardData.image_url && <img src={wizardData.image_url} className="h-16 w-16 object-cover rounded-lg bg-slate-200" />}
+                                    {/* STEP 2: MEDIA */}
+                                    {currentStep === 2 && (
+                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                            <h3 className="text-lg font-bold text-slate-900">Ajouter un visuel</h3>
+                                            
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Option A: Upload */}
                                                 <div>
-                                                    <p className="text-sm text-slate-800 line-clamp-2 italic">"{wizardData.content}"</p>
-                                                    <div className="flex gap-2 mt-2">
-                                                        {Object.entries(wizardData.platforms).filter(([_, v]) => v).map(([k]) => (
-                                                            <Badge key={k} variant="neutral" className="capitalize">{k}</Badge>
-                                                        ))}
+                                                    <h4 className="text-sm font-bold text-slate-500 mb-2 uppercase">Importer</h4>
+                                                    <ImageUploader 
+                                                        currentImage={wizardData.image_url} 
+                                                        onUpload={(url) => handleWizardChange('image_url', url)} 
+                                                    />
+                                                </div>
+
+                                                {/* Option B: From Review */}
+                                                <div className="border-l border-slate-100 pl-6">
+                                                    <h4 className="text-sm font-bold text-slate-500 mb-2 uppercase">Ou créer depuis un avis</h4>
+                                                    <div className="space-y-4">
+                                                        <Select 
+                                                            value={selectedReview?.id || ''} 
+                                                            onChange={(e) => setSelectedReview(reviews.find(r => r.id === e.target.value) || null)}
+                                                        >
+                                                            <option value="">Choisir un avis 5★...</option>
+                                                            {reviews.map(r => <option key={r.id} value={r.id}>{r.author_name} - {r.rating}★</option>)}
+                                                        </Select>
+                                                        
+                                                        {selectedReview && (
+                                                            <div className="bg-slate-50 p-2 rounded border border-slate-200 overflow-hidden h-40 relative">
+                                                                {/* Hidden Canvas for generation */}
+                                                                <div className="absolute opacity-0 pointer-events-none">
+                                                                    <CanvasRenderer />
+                                                                </div>
+                                                                <div className="text-center pt-8 text-xs text-slate-400">Aperçu généré en arrière-plan</div>
+                                                                <Button size="sm" className="absolute bottom-2 left-2 right-2" onClick={handleCanvasToImage} isLoading={generatingCanvas}>
+                                                                    Utiliser cet avis
+                                                                </Button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                            </CardContent>
-                            
-                            {/* FOOTER NAV */}
-                            <div className="p-6 border-t border-slate-100 flex justify-between bg-slate-50 rounded-b-xl">
-                                <Button variant="ghost" onClick={() => setCurrentStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>
-                                    <ChevronLeft className="h-4 w-4 mr-2" /> Retour
-                                </Button>
-                                {currentStep < 4 ? (
-                                    <Button onClick={() => setCurrentStep(currentStep + 1)} disabled={currentStep === 1 && !wizardData.content}>
-                                        Suivant <ChevronRight className="h-4 w-4 ml-2" />
-                                    </Button>
-                                ) : (
-                                    <Button onClick={handleSchedule} className="bg-green-600 hover:bg-green-700 border-none">
-                                        Confirmer la planification
-                                    </Button>
-                                )}
-                            </div>
-                        </Card>
-                    </div>
-                </div>
-            )}
-
-            {/* --- TAB: CALENDAR --- */}
-            {activeTab === 'calendar' && (
-                <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-indigo-600" /> Planning
-                        </h3>
-                        {posts.length === 0 ? (
-                            <div className="text-center text-slate-500 py-8">Aucun post planifié pour cet établissement.</div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {posts.map(post => (
-                                    <div key={post.id} className="border border-slate-200 rounded-lg p-4 bg-white flex flex-col hover:shadow-md transition-shadow">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="flex items-center gap-2">
-                                                {post.platform === 'instagram' && <Instagram className="h-4 w-4 text-pink-600" />}
-                                                {post.platform === 'facebook' && <Facebook className="h-4 w-4 text-blue-600" />}
-                                                <span className="text-xs font-bold capitalize">{post.platform}</span>
+                                    {/* STEP 3: NETWORKS */}
+                                    {currentStep === 3 && (
+                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                            <h3 className="text-lg font-bold text-slate-900">Choisir les plateformes</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                {[
+                                                    { id: 'instagram', icon: Instagram, label: 'Instagram', color: 'text-pink-600' },
+                                                    { id: 'facebook', icon: Facebook, label: 'Facebook', color: 'text-blue-600' },
+                                                    { id: 'linkedin', icon: Linkedin, label: 'LinkedIn', color: 'text-blue-700' },
+                                                ].map(net => (
+                                                    <div 
+                                                        key={net.id}
+                                                        onClick={() => handleWizardChange('platforms', { ...wizardData.platforms, [net.id]: !wizardData.platforms[net.id as keyof typeof wizardData.platforms] })}
+                                                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${wizardData.platforms[net.id as keyof typeof wizardData.platforms] ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                                    >
+                                                        <net.icon className={`h-6 w-6 ${net.color}`} />
+                                                        <span className="font-bold text-slate-700">{net.label}</span>
+                                                        {wizardData.platforms[net.id as keyof typeof wizardData.platforms] && <CheckCircle2 className="ml-auto h-5 w-5 text-indigo-600" />}
+                                                    </div>
+                                                ))}
                                             </div>
-                                            <Badge variant={post.status === 'published' ? 'success' : 'warning'}>{post.status}</Badge>
+                                            
+                                            {!wizardData.image_url && wizardData.platforms.instagram && (
+                                                <div className="bg-amber-50 text-amber-800 p-3 rounded-lg text-sm flex items-center gap-2">
+                                                    <AlertCircle className="h-4 w-4" />
+                                                    Instagram nécessite une image. Retournez à l'étape 2.
+                                                </div>
+                                            )}
                                         </div>
-                                        {post.image_url && <img src={post.image_url} className="w-full h-32 object-cover rounded-md mb-2 bg-slate-100" />}
-                                        <p className="text-xs text-slate-600 line-clamp-2 mb-3 flex-1">{post.content}</p>
-                                        <div className="text-xs text-slate-400 flex items-center gap-1">
-                                            <Clock className="h-3 w-3" /> {new Date(post.scheduled_date).toLocaleString()}
+                                    )}
+
+                                    {/* STEP 4: SCHEDULE */}
+                                    {currentStep === 4 && (
+                                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                                            <h3 className="text-lg font-bold text-slate-900">Quand publier ?</h3>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                                                    <Input type="date" value={wizardData.date} onChange={e => handleWizardChange('date', e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-700 mb-1">Heure</label>
+                                                    <Input type="time" value={wizardData.time} onChange={e => handleWizardChange('time', e.target.value)} />
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4">
+                                                <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Récapitulatif</h4>
+                                                <div className="flex gap-4 items-start">
+                                                    {wizardData.image_url && <img src={wizardData.image_url} className="h-16 w-16 object-cover rounded-lg bg-slate-200" />}
+                                                    <div>
+                                                        <p className="text-sm text-slate-800 line-clamp-2 italic">"{wizardData.content}"</p>
+                                                        <div className="flex gap-2 mt-2">
+                                                            {Object.entries(wizardData.platforms).filter(([_, v]) => v).map(([k]) => (
+                                                                <Badge key={k} variant="neutral" className="capitalize">{k}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                                    )}
+
+                                </CardContent>
+                                
+                                {/* FOOTER NAV */}
+                                <div className="p-6 border-t border-slate-100 flex justify-between bg-slate-50 rounded-b-xl">
+                                    <Button variant="ghost" onClick={() => setCurrentStep(Math.max(1, currentStep - 1))} disabled={currentStep === 1}>
+                                        <ChevronLeft className="h-4 w-4 mr-2" /> Retour
+                                    </Button>
+                                    {currentStep < 4 ? (
+                                        <Button onClick={() => setCurrentStep(currentStep + 1)} disabled={currentStep === 1 && !wizardData.content}>
+                                            Suivant <ChevronRight className="h-4 w-4 ml-2" />
+                                        </Button>
+                                    ) : (
+                                        <Button onClick={handleSchedule} className="bg-green-600 hover:bg-green-700 border-none">
+                                            Confirmer la planification
+                                        </Button>
+                                    )}
+                                </div>
+                            </Card>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* --- TAB: CALENDAR --- */}
+                {activeTab === 'calendar' && (
+                    <div className="space-y-6 mt-6">
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                                <Calendar className="h-5 w-5 text-indigo-600" /> Planning
+                            </h3>
+                            {posts.length === 0 ? (
+                                <div className="text-center text-slate-500 py-8">Aucun post planifié pour cet établissement.</div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {posts.map(post => (
+                                        <div key={post.id} className="border border-slate-200 rounded-lg p-4 bg-white flex flex-col hover:shadow-md transition-shadow">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    {post.platform === 'instagram' && <Instagram className="h-4 w-4 text-pink-600" />}
+                                                    {post.platform === 'facebook' && <Facebook className="h-4 w-4 text-blue-600" />}
+                                                    <span className="text-xs font-bold capitalize">{post.platform}</span>
+                                                </div>
+                                                <Badge variant={post.status === 'published' ? 'success' : 'warning'}>{post.status}</Badge>
+                                            </div>
+                                            {post.image_url && <img src={post.image_url} className="w-full h-32 object-cover rounded-md mb-2 bg-slate-100" />}
+                                            <p className="text-xs text-slate-600 line-clamp-2 mb-3 flex-1">{post.content}</p>
+                                            <div className="text-xs text-slate-400 flex items-center gap-1">
+                                                <Clock className="h-3 w-3" /> {new Date(post.scheduled_date).toLocaleString()}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </RestrictedFeature>
         </div>
     );
 };

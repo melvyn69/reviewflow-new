@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Competitor, Organization } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, Badge, useToast, ProLock } from '../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, Badge, useToast } from '../components/ui';
+import { RestrictedFeature } from '../components/AccessControl';
 import { 
     Radar, 
     Target, 
@@ -19,20 +20,19 @@ import {
     AlertTriangle, 
     Rocket,
     Trophy,
-    Filter,
-    FileText,
-    Download, 
-    MapPin,
     Globe,
     Medal,
     RefreshCw,
     Lightbulb,
-    Shield
+    Shield,
+    Download,
+    FileText
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
 import { useNavigate } from '../components/ui';
 
+// ... (Keep existing SonarRadar component)
 // --- SONAR RADAR COMPONENT ---
 const SonarRadar = ({ competitors, industry, className = "" }: { competitors: any[], industry: string, className?: string }) => {
     // Calculate aggregate metrics for the 4 axes
@@ -154,12 +154,11 @@ export const CompetitorsPage = () => {
         try {
             const organization = await api.organization.get();
             setOrg(organization);
-            if (organization?.subscription_plan === 'pro' || organization?.subscription_plan === 'elite') {
-                const data = await api.competitors.list();
-                setCompetitors(data || []);
-                const reports = await api.competitors.getReports();
-                if (reports.length > 0) setMarketData(reports[0].data);
-            }
+            // We fetch regardless, but UI will block display if needed
+            const data = await api.competitors.list();
+            setCompetitors(data || []);
+            const reports = await api.competitors.getReports();
+            if (reports.length > 0) setMarketData(reports[0].data);
         } catch (e) {
             console.error("Failed to load data", e);
         } finally {
@@ -311,27 +310,6 @@ export const CompetitorsPage = () => {
 
     if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
-    // PAYWALL - Block Free & Starter
-    if (!org || org.subscription_plan === 'free' || org.subscription_plan === 'starter') {
-        return (
-            <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8 px-4">
-                <div className="text-center mb-8">
-                    <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">Veille Concurrentielle</h1>
-                    <p className="text-slate-500">Espionnez légalement vos concurrents et analysez leur stratégie.</p>
-                </div>
-                <ProLock 
-                    title="Débloquez le Radar Concurrentiel"
-                    description="Suivez jusqu'à 10 concurrents, analysez leurs faiblesses et recevez des alertes."
-                    onUpgrade={() => navigate('/billing')}
-                >
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-8 filter blur-sm opacity-50">
-                        {[1, 2, 3].map(i => <div key={i} className="h-40 bg-slate-100 rounded-xl"></div>)}
-                    </div>
-                </ProLock>
-            </div>
-        );
-    }
-
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 px-4 sm:px-6 pb-20 relative">
             
@@ -360,309 +338,316 @@ export const CompetitorsPage = () => {
                     </h1>
                     <p className="text-slate-500">Surveillez votre marché et anticipez les mouvements adverses.</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleExportPDF} icon={Download} title="Exporter en PDF">
-                        Dossier PDF
-                    </Button>
-                    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2">
-                        <span className="text-xs font-bold text-slate-500">Rayon:</span>
-                        <select 
-                            className="bg-transparent text-sm py-2 focus:outline-none cursor-pointer"
-                            value={scanRadius}
-                            onChange={e => setScanRadius(parseInt(e.target.value))}
-                        >
-                            <option value={1}>1 km</option>
-                            <option value={5}>5 km</option>
-                            <option value={10}>10 km</option>
-                            <option value={50}>50 km</option>
-                        </select>
-                    </div>
-                    <Button onClick={runFullScan} icon={Radar} className="shadow-lg shadow-indigo-200 bg-indigo-600 hover:bg-indigo-700 text-white">
-                        Lancer un Scan
-                    </Button>
-                </div>
             </div>
 
-            {/* DASHBOARD CONTENT (Ref for PDF) */}
-            <div ref={dashboardRef} className="space-y-8 bg-slate-50/50 p-4 -m-4 rounded-xl">
-                
-                {/* 1. PERFORMANCES & RADAR */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    <Card className="lg:col-span-5 flex flex-col justify-center border-none shadow-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-sm uppercase text-slate-500 font-bold">
-                                <BarChart3 className="h-4 w-4" /> Performances de l'établissement
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="flex items-center justify-between p-6 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl text-white shadow-lg">
-                                <div>
-                                    <div className="text-xs text-slate-400 uppercase font-bold mb-1">Ma Note</div>
-                                    <div className="text-4xl font-bold text-white">4.7 <span className="text-lg text-slate-500">/5</span></div>
-                                </div>
-                                <div className="h-12 w-px bg-slate-700"></div>
-                                <div>
-                                    <div className="text-xs text-slate-400 uppercase font-bold mb-1">Moyenne Zone</div>
-                                    <div className="text-4xl font-bold text-indigo-400">4.2</div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                <div className="flex justify-between text-sm font-medium">
-                                    <span>Classement Zone</span>
-                                    <span className="text-green-600 font-bold">Top 10%</span>
-                                </div>
-                                <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
-                                    <div className="bg-green-500 h-2.5 rounded-full" style={{ width: '90%' }}></div>
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-slate-500">
-                                    <TrendingUp className="h-3 w-3 text-green-600" />
-                                    Vous surperformez 90% des concurrents directs.
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <div className="lg:col-span-7">
-                        <SonarRadar competitors={competitors} industry={org?.industry || 'Commerce'} />
-                    </div>
-                </div>
-
-                {/* 2. TOP CONCURRENTS */}
-                {top3.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {top3.map((comp, index) => {
-                            const badges = [
-                                { label: 'Leader', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: Trophy },
-                                { label: 'Challenger', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Medal },
-                                { label: 'Outsider', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: Rocket }
-                            ];
-                            const badge = badges[index];
-                            return (
-                                <Card key={comp.id} className={`border-t-4 ${index === 0 ? 'border-t-yellow-400 shadow-lg scale-105 z-10' : 'border-t-slate-200'}`}>
-                                    <CardContent className="p-6 text-center">
-                                        <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border mb-4 ${badge.color}`}>
-                                            <badge.icon className="h-3 w-3" /> {badge.label}
-                                        </div>
-                                        <h3 className="font-bold text-lg text-slate-900 mb-1 truncate">{comp.name}</h3>
-                                        <div className="flex justify-center items-center gap-1 text-amber-500 font-bold mb-4">
-                                            {comp.rating} ★ <span className="text-slate-400 text-xs font-normal">({comp.review_count})</span>
-                                        </div>
-                                        <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded truncate">
-                                            {comp.address}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {/* 3. TABLEAU DETAILLE */}
-                <Card>
-                    <CardHeader className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <CardTitle className="flex items-center gap-2">
-                            <Globe className="h-5 w-5 text-slate-600" />
-                            Liste des Concurrents
-                        </CardTitle>
-                        
-                        {/* FILTERS */}
-                        <div className="flex flex-wrap gap-2">
-                            {[
-                                { id: 'all', label: 'Tout' },
-                                { id: 'top3', label: 'Top 3' },
-                                { id: 'best', label: 'Meilleurs (>4.5)' },
-                                { id: 'weak', label: 'Faibles (<3.5)' }
-                            ].map(f => (
-                                <button
-                                    key={f.id}
-                                    onClick={() => setFilterType(f.id as any)}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${filterType === f.id ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                                >
-                                    {f.label}
-                                </button>
-                            ))}
+            {/* RESTRICTED CONTENT AREA */}
+            <RestrictedFeature feature="competitors" org={org}>
+                <div className="space-y-8">
+                    {/* Actions Bar (Inside restriction) */}
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={handleExportPDF} icon={Download} title="Exporter en PDF">
+                            Dossier PDF
+                        </Button>
+                        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2">
+                            <span className="text-xs font-bold text-slate-500">Rayon:</span>
+                            <select 
+                                className="bg-transparent text-sm py-2 focus:outline-none cursor-pointer"
+                                value={scanRadius}
+                                onChange={e => setScanRadius(parseInt(e.target.value))}
+                            >
+                                <option value={1}>1 km</option>
+                                <option value={5}>5 km</option>
+                                <option value={10}>10 km</option>
+                                <option value={50}>50 km</option>
+                            </select>
                         </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-slate-100">
-                                <thead className="bg-slate-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Établissement</th>
-                                        <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Adresse</th>
-                                        <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Note</th>
-                                        <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Avis</th>
-                                        <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Distance</th>
-                                        <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-slate-50">
-                                    {filteredCompetitors.map((comp) => (
-                                        <tr key={comp.id} className="hover:bg-slate-50 transition-colors group">
-                                            <td className="px-6 py-4">
-                                                <div className="font-bold text-slate-900 text-sm truncate max-w-[180px]">{comp.name}</div>
-                                            </td>
-                                            <td className="px-6 py-4 hidden md:table-cell">
-                                                <div className="text-sm text-slate-600 truncate max-w-[200px]" title={comp.address}>{comp.address}</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <Badge variant={comp.rating >= 4.5 ? 'success' : comp.rating >= 4 ? 'default' : 'warning'}>
-                                                    {comp.rating} ★
-                                                </Badge>
-                                            </td>
-                                            <td className="px-6 py-4 text-center text-sm font-mono text-slate-600">
-                                                {comp.review_count}
-                                            </td>
-                                            <td className="px-6 py-4 text-center hidden sm:table-cell">
-                                                <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                                                    <Navigation className="h-3 w-3" />
-                                                    {comp.distance || '~km'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {comp.url && (
-                                                        <a href={comp.url} target="_blank" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors" title="Google Maps">
-                                                            <ExternalLink className="h-4 w-4" />
-                                                        </a>
-                                                    )}
-                                                    <button onClick={() => handleDelete(comp.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Supprimer">
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredCompetitors.length === 0 && (
-                                        <tr>
-                                            <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                                                Aucun concurrent correspondant.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* 4. ANALYSE IA & SWOT */}
-                <Card className="overflow-hidden border-none shadow-lg">
-                    <div className="bg-gradient-to-r from-indigo-900 to-slate-900 p-6 flex justify-between items-center text-white">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-white/10 p-2 rounded-lg"><Sparkles className="h-6 w-6 text-indigo-300" /></div>
-                            <div>
-                                <h2 className="text-lg font-bold">Analyse Stratégique IA</h2>
-                                <p className="text-xs text-indigo-300 opacity-80">Basée sur {competitors.length} points de données</p>
-                            </div>
-                        </div>
-                        <Button size="sm" variant="secondary" onClick={runAiAnalysis} isLoading={loadingInsights} icon={RefreshCw}>
-                            Actualiser
+                        <Button onClick={runFullScan} icon={Radar} className="shadow-lg shadow-indigo-200 bg-indigo-600 hover:bg-indigo-700 text-white">
+                            Lancer un Scan
                         </Button>
                     </div>
 
-                    {marketData ? (
-                        <div className="p-6 md:p-8 space-y-8 bg-white">
-                            
-                            {/* Summary */}
-                            <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100 flex gap-4">
-                                <FileText className="h-6 w-6 text-indigo-600 shrink-0 mt-1" />
-                                <div>
-                                    <h3 className="font-bold text-indigo-900 mb-2 text-sm uppercase tracking-wide">Synthèse du Marché</h3>
-                                    <p className="text-indigo-800 text-sm leading-relaxed">
-                                        {marketData.market_analysis}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* MODERN SWOT GRID */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Strengths */}
-                                <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
-                                    <div className="flex items-center gap-2 mb-4 text-emerald-800 font-bold uppercase tracking-wide text-xs">
-                                        <CheckCircle2 className="h-4 w-4" /> Forces (Interne)
-                                    </div>
-                                    <ul className="space-y-2">
-                                        {marketData.swot?.strengths?.map((s: string, i: number) => (
-                                            <li key={i} className="flex gap-2 text-sm text-emerald-900 font-medium bg-white/60 p-2 rounded">
-                                                <span className="text-emerald-500 font-bold">•</span> {s}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-
-                                {/* Weaknesses */}
-                                <div className="bg-rose-50 rounded-xl p-5 border border-rose-100">
-                                    <div className="flex items-center gap-2 mb-4 text-rose-800 font-bold uppercase tracking-wide text-xs">
-                                        <AlertTriangle className="h-4 w-4" /> Faiblesses (Interne)
-                                    </div>
-                                    <ul className="space-y-2">
-                                        {marketData.swot?.weaknesses?.map((s: string, i: number) => (
-                                            <li key={i} className="flex gap-2 text-sm text-rose-900 font-medium bg-white/60 p-2 rounded">
-                                                <span className="text-rose-500 font-bold">•</span> {s}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-
-                                {/* Opportunities */}
-                                <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
-                                    <div className="flex items-center gap-2 mb-4 text-amber-800 font-bold uppercase tracking-wide text-xs">
-                                        <Lightbulb className="h-4 w-4" /> Opportunités (Externe)
-                                    </div>
-                                    <ul className="space-y-2">
-                                        {marketData.swot?.opportunities?.map((s: string, i: number) => (
-                                            <li key={i} className="flex gap-2 text-sm text-amber-900 font-medium bg-white/60 p-2 rounded">
-                                                <span className="text-amber-500 font-bold">↗</span> {s}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-
-                                {/* Threats */}
-                                <div className="bg-slate-100 rounded-xl p-5 border border-slate-200">
-                                    <div className="flex items-center gap-2 mb-4 text-slate-700 font-bold uppercase tracking-wide text-xs">
-                                        <Shield className="h-4 w-4" /> Menaces (Externe)
-                                    </div>
-                                    <ul className="space-y-2">
-                                        {marketData.swot?.threats?.map((s: string, i: number) => (
-                                            <li key={i} className="flex gap-2 text-sm text-slate-800 font-medium bg-white/60 p-2 rounded">
-                                                <span className="text-slate-500 font-bold">!</span> {s}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </div>
-
-                            {/* Strategic Recommendations */}
-                            <div>
-                                <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                    <Rocket className="h-5 w-5 text-indigo-600" /> Plan Stratégique
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {marketData.strategic_recommendations?.map((rec: string, i: number) => (
-                                        <div key={i} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors group">
-                                            <div className="text-4xl font-black text-slate-100 mb-2 group-hover:text-indigo-100 transition-colors">0{i+1}</div>
-                                            <p className="text-sm font-semibold text-slate-800">{rec}</p>
+                    {/* DASHBOARD CONTENT (Ref for PDF) */}
+                    <div ref={dashboardRef} className="space-y-8 bg-slate-50/50 p-4 -m-4 rounded-xl">
+                        
+                        {/* 1. PERFORMANCES & RADAR */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            <Card className="lg:col-span-5 flex flex-col justify-center border-none shadow-md">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-sm uppercase text-slate-500 font-bold">
+                                        <BarChart3 className="h-4 w-4" /> Performances de l'établissement
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <div className="flex items-center justify-between p-6 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl text-white shadow-lg">
+                                        <div>
+                                            <div className="text-xs text-slate-400 uppercase font-bold mb-1">Ma Note</div>
+                                            <div className="text-4xl font-bold text-white">4.7 <span className="text-lg text-slate-500">/5</span></div>
                                         </div>
+                                        <div className="h-12 w-px bg-slate-700"></div>
+                                        <div>
+                                            <div className="text-xs text-slate-400 uppercase font-bold mb-1">Moyenne Zone</div>
+                                            <div className="text-4xl font-bold text-indigo-400">4.2</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between text-sm font-medium">
+                                            <span>Classement Zone</span>
+                                            <span className="text-green-600 font-bold">Top 10%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                                            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: '90%' }}></div>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                                            <TrendingUp className="h-3 w-3 text-green-600" />
+                                            Vous surperformez 90% des concurrents directs.
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <div className="lg:col-span-7">
+                                <SonarRadar competitors={competitors} industry={org?.industry || 'Commerce'} />
+                            </div>
+                        </div>
+
+                        {/* 2. TOP CONCURRENTS */}
+                        {top3.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {top3.map((comp, index) => {
+                                    const badges = [
+                                        { label: 'Leader', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: Trophy },
+                                        { label: 'Challenger', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Medal },
+                                        { label: 'Outsider', color: 'bg-orange-100 text-orange-700 border-orange-200', icon: Rocket }
+                                    ];
+                                    const badge = badges[index];
+                                    return (
+                                        <Card key={comp.id} className={`border-t-4 ${index === 0 ? 'border-t-yellow-400 shadow-lg scale-105 z-10' : 'border-t-slate-200'}`}>
+                                            <CardContent className="p-6 text-center">
+                                                <div className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border mb-4 ${badge.color}`}>
+                                                    <badge.icon className="h-3 w-3" /> {badge.label}
+                                                </div>
+                                                <h3 className="font-bold text-lg text-slate-900 mb-1 truncate">{comp.name}</h3>
+                                                <div className="flex justify-center items-center gap-1 text-amber-500 font-bold mb-4">
+                                                    {comp.rating} ★ <span className="text-slate-400 text-xs font-normal">({comp.review_count})</span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded truncate">
+                                                    {comp.address}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* 3. TABLEAU DETAILLE */}
+                        <Card>
+                            <CardHeader className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Globe className="h-5 w-5 text-slate-600" />
+                                    Liste des Concurrents
+                                </CardTitle>
+                                
+                                {/* FILTERS */}
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        { id: 'all', label: 'Tout' },
+                                        { id: 'top3', label: 'Top 3' },
+                                        { id: 'best', label: 'Meilleurs (>4.5)' },
+                                        { id: 'weak', label: 'Faibles (<3.5)' }
+                                    ].map(f => (
+                                        <button
+                                            key={f.id}
+                                            onClick={() => setFilterType(f.id as any)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${filterType === f.id ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                        >
+                                            {f.label}
+                                        </button>
                                     ))}
                                 </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-slate-100">
+                                        <thead className="bg-slate-50">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Établissement</th>
+                                                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell">Adresse</th>
+                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Note</th>
+                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Avis</th>
+                                                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider hidden sm:table-cell">Distance</th>
+                                                <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-slate-50">
+                                            {filteredCompetitors.map((comp) => (
+                                                <tr key={comp.id} className="hover:bg-slate-50 transition-colors group">
+                                                    <td className="px-6 py-4">
+                                                        <div className="font-bold text-slate-900 text-sm truncate max-w-[180px]">{comp.name}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 hidden md:table-cell">
+                                                        <div className="text-sm text-slate-600 truncate max-w-[200px]" title={comp.address}>{comp.address}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <Badge variant={comp.rating >= 4.5 ? 'success' : comp.rating >= 4 ? 'default' : 'warning'}>
+                                                            {comp.rating} ★
+                                                        </Badge>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center text-sm font-mono text-slate-600">
+                                                        {comp.review_count}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center hidden sm:table-cell">
+                                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                                                            <Navigation className="h-3 w-3" />
+                                                            {comp.distance || '~km'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            {comp.url && (
+                                                                <a href={comp.url} target="_blank" className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors" title="Google Maps">
+                                                                    <ExternalLink className="h-4 w-4" />
+                                                                </a>
+                                                            )}
+                                                            <button onClick={() => handleDelete(comp.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors" title="Supprimer">
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {filteredCompetitors.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                                                        Aucun concurrent correspondant.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* 4. ANALYSE IA & SWOT */}
+                        <Card className="overflow-hidden border-none shadow-lg">
+                            <div className="bg-gradient-to-r from-indigo-900 to-slate-900 p-6 flex justify-between items-center text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-white/10 p-2 rounded-lg"><Sparkles className="h-6 w-6 text-indigo-300" /></div>
+                                    <div>
+                                        <h2 className="text-lg font-bold">Analyse Stratégique IA</h2>
+                                        <p className="text-xs text-indigo-300 opacity-80">Basée sur {competitors.length} points de données</p>
+                                    </div>
+                                </div>
+                                <Button size="sm" variant="secondary" onClick={runAiAnalysis} isLoading={loadingInsights} icon={RefreshCw}>
+                                    Actualiser
+                                </Button>
                             </div>
 
-                        </div>
-                    ) : (
-                        <div className="p-12 text-center bg-white">
-                            <div className="bg-slate-50 h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Zap className="h-8 w-8 text-slate-300" />
-                            </div>
-                            <h3 className="text-lg font-medium text-slate-900">Analyse indisponible</h3>
-                            <p className="text-slate-500 mb-6 text-sm">Lancez l'IA pour générer un audit stratégique complet basé sur vos concurrents.</p>
-                            <Button onClick={runAiAnalysis} icon={Zap}>Générer l'audit</Button>
-                        </div>
-                    )}
-                </Card>
-            </div>
+                            {marketData ? (
+                                <div className="p-6 md:p-8 space-y-8 bg-white">
+                                    
+                                    {/* Summary */}
+                                    <div className="bg-indigo-50 p-6 rounded-xl border border-indigo-100 flex gap-4">
+                                        <FileText className="h-6 w-6 text-indigo-600 shrink-0 mt-1" />
+                                        <div>
+                                            <h3 className="font-bold text-indigo-900 mb-2 text-sm uppercase tracking-wide">Synthèse du Marché</h3>
+                                            <p className="text-indigo-800 text-sm leading-relaxed">
+                                                {marketData.market_analysis}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* MODERN SWOT GRID */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Strengths */}
+                                        <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
+                                            <div className="flex items-center gap-2 mb-4 text-emerald-800 font-bold uppercase tracking-wide text-xs">
+                                                <CheckCircle2 className="h-4 w-4" /> Forces (Interne)
+                                            </div>
+                                            <ul className="space-y-2">
+                                                {marketData.swot?.strengths?.map((s: string, i: number) => (
+                                                    <li key={i} className="flex gap-2 text-sm text-emerald-900 font-medium bg-white/60 p-2 rounded">
+                                                        <span className="text-emerald-500 font-bold">•</span> {s}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+
+                                        {/* Weaknesses */}
+                                        <div className="bg-rose-50 rounded-xl p-5 border border-rose-100">
+                                            <div className="flex items-center gap-2 mb-4 text-rose-800 font-bold uppercase tracking-wide text-xs">
+                                                <AlertTriangle className="h-4 w-4" /> Faiblesses (Interne)
+                                            </div>
+                                            <ul className="space-y-2">
+                                                {marketData.swot?.weaknesses?.map((s: string, i: number) => (
+                                                    <li key={i} className="flex gap-2 text-sm text-rose-900 font-medium bg-white/60 p-2 rounded">
+                                                        <span className="text-rose-500 font-bold">•</span> {s}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+
+                                        {/* Opportunities */}
+                                        <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                                            <div className="flex items-center gap-2 mb-4 text-amber-800 font-bold uppercase tracking-wide text-xs">
+                                                <Lightbulb className="h-4 w-4" /> Opportunités (Externe)
+                                            </div>
+                                            <ul className="space-y-2">
+                                                {marketData.swot?.opportunities?.map((s: string, i: number) => (
+                                                    <li key={i} className="flex gap-2 text-sm text-amber-900 font-medium bg-white/60 p-2 rounded">
+                                                        <span className="text-amber-500 font-bold">↗</span> {s}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+
+                                        {/* Threats */}
+                                        <div className="bg-slate-100 rounded-xl p-5 border border-slate-200">
+                                            <div className="flex items-center gap-2 mb-4 text-slate-700 font-bold uppercase tracking-wide text-xs">
+                                                <Shield className="h-4 w-4" /> Menaces (Externe)
+                                            </div>
+                                            <ul className="space-y-2">
+                                                {marketData.swot?.threats?.map((s: string, i: number) => (
+                                                    <li key={i} className="flex gap-2 text-sm text-slate-800 font-medium bg-white/60 p-2 rounded">
+                                                        <span className="text-slate-500 font-bold">!</span> {s}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    {/* Strategic Recommendations */}
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                            <Rocket className="h-5 w-5 text-indigo-600" /> Plan Stratégique
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {marketData.strategic_recommendations?.map((rec: string, i: number) => (
+                                                <div key={i} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:border-indigo-300 transition-colors group">
+                                                    <div className="text-4xl font-black text-slate-100 mb-2 group-hover:text-indigo-100 transition-colors">0{i+1}</div>
+                                                    <p className="text-sm font-semibold text-slate-800">{rec}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                </div>
+                            ) : (
+                                <div className="p-12 text-center bg-white">
+                                    <div className="bg-slate-50 h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Zap className="h-8 w-8 text-slate-300" />
+                                    </div>
+                                    <h3 className="text-lg font-medium text-slate-900">Analyse indisponible</h3>
+                                    <p className="text-slate-500 mb-6 text-sm">Lancez l'IA pour générer un audit stratégique complet basé sur vos concurrents.</p>
+                                    <Button onClick={runAiAnalysis} icon={Zap}>Générer l'audit</Button>
+                                </div>
+                            )}
+                        </Card>
+                    </div>
+                </div>
+            </RestrictedFeature>
         </div>
     );
 };

@@ -27,15 +27,17 @@ import {
   ChevronRight,
   Sparkles,
   ChevronDown,
-  Terminal
+  Terminal,
+  Lock
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
+import { hasAccess, FeatureId } from '../lib/features';
 
 // Sidebar Item Component
-const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isPro?: boolean }) => {
+const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isLocked = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isLocked?: boolean }) => {
   const location = useLocation();
   const isActive = exact ? location.pathname === to : location.pathname.startsWith(to);
 
@@ -43,15 +45,15 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = fa
     <Link
       to={to}
       onClick={onClick}
-      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors group ${
+      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors group relative ${
         isActive 
           ? 'bg-indigo-50 text-indigo-700' 
           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
       }`}
     >
-      <Icon className="h-5 w-5 shrink-0" />
-      <span className="flex-1">{label}</span>
-      {isPro && <ProBadge className="opacity-70 group-hover:opacity-100 transition-opacity" />}
+      <Icon className={`h-5 w-5 shrink-0 ${isLocked ? 'opacity-70' : ''}`} />
+      <span className={`flex-1 ${isLocked ? 'opacity-70' : ''}`}>{label}</span>
+      {isLocked && <Lock className="h-3 w-3 text-slate-400" />}
     </Link>
   );
 };
@@ -130,8 +132,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   };
 
   const plan = org?.subscription_plan || 'free';
-  // Features that are locked on Starter/Free plans
-  const isLocked = plan === 'free' || plan === 'starter';
+  
+  // Helper to check access
+  const check = (feat: FeatureId) => !hasAccess(org, feat);
 
   return (
     <>
@@ -177,9 +180,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           {/* Main Navigation */}
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
-          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isLocked} />
+          
+          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isLocked={check('social_studio')} />
           <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
-          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isPro={isLocked} />
+          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isLocked={check('competitors')} />
           
           <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
           <SidebarItem to="/collect" icon={QrCode} label={t('sidebar.collect')} onClick={onClose} />
@@ -187,15 +191,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
           
           {/* Advanced / Pro Features */}
-          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isPro={isLocked} />
-          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isPro={isLocked} />
+          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isLocked={check('advanced_reports')} />
+          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isLocked={check('automation')} />
 
           <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.org')}</div>
           <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />
           <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={onClose} />
           
           <div className="px-3 mt-4 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">Avancé</div>
-          <SidebarItem to="/developers" icon={Terminal} label="Dev & API" onClick={onClose} isPro={isLocked} />
+          <SidebarItem to="/developers" icon={Terminal} label="Dev & API" onClick={onClose} isLocked={check('api_access')} />
           <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />
           
           {user?.role === 'super_admin' && (

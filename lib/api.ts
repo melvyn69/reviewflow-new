@@ -10,12 +10,22 @@ import {
     CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial
 } from '../types';
 import { supabase } from './supabase';
+import { hasAccess } from './features'; // Import helper
 
 // Mock function for demo mode check
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
 
 // Helper to simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper to get current org plan from storage (Mock backend context)
+const getOrgPlan = () => {
+    if (isDemoMode()) return INITIAL_ORG.subscription_plan;
+    // In real app, this is handled by backend middleware via token
+    // Here we peek at local storage for simulation
+    const userStr = localStorage.getItem('user');
+    return userStr ? 'free' : 'free'; // Simplified fallback
+}
 
 export const api = {
     auth: {
@@ -81,7 +91,11 @@ export const api = {
         saveGoogleTokens: async () => { return true; },
         addStaffMember: async (name: string, role: string, email: string) => { await delay(500); },
         removeStaffMember: async (id: string) => { await delay(500); },
-        generateApiKey: async (name: string) => { await delay(500); },
+        generateApiKey: async (name: string) => { 
+            // MOCKED BACKEND GUARD
+            if (!hasAccess(INITIAL_ORG, 'api_access')) throw new Error("Accès API réservé au plan Elite.");
+            await delay(500); 
+        },
         revokeApiKey: async (id: string) => { await delay(500); },
         saveWebhook: async () => { await delay(500); },
         testWebhook: async () => { await delay(1000); return true; },
@@ -139,6 +153,7 @@ export const api = {
             return `${prefix}${body} (Réponse générée avec le ton '${tone}' et le style '${settings.language_style}')`;
         },
         generateSocialPost: async (review: Review, platform: string) => {
+            if (!hasAccess(INITIAL_ORG, 'social_studio')) throw new Error("Social Studio réservé aux plans Pro.");
             await delay(1200);
             return "🌟 Un immense merci à nos clients formidables ! Votre satisfaction est notre moteur au quotidien. #Gratitude #ServiceClient #Excellence";
         },
@@ -173,7 +188,10 @@ export const api = {
             await delay(300);
             return INITIAL_WORKFLOWS;
         },
-        saveWorkflow: async (workflow: WorkflowRule) => { await delay(500); },
+        saveWorkflow: async (workflow: WorkflowRule) => { 
+            if (!hasAccess(INITIAL_ORG, 'automation')) throw new Error("Upgrade requis.");
+            await delay(500); 
+        },
         deleteWorkflow: async (id: string) => { await delay(500); },
         run: async () => {
             await delay(2000);
@@ -182,12 +200,14 @@ export const api = {
     },
     competitors: {
         list: async () => {
+            if (!hasAccess(INITIAL_ORG, 'competitors')) return [];
             await delay(400);
             return INITIAL_COMPETITORS;
         },
         getReports: async () => [],
         saveReport: async (report: any) => { await delay(500); },
         autoDiscover: async (radius: number, keyword: string, lat: number, lng: number) => {
+            if (!hasAccess(INITIAL_ORG, 'competitors')) throw new Error("Upgrade requis pour le scan.");
             await delay(3000);
             return INITIAL_COMPETITORS;
         },
@@ -238,7 +258,10 @@ export const api = {
         }
     },
     reports: {
-        trigger: async (id: string) => { await delay(1000); }
+        trigger: async (id: string) => { 
+            if (!hasAccess(INITIAL_ORG, 'advanced_reports')) throw new Error("Upgrade requis.");
+            await delay(1000); 
+        }
     },
     billing: {
         getInvoices: async () => {
@@ -274,6 +297,7 @@ export const api = {
     seedCloudDatabase: async () => { await delay(2000); },
     social: {
         getPosts: async (locationId?: string) => {
+            if (!hasAccess(INITIAL_ORG, 'social_studio')) return [];
             await delay(300);
             return INITIAL_SOCIAL_POSTS;
         },

@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Skeleton, useToast } from '../components/ui';
-import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
+import { CreditCard, CheckCircle2, Download, Zap, FileText, ShieldCheck, RefreshCw, AlertCircle, Calendar, Gauge } from 'lucide-react';
 import { api } from '../lib/api';
 import { Organization, BillingInvoice } from '../types';
 import { PLANS, getPlanDetails, PlanId } from '../lib/plans';
+import { getPlanLimits } from '../lib/features';
 import { useLocation, useNavigate } from '../components/ui';
 
+// ... (Confetti and PaymentProcessingOverlay components unchanged)
 const Confetti = () => (
     <div className="fixed inset-0 pointer-events-none z-[100] overflow-hidden">
         {[...Array(50)].map((_, i) => (
@@ -98,6 +100,7 @@ const PricingCard = ({
 };
 
 const InvoiceTable = () => {
+    // ... same logic
     const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -164,6 +167,7 @@ const InvoiceTable = () => {
 
 // Subscription Status Component
 const SubscriptionStatus = ({ org, onPortal }: { org: Organization, onPortal: () => void }) => {
+    // ... same logic
     const status = org.subscription_status || 'active';
     const isPastDue = status === 'past_due' || status === 'unpaid';
     const renewalDate = org.current_period_end ? new Date(org.current_period_end).toLocaleDateString() : 'N/A';
@@ -204,6 +208,25 @@ const SubscriptionStatus = ({ org, onPortal }: { org: Organization, onPortal: ()
     );
 };
 
+// Usage Gauge Component
+const UsageGauge = ({ label, value, max }: { label: string, value: number, max: number }) => {
+    const percentage = Math.min(100, Math.max(0, (value / max) * 100));
+    return (
+        <div className="mb-4">
+            <div className="flex justify-between text-sm mb-1">
+                <span className="text-slate-600 font-medium">{label}</span>
+                <span className="text-slate-900 font-bold">{value} / {max}</span>
+            </div>
+            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div 
+                    className={`h-full transition-all duration-500 ${percentage > 90 ? 'bg-red-500' : percentage > 70 ? 'bg-amber-500' : 'bg-indigo-600'}`} 
+                    style={{ width: `${percentage}%` }}
+                ></div>
+            </div>
+        </div>
+    );
+}
+
 export const BillingPage = () => {
     const [org, setOrg] = useState<Organization | null>(null);
     const [upgrading, setUpgrading] = useState<string | null>(null);
@@ -231,13 +254,13 @@ export const BillingPage = () => {
     }, [location.search]);
 
     const pollForPlanUpdate = async () => {
+        // ... same polling logic
         let attempts = 0;
         const maxAttempts = 10;
         
         const check = async () => {
             try {
                 const data = await api.organization.get();
-                // Check if plan has changed from free
                 if (data && data.subscription_plan !== 'free') {
                     setOrg(data);
                     setIsVerifyingPayment(false);
@@ -329,26 +352,9 @@ export const BillingPage = () => {
         );
     }
 
-    if (!org) {
-        return (
-            <div className="p-12 text-center flex flex-col items-center justify-center min-h-[50vh]">
-                <div className="bg-slate-50 p-4 rounded-full mb-4">
-                    <CreditCard className="h-8 w-8 text-slate-500" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">Aucun abonnement actif</h3>
-                <p className="text-slate-500 mb-6 max-w-sm">
-                    Veuillez terminer la configuration de votre compte pour accéder aux offres.
-                </p>
-                <Button onClick={() => navigate('/onboarding')}>Terminer l'installation</Button>
-            </div>
-        );
-    }
+    if (!org) return null;
 
-    // Dynamic Logic from PLANS config
-    const currentPlanDetails = getPlanDetails(org.subscription_plan);
-    const limit = currentPlanDetails.ai_limit;
-    const percentage = limit > 0 ? Math.min(100, (usageCount / limit) * 100) : 100;
-    const remaining = Math.max(0, limit - usageCount);
+    const limits = getPlanLimits(org.subscription_plan);
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 relative pb-20">
@@ -366,44 +372,28 @@ export const BillingPage = () => {
                 <SubscriptionStatus org={org} onPortal={handleManageCards} />
             )}
 
-            {/* Usage Section */}
-            <Card className="bg-gradient-to-r from-slate-900 to-indigo-900 text-white border-none shadow-xl">
-                <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div className="flex-1 w-full">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Zap className="h-5 w-5 text-yellow-400 fill-yellow-400" />
-                            <h3 className="font-bold text-lg">Consommation IA (Ce mois)</h3>
+            {/* NEW: Usage & Limits Section */}
+            <Card className="border border-slate-200">
+                <CardHeader className="border-b border-slate-100 bg-slate-50/50">
+                    <CardTitle className="flex items-center gap-2 text-base text-slate-800">
+                        <Gauge className="h-5 w-5 text-indigo-600" /> 
+                        Usage & Limites
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <UsageGauge label="Réponses IA (Mensuel)" value={usageCount} max={limits.ai_responses} />
+                            <UsageGauge label="Établissements" value={org.locations.length} max={limits.locations} />
+                            <UsageGauge label="Membres d'équipe" value={(org.staff_members?.length || 0)} max={limits.team_members} />
                         </div>
-                        <div className="relative pt-1">
-                            <div className="flex mb-2 items-center justify-between">
-                                <div>
-                                    <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-indigo-600 bg-indigo-200">
-                                        {percentage.toFixed(0)}% Utilisé
-                                    </span>
-                                </div>
-                                <div className="text-right">
-                                    <span className="text-xs font-semibold inline-block text-indigo-200">
-                                        {org.subscription_plan === 'elite' ? 'Illimité' : `${remaining} restants`}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="overflow-hidden h-4 mb-4 text-xs flex rounded bg-indigo-800">
-                                <div style={{ width: `${percentage}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-1000 ease-out"></div>
-                            </div>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-center text-center">
+                            <h4 className="font-bold text-slate-900 text-sm mb-2">Besoin de plus de puissance ?</h4>
+                            <p className="text-xs text-slate-500 mb-4">Passez au plan supérieur pour débloquer plus de volume et des fonctionnalités exclusives.</p>
+                            <Button size="sm" onClick={() => document.getElementById('pricing')?.scrollIntoView({behavior: 'smooth'})} className="mx-auto">
+                                Voir les offres
+                            </Button>
                         </div>
-                        <div className="flex justify-between text-xs font-medium text-indigo-200">
-                            <span>{usageCount} réponses générées</span>
-                            <span>Plafond : {org.subscription_plan === 'elite' ? '∞' : limit}</span>
-                        </div>
-                    </div>
-                    <div className="bg-white/10 p-6 rounded-xl backdrop-blur-sm border border-white/10 text-center min-w-[200px]">
-                        <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold mb-1">Plan Actuel</div>
-                        <div className="text-2xl font-bold mb-1">
-                            {currentPlanDetails.name}
-                        </div>
-                        {org.subscription_plan === 'free' && (
-                            <Button size="xs" variant="secondary" className="mt-2 w-full" onClick={() => document.getElementById('pricing')?.scrollIntoView({behavior:'smooth'})}>Mettre à niveau</Button>
-                        )}
                     </div>
                 </CardContent>
             </Card>

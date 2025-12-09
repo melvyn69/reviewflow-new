@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { WorkflowRule, Organization, Condition, Action, ActionType, TriggerType } from '../types';
 import { Card, CardContent, Button, Toggle, Badge, useToast, Input, Select, ProLock } from '../components/ui';
+import { RestrictedFeature } from '../components/AccessControl';
 import { Plus, Play, Zap, MoreVertical, Loader2, CheckCircle2, Trash2, Save, X, ArrowRight, Settings, Gift, AlertTriangle, MessageCircle, Star, Share2, Rocket, Plane, Clock, Info, ShieldCheck, Filter } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 
@@ -21,7 +22,9 @@ const WorkflowTemplateCard = ({ title, description, icon: Icon, color, onClick }
     </div>
 );
 
+// ... (WorkflowEditor component stays same)
 const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule | null, onSave: (w: WorkflowRule) => void, onCancel: () => void }) => {
+    // ... logic same ...
     const [name, setName] = useState(workflow?.name || 'Nouveau Workflow');
     const [trigger, setTrigger] = useState<TriggerType>(workflow?.trigger || 'review_created');
     const [conditions, setConditions] = useState<Condition[]>(workflow?.conditions || []);
@@ -450,36 +453,6 @@ export const AutomationPage = () => {
 
   if (loading) return <div className="p-12 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
 
-  // PAYWALL - PRO (GROWTH) PLAN ONLY
-  if (org && (org.subscription_plan === 'free' || org.subscription_plan === 'starter')) {
-      return (
-          <div className="max-w-5xl mx-auto mt-12 animate-in fade-in space-y-8 p-4">
-              <div className="text-center mb-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">Automatisation Intelligente</h1>
-                  <p className="text-slate-500">Pilotez votre e-réputation sans lever le petit doigt.</p>
-              </div>
-              
-              <ProLock 
-                  title="Débloquez l'Automatisation"
-                  description="Créez des règles personnalisées pour répondre automatiquement, alerter votre équipe ou trier vos avis."
-                  onUpgrade={() => navigate('/billing')}
-              >
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-8 filter blur-sm pointer-events-none opacity-50">
-                      {TEMPLATES.map((tpl, i) => (
-                          <div key={i} className="flex flex-col p-4 bg-white border border-slate-200 rounded-xl">
-                              <div className={`h-10 w-10 rounded-lg ${tpl.color} flex items-center justify-center mb-3`}>
-                                  <tpl.icon className="h-5 w-5 text-white" />
-                              </div>
-                              <h4 className="font-bold text-slate-900 text-sm mb-1">{tpl.title}</h4>
-                              <p className="text-xs text-slate-500 leading-relaxed">{tpl.description}</p>
-                          </div>
-                      ))}
-                  </div>
-              </ProLock>
-          </div>
-      );
-  }
-
   if (isEditing) {
       return <WorkflowEditor workflow={editingWorkflow} onSave={handleSaveWorkflow} onCancel={() => { setIsEditing(false); setEditingWorkflow(null); }} />;
   }
@@ -497,104 +470,110 @@ export const AutomationPage = () => {
           </h1>
           <p className="text-slate-500 mt-1">Configurez le pilote automatique pour votre e-réputation.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <Button variant="primary" icon={Plane} onClick={handleRunManually} isLoading={isRunning} className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-200 w-full sm:w-auto justify-center">
-                Actionner l'auto maintenant
-            </Button>
-            <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }} className="w-full sm:w-auto justify-center">Créer Manuellement</Button>
-        </div>
+        
+        {/* Buttons are now safe inside RestrictedFeature, or visible if pro */}
+        <RestrictedFeature feature="automation" org={org}>
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <Button variant="primary" icon={Plane} onClick={handleRunManually} isLoading={isRunning} className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-200 w-full sm:w-auto justify-center">
+                    Actionner l'auto maintenant
+                </Button>
+                <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }} className="w-full sm:w-auto justify-center">Créer Manuellement</Button>
+            </div>
+        </RestrictedFeature>
       </div>
 
-      {/* Templates Gallery */}
-      <h3 className="font-bold text-lg text-slate-900 mt-8 mb-4">Modèles Prêts à l'emploi</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {TEMPLATES.map((tpl, i) => (
-              <WorkflowTemplateCard key={i} {...tpl} onClick={() => applyTemplate(tpl)} />
-          ))}
-      </div>
+      <RestrictedFeature feature="automation" org={org}>
+          {/* Templates Gallery */}
+          <h3 className="font-bold text-lg text-slate-900 mt-8 mb-4">Modèles Prêts à l'emploi</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              {TEMPLATES.map((tpl, i) => (
+                  <WorkflowTemplateCard key={i} {...tpl} onClick={() => applyTemplate(tpl)} />
+              ))}
+          </div>
 
-      {/* Existing Workflows */}
-      <div className="space-y-4">
-          <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2 mt-8 mb-4">
-              <Plane className="h-5 w-5 text-indigo-600" />
-              Vos Scénarios Actifs
-          </h3>
-          
-          {workflows.length === 0 && (
-              <div className="p-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <Plane className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500 mb-2">Aucune règle active.</p>
-                  <p className="text-xs text-slate-400">Cliquez sur un modèle ci-dessus pour commencer.</p>
-              </div>
-          )}
-
-          {workflows.map(wf => (
-              <div key={wf.id} className={`relative overflow-hidden rounded-xl border-2 transition-all duration-300 group ${wf.enabled ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100/50' : 'border-slate-200 bg-slate-50'}`}>
-                  {/* Autopilot Header Strip */}
-                  <div className={`px-4 py-2 flex items-center justify-between text-xs font-bold uppercase tracking-widest ${wf.enabled ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                      <div className="flex items-center gap-2">
-                          <Plane className={`h-4 w-4 ${wf.enabled ? 'animate-pulse' : ''}`} />
-                          {wf.enabled ? 'Pilote Automatique : ACTIF' : 'Pilote Automatique : DÉSACTIVÉ'}
-                      </div>
-                      <div className="flex items-center gap-2">
-                          {wf.enabled && <span className="h-2 w-2 rounded-full bg-green-400 animate-ping" />}
-                      </div>
+          {/* Existing Workflows */}
+          <div className="space-y-4">
+              <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2 mt-8 mb-4">
+                  <Plane className="h-5 w-5 text-indigo-600" />
+                  Vos Scénarios Actifs
+              </h3>
+              
+              {workflows.length === 0 && (
+                  <div className="p-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                      <Plane className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                      <p className="text-slate-500 mb-2">Aucune règle active.</p>
+                      <p className="text-xs text-slate-400">Cliquez sur un modèle ci-dessus pour commencer.</p>
                   </div>
+              )}
 
-                  <div className="p-6">
-                      <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
-                          <div className="flex items-start gap-4 w-full">
-                              <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 ${wf.enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-400'}`}>
-                                  {wf.enabled ? <Zap className="h-7 w-7" /> : <Plane className="h-7 w-7" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                  <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2 flex-wrap">
-                                      {wf.name}
-                                  </h3>
-                                  <div className="flex flex-wrap gap-2 mt-3">
-                                      {/* Conditions */}
-                                      {wf.conditions.map((c, i) => (
-                                          <Badge key={i} variant="neutral" className="text-[10px] bg-slate-100 border-slate-200 text-slate-600 px-2 py-1">
-                                              {c.field === 'rating' ? `${c.value} ★` : c.field}
-                                          </Badge>
-                                      ))}
-                                      <ArrowRight className="h-3 w-3 text-slate-300 self-center hidden sm:block" />
-                                      {/* Actions */}
-                                      {wf.actions.map((a, i) => (
-                                          <Badge key={i} variant="default" className="text-[10px] border-indigo-100 bg-indigo-50 text-indigo-700 px-2 py-1">
-                                              {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type === 'post_social' ? 'Booster Social' : a.type}
-                                          </Badge>
-                                      ))}
+              {workflows.map(wf => (
+                  <div key={wf.id} className={`relative overflow-hidden rounded-xl border-2 transition-all duration-300 group ${wf.enabled ? 'border-indigo-600 bg-white shadow-xl shadow-indigo-100/50' : 'border-slate-200 bg-slate-50'}`}>
+                      {/* Autopilot Header Strip */}
+                      <div className={`px-4 py-2 flex items-center justify-between text-xs font-bold uppercase tracking-widest ${wf.enabled ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                          <div className="flex items-center gap-2">
+                              <Plane className={`h-4 w-4 ${wf.enabled ? 'animate-pulse' : ''}`} />
+                              {wf.enabled ? 'Pilote Automatique : ACTIF' : 'Pilote Automatique : DÉSACTIVÉ'}
+                          </div>
+                          <div className="flex items-center gap-2">
+                              {wf.enabled && <span className="h-2 w-2 rounded-full bg-green-400 animate-ping" />}
+                          </div>
+                      </div>
+
+                      <div className="p-6">
+                          <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
+                              <div className="flex items-start gap-4 w-full">
+                                  <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 ${wf.enabled ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-400'}`}>
+                                      {wf.enabled ? <Zap className="h-7 w-7" /> : <Plane className="h-7 w-7" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                      <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2 flex-wrap">
+                                          {wf.name}
+                                      </h3>
+                                      <div className="flex flex-wrap gap-2 mt-3">
+                                          {/* Conditions */}
+                                          {wf.conditions.map((c, i) => (
+                                              <Badge key={i} variant="neutral" className="text-[10px] bg-slate-100 border-slate-200 text-slate-600 px-2 py-1">
+                                                  {c.field === 'rating' ? `${c.value} ★` : c.field}
+                                              </Badge>
+                                          ))}
+                                          <ArrowRight className="h-3 w-3 text-slate-300 self-center hidden sm:block" />
+                                          {/* Actions */}
+                                          {wf.actions.map((a, i) => (
+                                              <Badge key={i} variant="default" className="text-[10px] border-indigo-100 bg-indigo-50 text-indigo-700 px-2 py-1">
+                                                  {a.type === 'generate_ai_reply' ? 'Brouillon IA' : a.type === 'auto_reply' ? 'Réponse Auto' : a.type === 'post_social' ? 'Booster Social' : a.type}
+                                              </Badge>
+                                          ))}
+                                      </div>
                                   </div>
                               </div>
+
+                              <div className="flex flex-row sm:flex-col items-center sm:items-end gap-3 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0 bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-lg">
+                                  <span className={`text-[10px] font-bold uppercase tracking-wider ${wf.enabled ? 'text-green-600' : 'text-slate-400'}`}>
+                                      {wf.enabled ? 'ON' : 'OFF'}
+                                  </span>
+                                  <Toggle checked={wf.enabled} onChange={() => handleToggle(wf)} />
+                              </div>
                           </div>
 
-                          <div className="flex flex-row sm:flex-col items-center sm:items-end gap-3 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0 bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-lg">
-                              <span className={`text-[10px] font-bold uppercase tracking-wider ${wf.enabled ? 'text-green-600' : 'text-slate-400'}`}>
-                                  {wf.enabled ? 'ON' : 'OFF'}
-                              </span>
-                              <Toggle checked={wf.enabled} onChange={() => handleToggle(wf)} />
+                          <div className="flex flex-wrap justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+                              <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                  onClick={handleRunManually}
+                                  isLoading={isRunning}
+                                  icon={Plane}
+                              >
+                                  Actionner l'auto maintenant
+                              </Button>
+                              <Button size="sm" variant="ghost" icon={Settings} onClick={() => { setEditingWorkflow(wf); setIsEditing(true); }}>Configurer</Button>
+                              <button onClick={() => handleDelete(wf.id)} className="p-2 text-slate-400 hover:text-red-500 rounded transition-colors bg-slate-50 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                           </div>
-                      </div>
-
-                      <div className="flex flex-wrap justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                          <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                              onClick={handleRunManually}
-                              isLoading={isRunning}
-                              icon={Plane}
-                          >
-                              Actionner l'auto maintenant
-                          </Button>
-                          <Button size="sm" variant="ghost" icon={Settings} onClick={() => { setEditingWorkflow(wf); setIsEditing(true); }}>Configurer</Button>
-                          <button onClick={() => handleDelete(wf.id)} className="p-2 text-slate-400 hover:text-red-500 rounded transition-colors bg-slate-50 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                       </div>
                   </div>
-              </div>
-          ))}
-      </div>
+              ))}
+          </div>
+      </RestrictedFeature>
     </div>
   );
 };
