@@ -1,5 +1,4 @@
 
-
 export type SocialPlatform = 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
 
 export interface SocialPost {
@@ -84,7 +83,8 @@ export interface User {
     organizations?: string[]; // For super admin or multi-org
 }
 
-export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'services' | 'health' | 'other';
+// Relaxed type to allow custom sectors from the UI while keeping backward compatibility
+export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'services' | 'health' | 'other' | string;
 
 export interface BrandSettings {
     tone: string;
@@ -231,9 +231,9 @@ export interface Organization {
     cancel_at_period_end?: boolean;
     payment_method_brand?: string;
     payment_method_last4?: string;
+    stripe_customer_id?: string;
     created_at: string;
     locations: Location[];
-    ai_usage_count?: number;
     integrations: {
         google: boolean;
         facebook: boolean;
@@ -250,7 +250,6 @@ export interface Organization {
     saved_replies?: SavedReply[];
     staff_members?: StaffMember[];
     offers?: Offer[];
-    stripe_customer_id?: string;
     workflows?: WorkflowRule[];
     google_access_token?: string;
     google_refresh_token?: string;

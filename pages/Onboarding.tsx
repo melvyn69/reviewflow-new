@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import { useNavigate } from '../components/ui';
 import { api } from '../lib/api';
 import { Button, Input, Select, useToast, Card } from '../components/ui';
-import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut, Link as LinkIcon } from 'lucide-react';
+import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut, Link as LinkIcon, Search } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
+import { BUSINESS_SECTORS } from '../lib/constants';
 
 const GoogleIcon = () => (
     <svg viewBox="0 0 48 48" className="w-5 h-5 mr-2">
@@ -30,13 +31,39 @@ export const OnboardingPage = () => {
     const [tone, setTone] = useState('professionnel');
     const [style, setStyle] = useState('formal');
 
+    // Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+
+    const handleSearch = async () => {
+        if (!searchQuery) return;
+        setSearching(true);
+        try {
+            const results = await api.company.search(searchQuery);
+            setSearchResults(results);
+            if (results.length === 0) toast.info("Aucun résultat trouvé.");
+        } catch (e) {
+            toast.error("Erreur recherche.");
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    const handleSelectCompany = (c: any) => {
+        setCompanyName(c.legal_name || '');
+        setSearchResults([]);
+        setSearchQuery('');
+        toast.success("Informations pré-remplies !");
+    };
+
     const handleNext = async () => {
         setLoading(true);
         try {
             // Save current step data
             if (step === 1) {
-                if (!companyName || !googleUrl) {
-                    toast.error("Veuillez remplir tous les champs obligatoires.");
+                if (!companyName) {
+                    toast.error("Veuillez renseigner le nom de l'établissement.");
                     setLoading(false);
                     return;
                 }
@@ -54,8 +81,8 @@ export const OnboardingPage = () => {
                 if (currentOrg) {
                     await api.locations.create({
                         name: companyName,
-                        google_review_url: googleUrl,
-                        city: "Siège", // Default city
+                        google_review_url: googleUrl, // Optional
+                        city: "Siège", 
                         country: "France"
                     });
                 }
@@ -132,17 +159,57 @@ export const OnboardingPage = () => {
                     {/* STEP 1: COMPANY */}
                     {step === 1 && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-8">
+                            
+                            {/* Company Search Block */}
+                            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                                <label className="block text-xs font-bold text-indigo-900 mb-2 flex items-center gap-1">
+                                    <Search className="h-3 w-3" /> Trouver mon entreprise (France)
+                                </label>
+                                <div className="flex gap-2">
+                                    <Input 
+                                        placeholder="Nom ou SIRET..." 
+                                        value={searchQuery}
+                                        onChange={e => setSearchQuery(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                        className="bg-white h-9 text-sm"
+                                    />
+                                    <Button size="sm" onClick={handleSearch} isLoading={searching}>Chercher</Button>
+                                </div>
+                                {searchResults.length > 0 && (
+                                    <div className="mt-2 bg-white rounded border border-indigo-100 max-h-40 overflow-y-auto shadow-sm">
+                                        {searchResults.map((r, i) => (
+                                            <div 
+                                                key={i} 
+                                                className="p-3 border-b border-slate-50 last:border-0 hover:bg-indigo-50 cursor-pointer text-xs"
+                                                onClick={() => handleSelectCompany(r)}
+                                            >
+                                                <div className="font-bold text-slate-800">{r.legal_name}</div>
+                                                <div className="text-slate-500">{r.address} - {r.city}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement <span className="text-red-500">*</span></label>
                                 <Input 
                                     placeholder="Ex: Le Petit Bistro" 
                                     value={companyName}
                                     onChange={e => setCompanyName(e.target.value)}
-                                    autoFocus
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Lien Google Avis (URL) <span className="text-red-500">*</span></label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Secteur d'activité</label>
+                                <Select value={industry} onChange={e => setIndustry(e.target.value)}>
+                                    {BUSINESS_SECTORS.map(sec => (
+                                        <option key={sec.value} value={sec.value}>{sec.label}</option>
+                                    ))}
+                                </Select>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Lien Google Avis (Optionnel)</label>
                                 <div className="relative">
                                     <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                     <Input 
@@ -152,17 +219,6 @@ export const OnboardingPage = () => {
                                         onChange={e => setGoogleUrl(e.target.value)}
                                     />
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-1">Lien direct vers votre page d'avis Google.</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Secteur d'activité</label>
-                                <Select value={industry} onChange={e => setIndustry(e.target.value)}>
-                                    <option value="restaurant">Restauration</option>
-                                    <option value="hotel">Hôtellerie</option>
-                                    <option value="retail">Commerce</option>
-                                    <option value="services">Services</option>
-                                    <option value="health">Santé</option>
-                                </Select>
                             </div>
                         </div>
                     )}
@@ -176,7 +232,7 @@ export const OnboardingPage = () => {
                                         <GoogleIcon />
                                     </div>
                                     <div>
-                                        <div className="font-bold text-slate-900 text-sm">Google Business (Optionnel)</div>
+                                        <div className="font-bold text-slate-900 text-sm">Google Business (Recommandé)</div>
                                         <div className="text-xs text-slate-500">{googleConnected ? 'Connecté avec succès' : 'Sync auto des réponses'}</div>
                                     </div>
                                 </div>
@@ -233,7 +289,7 @@ export const OnboardingPage = () => {
                         ) : (
                             <div></div>
                         )}
-                        <Button onClick={handleNext} isLoading={loading} disabled={step === 1 && (!companyName || !googleUrl)}>
+                        <Button onClick={handleNext} isLoading={loading} disabled={step === 1 && !companyName}>
                             {step === 3 ? t('onboarding.finish') : t('onboarding.next')} <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     </div>

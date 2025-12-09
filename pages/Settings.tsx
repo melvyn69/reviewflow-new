@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig, TwilioSettings } from '../types';
+import { BUSINESS_SECTORS } from '../lib/constants';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation, ProLock } from '../components/ui';
 import { 
     Building2, 
@@ -86,9 +87,8 @@ const IntegrationCard = ({ icon: Icon, title, description, connected, onConnect,
     </div>
 );
 
-// ... (LocationModal, GoogleMappingModal, InviteModal remain unchanged) ...
+// --- LOCATION MODAL ---
 const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Location | null, onClose: () => void, onSave: (data: any) => Promise<void>, onUpload?: (file: File, id: string) => Promise<void> }) => {
-    // ... [existing implementation]
     const [formData, setFormData] = useState({
         name: location?.name || '',
         address: location?.address || '',
@@ -104,6 +104,12 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
         booking_url: location?.booking_url || '',
         cover_image: location?.cover_image || ''
     });
+    
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [tab, setTab] = useState<'info' | 'profile'>('info');
@@ -126,6 +132,34 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
             cover_image: location?.cover_image || ''
         });
     }, [location]);
+
+    const handleSearch = async () => {
+        if (!searchQuery) return;
+        setSearching(true);
+        try {
+            const results = await api.company.search(searchQuery);
+            setSearchResults(results);
+            if (results.length === 0) toast.info("Aucun établissement trouvé (API Sirene).");
+        } catch (e) {
+            toast.error("Erreur API de recherche.");
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    const handleSelectCompany = (c: any) => {
+        setFormData(prev => ({
+            ...prev,
+            name: c.legal_name || prev.name,
+            address: c.address || prev.address,
+            city: c.city || prev.city,
+            country: 'France',
+            // Note: Sirene does not provide phone or website usually
+        }));
+        setSearchResults([]);
+        setSearchQuery('');
+        toast.success("Informations pré-remplies !");
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -172,6 +206,39 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                     <form id="loc-form" onSubmit={handleSubmit} className="space-y-4" noValidate>
                         {tab === 'info' && (
                             <>
+                                {/* Search Block */}
+                                {!location && (
+                                    <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-4">
+                                        <label className="block text-xs font-bold text-indigo-900 mb-1 flex items-center gap-1">
+                                            <Search className="h-3 w-3" /> Pré-remplir via Société.com (API)
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <Input 
+                                                placeholder="SIRET ou Nom..." 
+                                                value={searchQuery}
+                                                onChange={e => setSearchQuery(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleSearch())}
+                                                className="bg-white h-8 text-xs"
+                                            />
+                                            <Button type="button" size="xs" onClick={handleSearch} isLoading={searching}>Trouver</Button>
+                                        </div>
+                                        {searchResults.length > 0 && (
+                                            <div className="mt-2 bg-white rounded border border-indigo-100 max-h-40 overflow-y-auto">
+                                                {searchResults.map((r, i) => (
+                                                    <div 
+                                                        key={i} 
+                                                        className="p-2 border-b border-slate-50 last:border-0 hover:bg-indigo-50 cursor-pointer text-xs"
+                                                        onClick={() => handleSelectCompany(r)}
+                                                    >
+                                                        <div className="font-bold text-slate-800">{r.legal_name}</div>
+                                                        <div className="text-slate-500">{r.address} - {r.city}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'établissement <span className="text-red-500">*</span></label>
                                     <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ex: Restaurant Le Gourmet" />
@@ -531,6 +598,7 @@ export const SettingsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [customIndustry, setCustomIndustry] = useState('');
 
   // Form states (Profile)
   const [userName, setUserName] = useState('');
@@ -617,7 +685,16 @@ export const SettingsPage = () => {
             setOrgLegalName(orgData.legal_name || '');
             setOrgSiret(orgData.siret || '');
             setOrgAddress(orgData.address || '');
-            setIndustry(orgData.industry || 'other');
+            
+            // Check if industry is in our list or custom
+            const isStandard = BUSINESS_SECTORS.some(s => s.value === orgData.industry);
+            if (isStandard) {
+                setIndustry(orgData.industry || 'other');
+            } else {
+                setIndustry('other');
+                setCustomIndustry(orgData.industry || '');
+            }
+
             if (orgData.brand) {
                 setBrandTone(orgData.brand.tone || '');
                 setBrandDesc(orgData.brand.description || '');
@@ -701,22 +778,23 @@ export const SettingsPage = () => {
   };
 
   const handleSelectCompany = (company: any) => {
-      setOrgLegalName(company.legal_name);
-      setOrgSiret(company.siret);
-      setOrgAddress(company.address);
-      if(!orgCommercialName) setOrgCommercialName(company.legal_name); 
+      setOrgLegalName(company.legal_name || '');
+      setOrgSiret(company.siret || '');
+      setOrgAddress(`${company.address} ${company.zip || ''} ${company.city || ''}`);
+      if(!orgCommercialName) setOrgCommercialName(company.legal_name || ''); 
       setSearchResults([]);
       setSearchQuery('');
   };
 
   const handleSaveOrg = async () => {
       if (!org) return;
+      const finalIndustry = industry === 'other' && customIndustry ? customIndustry : industry;
       await api.organization.update({ 
           name: orgCommercialName, 
           legal_name: orgLegalName, 
           siret: orgSiret, 
           address: orgAddress,
-          industry: industry as any 
+          industry: finalIndustry as any 
       });
       toast.success("Informations entreprise mises à jour");
   };
@@ -1068,29 +1146,31 @@ export const SettingsPage = () => {
 
             {activeTab === 'organization' && (
                 <div className="max-w-xl space-y-6">
-                    {/* ... Same content as original ... */}
+                    {/* Company Search with Real API */}
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4">
                         <h4 className="font-bold text-sm mb-2 flex items-center gap-2">
-                            <Search className="h-4 w-4" /> Recherche Auto (SIRET)
+                            <Search className="h-4 w-4" /> Recherche Société (SIRET/Nom)
                         </h4>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 relative">
                             <Input 
-                                placeholder="Nom de l'entreprise..." 
+                                placeholder="Entrez le nom ou SIRET..." 
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleSearchCompany()}
                             />
                             <Button onClick={handleSearchCompany} isLoading={searching}>Chercher</Button>
                         </div>
                         {searchResults.length > 0 && (
-                            <div className="mt-2 space-y-2">
+                            <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 max-h-60 overflow-y-auto">
                                 {searchResults.map((res, i) => (
-                                    <div key={i} className="p-2 bg-white rounded border border-slate-200 cursor-pointer hover:bg-slate-50" onClick={() => handleSelectCompany(res)}>
+                                    <div key={i} className="p-3 bg-white rounded border border-slate-200 cursor-pointer hover:bg-indigo-50 transition-colors" onClick={() => handleSelectCompany(res)}>
                                         <div className="font-bold text-sm">{res.legal_name}</div>
-                                        <div className="text-xs text-slate-500">{res.address} - {res.siret}</div>
+                                        <div className="text-xs text-slate-500">{res.address} - SIRET: {res.siret}</div>
                                     </div>
                                 ))}
                             </div>
                         )}
+                        <p className="text-xs text-slate-400 mt-2">Source: API Recherche Entreprises (Gouv.fr)</p>
                     </div>
 
                     <div className="space-y-4">
@@ -1108,15 +1188,26 @@ export const SettingsPage = () => {
                                 <Input value={orgSiret} onChange={e => setOrgSiret(e.target.value)} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Industrie</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Secteur d'activité</label>
                                 <Select value={industry} onChange={e => setIndustry(e.target.value as any)}>
-                                    <option value="restaurant">Restauration</option>
-                                    <option value="hotel">Hôtellerie</option>
-                                    <option value="retail">Commerce</option>
-                                    <option value="services">Services</option>
+                                    {BUSINESS_SECTORS.map(sec => (
+                                        <option key={sec.value} value={sec.value}>{sec.label}</option>
+                                    ))}
                                 </Select>
                             </div>
                         </div>
+                        
+                        {industry === 'other' && (
+                            <div className="animate-in fade-in slide-in-from-top-2">
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Précisez votre secteur</label>
+                                <Input 
+                                    value={customIndustry} 
+                                    onChange={e => setCustomIndustry(e.target.value)} 
+                                    placeholder="Ex: Agence immobilière, Garage..."
+                                />
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Adresse Siège</label>
                             <Input value={orgAddress} onChange={e => setOrgAddress(e.target.value)} />
