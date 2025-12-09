@@ -43,7 +43,8 @@ const getEffectiveUser = async (): Promise<User | null> => {
 const isGodEmail = (email?: string) => {
     if (!email) return false;
     const normalized = email.toLowerCase().trim();
-    return normalized === 'god@reviewflow.com' || normalized === 'melvynbenichou@gmail.com';
+    // Liste des emails administrateurs "God Mode"
+    return ['god@reviewflow.com', 'melvynbenichou@gmail.com'].includes(normalized);
 };
 
 export const api = {
@@ -70,23 +71,28 @@ export const api = {
             const normalizedEmail = email.toLowerCase().trim();
             
             // GOD MODE LOGIN (Explicit Mock - Case Insensitive)
-            if ((normalizedEmail === 'god@reviewflow.com' && pass === 'godmode') || 
-                (normalizedEmail === 'melvynbenichou@gmail.com' && pass === 'password')) {
-                
+            // Accepte 'password' OU 'demo' pour votre compte
+            if (
+                (normalizedEmail === 'god@reviewflow.com' && pass === 'godmode') || 
+                (normalizedEmail === 'melvynbenichou@gmail.com' && (pass === 'password' || pass === 'demo'))
+            ) {
                 const godUser: User = {
                     ...INITIAL_USERS[0],
                     id: 'god-user-id',
                     name: 'Melvyn Benichou',
                     email: normalizedEmail,
                     role: 'super_admin',
-                    avatar: 'https://ui-avatars.com/api/?name=Melvyn+Benichou&background=0D9488&color=fff'
+                    avatar: 'https://ui-avatars.com/api/?name=Melvyn+Benichou&background=0D9488&color=fff',
+                    organization_id: 'demo-org-id' 
                 };
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true');
                 return godUser;
             }
 
-            if (normalizedEmail === 'demo@reviewflow.com' || normalizedEmail === 'admin@admin.com') {
+            // Standard Demo Login
+            if ((normalizedEmail === 'demo@reviewflow.com' && pass === 'demo') || 
+                (normalizedEmail === 'admin@admin.com' && pass === 'admin')) {
                 localStorage.setItem('user', JSON.stringify(INITIAL_USERS[0]));
                 localStorage.setItem('is_demo_mode', 'true');
                 return INITIAL_USERS[0];
@@ -98,7 +104,7 @@ export const api = {
                 if (error) {
                     // Friendly error message mapping
                     if (error.message === 'Invalid login credentials') {
-                        throw new Error("Email ou mot de passe incorrect (Supabase).");
+                        throw new Error("Email ou mot de passe incorrect.");
                     }
                     throw error;
                 }
@@ -114,7 +120,7 @@ export const api = {
                 } as User;
             }
 
-            throw new Error("Identifiants incorrects. Utilisez demo@reviewflow.com / demo pour tester.");
+            throw new Error("Identifiants incorrects. Pour le test, utilisez demo@reviewflow.com / demo");
         },
         logout: async () => {
             localStorage.removeItem('user');
@@ -193,9 +199,10 @@ export const api = {
         removeStaffMember: async (id: string) => { await delay(500); },
         generateApiKey: async (name: string) => { 
             const user = await getEffectiveUser();
-            const plan = isGodEmail(user?.email) ? 'elite' : INITIAL_ORG.subscription_plan;
-            // Fake check using forced plan
-            if (plan !== 'elite') throw new Error("Accès API réservé au plan Elite.");
+            // Allow if elite plan OR if user is god (double check)
+            const isElite = INITIAL_ORG.subscription_plan === 'elite' || (user && isGodEmail(user.email));
+            
+            if (!isElite) throw new Error("Accès API réservé au plan Elite.");
             await delay(500); 
         },
         revokeApiKey: async (id: string) => { await delay(500); },
