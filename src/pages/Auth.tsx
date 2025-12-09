@@ -324,30 +324,28 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                     {isLogin ? 'S\'inscrire' : 'Se connecter'}
                 </button>
                 </p>
-                
-                {/* Developer Mode Shortcuts */}
-                <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col gap-3">
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Accès Rapide (Dev)</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button 
-                            onClick={handleDemoLogin}
-                            className="flex items-center justify-center gap-2 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 transition-all text-xs font-bold shadow-sm"
-                        >
-                            <HelpCircle className="h-4 w-4 text-blue-500" />
-                            Mode Démo
-                        </button>
-                        <button 
-                            onClick={handleGodModeLogin}
-                            className="flex items-center justify-center gap-2 p-3 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 hover:text-red-900 transition-all text-xs font-bold shadow-sm"
-                        >
-                            <ShieldAlert className="h-4 w-4 text-red-600" />
-                            God Mode
-                        </button>
-                    </div>
-                </div>
             </div>
           )}
         </div>
+      </div>
+
+      {/* FIXED DEV SHORTCUTS - ALWAYS VISIBLE */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 p-2 bg-white/50 backdrop-blur rounded-xl border border-slate-200 shadow-xl">
+          <p className="text-[10px] uppercase font-bold text-slate-500 text-center tracking-wider">Dev Tools</p>
+          <button 
+              onClick={handleGodModeLogin}
+              className="flex items-center gap-2 p-3 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold shadow-md hover:scale-105 active:scale-95"
+          >
+              <ShieldAlert className="h-4 w-4" />
+              God Mode
+          </button>
+          <button 
+              onClick={handleDemoLogin}
+              className="flex items-center gap-2 p-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all text-xs font-bold shadow-sm"
+          >
+              <HelpCircle className="h-4 w-4 text-blue-500" />
+              Mode Démo
+          </button>
       </div>
     </div>
   );
