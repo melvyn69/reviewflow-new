@@ -87,6 +87,7 @@ export interface User {
 export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'services' | 'health' | 'other' | string;
 
 export interface BrandSettings {
+    enabled: boolean;
     tone: string;
     description: string;
     knowledge_base: string;
@@ -97,6 +98,9 @@ export interface BrandSettings {
     primary_color?: string;
     secondary_color?: string;
     logo_url?: string;
+    // AI Identity Advanced
+    response_examples?: string;
+    forbidden_words?: string[];
 }
 
 export interface NotificationSettings {
@@ -225,6 +229,7 @@ export interface Organization {
     siret?: string;
     address?: string;
     industry?: IndustryType;
+    ai_usage_count?: number;
     subscription_plan: 'free' | 'starter' | 'pro' | 'elite';
     subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing' | 'unpaid';
     current_period_end?: string;

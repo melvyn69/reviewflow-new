@@ -7,7 +7,7 @@ import {
 import { 
     User, Organization, Review, AnalyticsSummary, WorkflowRule, 
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
-    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent
+    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings
 } from '../types';
 
 // Mock function for demo mode check
@@ -123,9 +123,19 @@ export const api = {
             await delay(1500);
             return "Merci pour votre message ! Nous sommes ravis que vous ayez apprécié votre expérience. À très bientôt !";
         },
-        previewBrandVoice: async () => {
-            await delay(1000);
-            return "Ceci est un exemple de réponse générée avec votre nouvelle identité de marque.";
+        previewBrandVoice: async (simulationType: string, inputText: string, settings: BrandSettings) => {
+            await delay(1500);
+            // Simulation logic depending on settings to show dynamic preview in mock mode
+            const isCasual = settings.language_style === 'casual';
+            const tone = settings.tone || 'standard';
+            
+            let prefix = isCasual ? "Salut ! " : "Bonjour, ";
+            let body = "Merci pour ce retour.";
+            
+            if (tone === 'enthousiaste') body = "C'est génial de lire ça ! Merci infiniment !";
+            if (tone === 'empathique') body = "Nous comprenons tout à fait votre ressenti et vous remercions de partager cela.";
+            
+            return `${prefix}${body} (Réponse générée avec le ton '${tone}' et le style '${settings.language_style}')`;
         },
         generateSocialPost: async (review: Review, platform: string) => {
             await delay(1200);

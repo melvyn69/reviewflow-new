@@ -40,7 +40,8 @@ import {
     Film,
     ChevronRight,
     ChevronLeft,
-    Rocket
+    Rocket,
+    Settings
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useLocation, useNavigate } from '../components/ui';
@@ -177,7 +178,7 @@ export const SocialPage = () => {
     const [org, setOrg] = useState<Organization | null>(null);
     const [locations, setLocations] = useState<Location[]>([]);
     const [selectedLocationId, setSelectedLocationId] = useState<string>('all');
-    const [activeTab, setActiveTab] = useState<'create' | 'calendar' | 'accounts'>('create');
+    const [activeTab, setActiveTab] = useState<'create' | 'calendar'>('create');
     const [showInfoBanner, setShowInfoBanner] = useState(true);
     
     // Data Lists
@@ -369,7 +370,7 @@ export const SocialPage = () => {
             )}
 
             {/* Tabs */}
-            <div className="flex border-b border-slate-200">
+            <div className="flex border-b border-slate-200 items-center">
                 <button 
                     onClick={() => setActiveTab('create')} 
                     className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'create' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -382,12 +383,11 @@ export const SocialPage = () => {
                 >
                     Planning
                 </button>
-                <button 
-                    onClick={() => setActiveTab('accounts')} 
-                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'accounts' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-                >
-                    Comptes
-                </button>
+                <div className="ml-auto pr-4">
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/settings?tab=integrations')} className="text-slate-500 hover:text-indigo-600">
+                        <Settings className="h-4 w-4 mr-2" /> Gérer les comptes
+                    </Button>
+                </div>
             </div>
 
             {/* --- WIZARD: CREATE --- */}
@@ -589,26 +589,6 @@ export const SocialPage = () => {
                             </div>
                         )}
                     </div>
-                </div>
-            )}
-
-            {/* --- TAB: ACCOUNTS --- */}
-            {activeTab === 'accounts' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                        <CardHeader><CardTitle>Instagram</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-slate-500 mb-4">Connectez votre compte Instagram Business.</p>
-                            <Button variant="outline" className="w-full" onClick={() => api.social.connectAccount('instagram')}>Connecter</Button>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader><CardTitle>Facebook</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-slate-500 mb-4">Connectez votre Page Facebook.</p>
-                            <Button variant="outline" className="w-full" onClick={() => api.social.connectAccount('facebook')}>Connecter</Button>
-                        </CardContent>
-                    </Card>
                 </div>
             )}
         </div>

@@ -41,10 +41,12 @@ Deno.serve(async (req: Request) => {
     // --- ENFORCE PLAN LIMITS ---
     const orgId = userProfile.organization_id;
     
-    // Fetch Org Plan
-    const { data: org } = await supabase.from('organizations').select('subscription_plan').eq('id', orgId).single();
+    // Fetch Org Data (Plan + Brand Identity)
+    const { data: org } = await supabase.from('organizations').select('subscription_plan, brand, name, industry').eq('id', orgId).single();
+    
     const currentPlan = org?.subscription_plan || 'free';
     const limit = PLAN_LIMITS[currentPlan] || 10;
+    const brand = org?.brand || {};
 
     // Fetch Usage for current month
     const startOfMonth = new Date();
@@ -71,14 +73,36 @@ Deno.serve(async (req: Request) => {
     const modelName = 'gemini-2.5-flash';
     let prompt = ""
 
+    // --- HELPER: CONSTRUCT IDENTITY INSTRUCTIONS ---
+    // If brand.enabled is true, use stored settings. Otherwise fallback to generic or provided local override.
+    const buildIdentityInstruction = () => {
+        if (!brand.enabled) return ""; // Use default generic persona if disabled
+
+        return `
+        RESPECTE IMPÉRATIVEMENT L'IDENTITÉ DE MARQUE SUIVANTE :
+        - Ton : ${brand.tone || 'Professionnel'}
+        - Style de langage : ${brand.language_style === 'casual' ? 'Tutoiement, décontracté, emojis autorisés' : 'Vouvoiement, formel, poli'}
+        - Contexte établissement : ${brand.knowledge_base || org?.industry || ''}
+        ${brand.forbidden_words?.length ? `- MOTS INTERDITS : ${brand.forbidden_words.join(', ')}` : ''}
+        ${brand.response_examples ? `- EXEMPLES DE STYLE À IMITER :\n${brand.response_examples}` : ''}
+        
+        Si les instructions de l'identité de marque entrent en conflit avec des consignes génériques, l'identité de marque GAGNE.
+        `;
+    };
+
     // 3. Construct Prompt based on Task
     if (task === 'generate_reply') {
-        const { review, tone, length, businessName, city, category } = context;
+        const { review, tone: overrideTone, length, businessName, city, category } = context;
         const isPositive = review.rating >= 4;
+        
+        const identityBlock = buildIdentityInstruction();
+        const toneToUse = brand.enabled ? brand.tone : (overrideTone || 'Professionnel mais chaleureux');
 
         prompt = `
-            Rôle : Tu es le gérant de "${businessName || 'notre établissement'}", situé à ${city || 'votre ville'} (${category || 'Commerce'}).
+            Rôle : Tu es le gérant de "${businessName || org?.name || 'notre établissement'}", situé à ${city || 'votre ville'} (${category || org?.industry || 'Commerce'}).
             
+            ${identityBlock}
+
             Tâche : Répondre à cet avis client.
             
             DÉTAILS DE L'AVIS :
@@ -86,11 +110,11 @@ Deno.serve(async (req: Request) => {
             - Auteur : ${review.author_name}
             - Commentaire : "${review.body}"
             
-            OBJECTIFS & STYLE (CRUCIAL) :
+            OBJECTIFS & STYLE :
             1. **SEO Local** : Mentionne naturellement le nom de l'établissement ("${businessName}") et la ville ("${city}") ou le type de service dans la réponse.
-            2. **Ton** : ${tone || 'Professionnel mais chaleureux'}. Utilise un français courant, naturel.
+            2. **Ton** : ${toneToUse}. Utilise un français courant, naturel.
             3. **Longueur** : ${length === 'short' ? 'Très court (1-2 phrases)' : 'Court (2-3 phrases max)'}.
-            4. **Format** : Pas de guillemets, pas de "Bonjour [Nom]" au début.
+            4. **Format** : Pas de guillemets, pas de "Bonjour [Nom]" au début si c'est un chat, mais ok pour un avis Google.
 
             LOGIQUE DE RÉPONSE :
             ${isPositive ? 
@@ -99,11 +123,37 @@ Deno.serve(async (req: Request) => {
             }
         `;
     } 
+    else if (task === 'test_brand_voice') {
+        // New Task for the "Test" button in Settings
+        const { simulationType, inputText, simulationSettings } = context;
+        // simulationSettings allows testing "unsaved" settings from the UI
+        const activeBrand = simulationSettings || brand;
+        
+        prompt = `
+            Tu es le community manager de "${org?.name || 'Notre Entreprise'}".
+            
+            Applique STRICTEMENT cette identité de marque :
+            - Ton : ${activeBrand.tone}
+            - Style : ${activeBrand.language_style === 'casual' ? 'Tutoiement' : 'Vouvoiement'}
+            - Mots interdits : ${activeBrand.forbidden_words?.join(', ') || 'Aucun'}
+            - Contexte : ${activeBrand.knowledge_base || ''}
+            
+            Tâche : Réponds à ce message client (${simulationType}).
+            Message client : "${inputText}"
+            
+            Réponse :
+        `;
+    }
     else if (task === 'social_post') {
         const { review, platform } = context;
+        const identityBlock = buildIdentityInstruction();
+
         prompt = `
             Act as a world-class Social Media Manager.
             Platform: ${platform}.
+            
+            ${identityBlock}
+
             Context: We received a glowing 5-star review from a customer.
             Task: Write a captivating, platform-native caption.
             Review: "${review.body}" by ${review.author_name}.
@@ -119,11 +169,13 @@ Deno.serve(async (req: Request) => {
     }
     else if (task === 'generate_sms') {
         const { offerTitle, offerDesc, offerCode } = context;
-        prompt = `Expert Marketing. Rédiger SMS (max 160 chars) pour offre "${offerTitle}". Code: ${offerCode}. Français, urgent, emoji.`;
+        const identityBlock = buildIdentityInstruction();
+        prompt = `Expert Marketing. Rédiger SMS (max 160 chars) pour offre "${offerTitle}". Code: ${offerCode}. Français, urgent, emoji. ${identityBlock}`;
     }
     else if (task === 'generate_email_campaign') {
         const { offerTitle, offerDesc, segment } = context;
-        prompt = `Copywriter Email. Rédiger objet et corps HTML pour offre "${offerTitle}". Cible: ${segment}. JSON strict: {subject, body}.`;
+        const identityBlock = buildIdentityInstruction();
+        prompt = `Copywriter Email. Rédiger objet et corps HTML pour offre "${offerTitle}". Cible: ${segment}. JSON strict: {subject, body}. ${identityBlock}`;
     }
     else {
         throw new Error('Unknown task')
@@ -141,16 +193,18 @@ Deno.serve(async (req: Request) => {
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
     }
 
-    // 5. Log Usage to Supabase
-    try {
-        await supabase.from('ai_usage').insert({
-            organization_id: userProfile.organization_id,
-            model: modelName,
-            tokens_estimated: 1, 
-            created_at: new Date().toISOString()
-        });
-    } catch (dbErr) {
-        console.error("Failed to log AI usage:", dbErr);
+    // 5. Log Usage to Supabase (Skip for tests to be nice?)
+    if (task !== 'test_brand_voice') {
+        try {
+            await supabase.from('ai_usage').insert({
+                organization_id: userProfile.organization_id,
+                model: modelName,
+                tokens_estimated: 1, 
+                created_at: new Date().toISOString()
+            });
+        } catch (dbErr) {
+            console.error("Failed to log AI usage:", dbErr);
+        }
     }
 
     return new Response(

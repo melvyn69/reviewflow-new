@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { useNavigate } from '../components/ui';
 import { api } from '../lib/api';
@@ -90,6 +91,7 @@ export const OnboardingPage = () => {
             } else if (step === 3) {
                 await api.organization.update({ 
                     brand: { 
+                        enabled: true,
                         tone, 
                         language_style: style as any, 
                         description: '', 
