@@ -109,6 +109,7 @@ export interface NotificationSettings {
     weekly_digest: boolean;
     digest_day: string;
     marketing_emails: boolean;
+    alert_email?: string;
 }
 
 export interface TwilioSettings {

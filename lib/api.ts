@@ -9,6 +9,7 @@ import {
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
     CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings
 } from '../types';
+import { supabase } from './supabase';
 
 // Mock function for demo mode check
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
@@ -200,13 +201,30 @@ export const api = {
     },
     team: {
         list: async (): Promise<User[]> => {
-            await delay(300);
-            // Returns USERS (colleagues), mocked with INITIAL_USERS for now.
-            // Reports page uses this for distribution.
-            // Staff members (for ratings) are in organization.staff_members.
-            return INITIAL_USERS;
+            if (isDemoMode()) {
+                await delay(300);
+                return INITIAL_USERS;
+            }
+            // Fetch real users if not demo
+            if (supabase) {
+                const { data } = await supabase.from('users').select('*');
+                return data as User[] || [];
+            }
+            return [];
         },
-        invite: async (email: string, role: string) => { await delay(800); }
+        invite: async (email: string, role: string, firstName: string, lastName: string) => { 
+            if (isDemoMode()) {
+                await delay(800);
+                return { success: true };
+            }
+            if (supabase) {
+                const { data, error } = await supabase.functions.invoke('invite_user', {
+                    body: { email, role, firstName, lastName }
+                });
+                if (error) throw error;
+                return data;
+            }
+        }
     },
     reports: {
         trigger: async (id: string) => { await delay(1000); }

@@ -17,7 +17,8 @@ serve(async (req: Request) => {
   try {
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) {
-        throw new Error("RESEND_API_KEY is missing");
+        console.error("RESEND_API_KEY missing in Supabase Secrets.");
+        throw new Error("Server Configuration Error: Missing Email Key.");
     }
 
     const resend = new Resend(RESEND_API_KEY);
@@ -63,9 +64,11 @@ serve(async (req: Request) => {
     const { data, error } = await resend.batch.send(emailBatch);
 
     if (error) {
-        console.error("Resend Batch Error:", error);
-        throw error;
+        console.error("Resend Batch Error:", JSON.stringify(error));
+        throw new Error(`Email Service Error: ${error.message}`);
     }
+
+    console.log(`Successfully sent ${emailBatch.length} emails via Resend.`);
 
     return new Response(JSON.stringify({ success: true, count: emailBatch.length, data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

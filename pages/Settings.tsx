@@ -37,7 +37,9 @@ import {
     AlertTriangle,
     Eye,
     EyeOff,
-    AlertOctagon
+    AlertOctagon,
+    FileText,
+    Users
 } from 'lucide-react';
 import { useNavigate, useLocation } from '../components/ui';
 
@@ -488,6 +490,14 @@ export const SettingsPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // Invite Team State
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteFirstName, setInviteFirstName] = useState('');
+  const [inviteLastName, setInviteLastName] = useState('');
+  const [inviteRole, setInviteRole] = useState('editor');
+  const [inviting, setInviting] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<User[]>([]);
+
   // Modals state
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
@@ -502,6 +512,12 @@ export const SettingsPage = () => {
     loadData();
   }, [location.search]);
 
+  useEffect(() => {
+      if (activeTab === 'team') {
+          loadTeam();
+      }
+  }, [activeTab]);
+
   const loadData = async () => {
       setLoading(true);
       try {
@@ -515,6 +531,15 @@ export const SettingsPage = () => {
           console.error(e);
       } finally {
           setLoading(false);
+      }
+  };
+
+  const loadTeam = async () => {
+      try {
+          const members = await api.team.list();
+          setTeamMembers(members);
+      } catch (e) {
+          console.error("Failed to load team", e);
       }
   };
 
@@ -561,6 +586,23 @@ export const SettingsPage = () => {
           loadData();
       } catch(e) {
           toast.error("Erreur connexion");
+      }
+  };
+
+  const handleInviteUser = async () => {
+      if (!inviteEmail || !inviteFirstName) return toast.error("Email et Prénom requis");
+      setInviting(true);
+      try {
+          await api.team.invite(inviteEmail, inviteRole, inviteFirstName, inviteLastName);
+          toast.success(`Invitation envoyée à ${inviteEmail}`);
+          setInviteEmail('');
+          setInviteFirstName('');
+          setInviteLastName('');
+          loadTeam(); // Refresh list to maybe show pending state if backend supported it
+      } catch (e: any) {
+          toast.error("Erreur lors de l'invitation: " + e.message);
+      } finally {
+          setInviting(false);
       }
   };
 
@@ -613,6 +655,7 @@ export const SettingsPage = () => {
                 { id: 'integrations', label: 'Intégrations', icon: LinkIcon },
                 { id: 'ai-identity', label: 'Identité IA', icon: Sparkles },
                 { id: 'locations', label: 'Établissements', icon: Store },
+                { id: 'team', label: 'Équipe', icon: Users },
                 { id: 'profile', label: 'Mon Profil', icon: UserIcon },
                 { id: 'organization', label: 'Entreprise', icon: Building2 },
                 { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -810,6 +853,87 @@ export const SettingsPage = () => {
                 </div>
             )}
 
+            {/* --- TAB: TEAM (NEW) --- */}
+            {activeTab === 'team' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
+                    {/* List of members */}
+                    <div className="md:col-span-2 space-y-6">
+                        <Card>
+                            <CardHeader><CardTitle>Collaborateurs Actifs</CardTitle></CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    {teamMembers.length === 0 ? (
+                                        <p className="text-sm text-slate-500 italic">Aucun autre membre dans l'équipe.</p>
+                                    ) : (
+                                        teamMembers.map(member => (
+                                            <div key={member.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-xs">
+                                                        {member.name ? member.name.charAt(0) : 'U'}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-slate-900 text-sm">{member.name}</div>
+                                                        <div className="text-xs text-slate-500">{member.email}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <Badge variant="neutral" className="uppercase">{member.role}</Badge>
+                                                    {/* In a real app, delete action here */}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Invite Form */}
+                    <div className="space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4" /> Inviter un membre
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Prénom</label>
+                                    <Input value={inviteFirstName} onChange={e => setInviteFirstName(e.target.value)} placeholder="Ex: Thomas" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom</label>
+                                    <Input value={inviteLastName} onChange={e => setInviteLastName(e.target.value)} placeholder="Ex: Dupont" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Email professionnel</label>
+                                    <Input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="thomas@entreprise.com" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Rôle</label>
+                                    <Select value={inviteRole} onChange={e => setInviteRole(e.target.value)}>
+                                        <option value="admin">Administrateur</option>
+                                        <option value="editor">Éditeur</option>
+                                        <option value="viewer">Lecteur</option>
+                                    </Select>
+                                </div>
+                                <Button 
+                                    onClick={handleInviteUser} 
+                                    isLoading={inviting} 
+                                    disabled={!inviteEmail || !inviteFirstName} 
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                                >
+                                    Envoyer l'invitation
+                                </Button>
+                                <p className="text-xs text-slate-400 mt-2 text-center">
+                                    L'utilisateur recevra un email avec un lien d'activation unique.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            )}
+
             {/* --- TAB: PROFILE (ENHANCED) --- */}
             {activeTab === 'profile' && user && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
@@ -999,7 +1123,7 @@ export const SettingsPage = () => {
                 </div>
             )}
 
-            {/* --- TAB: NOTIFICATIONS (ENHANCED) --- */}
+            {/* --- TAB: NOTIFICATIONS (UPDATED) --- */}
             {activeTab === 'notifications' && org && (
                 <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4">
                     <Card>
@@ -1008,57 +1132,64 @@ export const SettingsPage = () => {
                                 <Bell className="h-5 w-5 text-indigo-600" /> Préférences de notification
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="divide-y divide-slate-100">
-                            {/* EMAIL ALERTS */}
-                            <div className="py-4 flex items-start justify-between">
-                                <div>
-                                    <h4 className="font-medium text-slate-900">Alertes Email</h4>
-                                    <p className="text-sm text-slate-500">Recevoir un email à chaque nouvel avis.</p>
+                        <CardContent className="space-y-6 divide-y divide-slate-100">
+                            {/* EMAIL ALERTS CONFIG */}
+                            <div className="pt-4">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div>
+                                        <h4 className="font-medium text-slate-900">Alertes Email</h4>
+                                        <p className="text-sm text-slate-500">Recevoir un email en cas d'avis critique ou problème.</p>
+                                    </div>
+                                    <Toggle 
+                                        checked={org.notification_settings?.email_alerts ?? true} 
+                                        onChange={(v) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, email_alerts: v } })} 
+                                    />
                                 </div>
-                                <Toggle 
-                                    checked={org.notification_settings?.email_alerts ?? true} 
-                                    onChange={(v) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, email_alerts: v } })} 
-                                />
-                            </div>
 
-                            {/* THRESHOLD */}
-                            <div className={`py-4 transition-opacity ${!org.notification_settings?.email_alerts ? 'opacity-50 pointer-events-none' : ''}`}>
-                                <div className="flex flex-col gap-2">
-                                    <h4 className="font-medium text-slate-900">Filtrage des alertes</h4>
-                                    <p className="text-sm text-slate-500 mb-2">Ne m'alerter que si la note est inférieure ou égale à :</p>
-                                    <div className="flex gap-2">
-                                        {[1, 2, 3, 4, 5].map(stars => (
-                                            <button
-                                                key={stars}
-                                                onClick={() => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, alert_threshold: stars } })}
-                                                className={`px-3 py-1 rounded-lg text-sm font-bold border transition-colors ${org.notification_settings?.alert_threshold === stars ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-                                            >
-                                                {stars} ★
-                                            </button>
-                                        ))}
+                                <div className={`space-y-4 transition-opacity ${!org.notification_settings?.email_alerts ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Email de réception des alertes</label>
+                                        <Input 
+                                            placeholder="manager@entreprise.com (Laisser vide pour utiliser l'email admin)" 
+                                            value={org.notification_settings?.alert_email || ''}
+                                            onChange={(e) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, alert_email: e.target.value } })}
+                                        />
+                                        <p className="text-xs text-slate-500 mt-1">Si vide, les alertes seront envoyées au propriétaire du compte.</p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-2">Seuil d'alerte (Note)</label>
+                                        <div className="flex gap-2">
+                                            {[1, 2, 3, 4, 5].map(stars => (
+                                                <button
+                                                    key={stars}
+                                                    onClick={() => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, alert_threshold: stars } })}
+                                                    className={`px-3 py-1 rounded-lg text-sm font-bold border transition-colors ${org.notification_settings?.alert_threshold === stars ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                                >
+                                                    ≤ {stars} ★
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-1">Vous serez alerté si la note est inférieure ou égale à ce seuil.</p>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* WEEKLY DIGEST */}
-                            <div className="py-4 flex items-start justify-between">
-                                <div>
-                                    <h4 className="font-medium text-slate-900">Digest Hebdomadaire</h4>
-                                    <p className="text-sm text-slate-500">Un résumé de vos performances envoyé chaque semaine.</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <Select 
-                                        className="w-32 h-8 text-xs" 
-                                        value={org.notification_settings?.digest_day || 'monday'}
-                                        onChange={(e) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, digest_day: e.target.value } })}
-                                    >
-                                        <option value="monday">Lundi</option>
-                                        <option value="friday">Vendredi</option>
-                                    </Select>
-                                    <Toggle 
-                                        checked={org.notification_settings?.weekly_digest ?? true} 
-                                        onChange={(v) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, weekly_digest: v } })} 
-                                    />
+                            {/* REPLACED WEEKLY DIGEST WITH REPORTS LINK */}
+                            <div className="py-6">
+                                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex gap-4 items-start">
+                                    <div className="p-2 bg-white rounded-lg border border-indigo-100 shadow-sm text-indigo-600 shrink-0">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-indigo-900 text-sm">Besoin d'un récapitulatif ?</h4>
+                                        <p className="text-sm text-indigo-700 mt-1 mb-3 leading-relaxed">
+                                            L'ancien "Digest Hebdomadaire" a été remplacé par notre puissant module de Rapports. Créez des rapports PDF personnalisés et planifiez leur envoi automatique.
+                                        </p>
+                                        <Button size="sm" variant="outline" onClick={() => navigate('/reports')} className="bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200">
+                                            Configurer mes rapports
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
 

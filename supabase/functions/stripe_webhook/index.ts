@@ -129,17 +129,38 @@ serve(async (req) => {
             .eq('stripe_customer_id', customerId);
 
           // Alert Org Admin
-          const { data: org } = await supabase.from('organizations').select('id, name, users(email)').eq('stripe_customer_id', customerId).single();
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('id, name, notification_settings, users(email)')
+            .eq('stripe_customer_id', customerId)
+            .single();
+
           if (org && resendApiKey) {
-              const resend = new Resend(resendApiKey);
-              const emails = org.users.map((u:any) => u.email).filter(Boolean);
-              if (emails.length > 0) {
-                  await resend.emails.send({
-                      from: 'Reviewflow Billing <billing@resend.dev>',
-                      to: emails,
-                      subject: '❌ Échec du paiement de votre abonnement',
-                      html: `<p>Le paiement pour <strong>${org.name}</strong> a échoué. Votre abonnement risque d'être suspendu. <a href="https://reviewflow.vercel.app/#/billing">Mettre à jour</a></p>`
-                  });
+              // Determine recipient: alert_email OR owner email
+              let recipientEmail = null;
+              if (org.notification_settings?.alert_email) {
+                  recipientEmail = org.notification_settings.alert_email;
+              } else if (org.users && org.users.length > 0) {
+                  recipientEmail = org.users[0].email;
+              }
+
+              if (recipientEmail) {
+                  try {
+                      const resend = new Resend(resendApiKey);
+                      const { error: emailError } = await resend.emails.send({
+                          from: 'Reviewflow Billing <billing@resend.dev>',
+                          to: recipientEmail,
+                          subject: '❌ Échec du paiement de votre abonnement',
+                          html: `<p>Le paiement pour <strong>${org.name}</strong> a échoué. Votre abonnement risque d'être suspendu. <a href="https://reviewflow.vercel.app/#/billing">Mettre à jour</a></p>`
+                      });
+                      if (emailError) {
+                          console.error("Resend API Error (Payment Failed):", JSON.stringify(emailError));
+                      } else {
+                          console.log(`Email échec paiement envoyé à ${recipientEmail}`);
+                      }
+                  } catch (e: any) {
+                      console.error("Email send exception:", e.message);
+                  }
               }
           }
           log('PAYMENT_FAILED', { customerId, reason: invoice.billing_reason });
@@ -180,18 +201,37 @@ serve(async (req) => {
       case 'customer.source.expiring': {
           const source = event.data.object;
           log('CARD_EXPIRING', { customerId: source.customer });
-          // Logic handled in previous iteration (email alert logic could be here too)
-          const { data: org } = await supabase.from('organizations').select('id, name, users(email)').eq('stripe_customer_id', source.customer).single();
+          
+          const { data: org } = await supabase
+            .from('organizations')
+            .select('id, name, notification_settings, users(email)')
+            .eq('stripe_customer_id', source.customer)
+            .single();
+
           if (org && resendApiKey) {
-              const resend = new Resend(resendApiKey);
-              const emails = org.users.map((u:any) => u.email).filter(Boolean);
-              if (emails.length > 0) {
-                  await resend.emails.send({
-                      from: 'Reviewflow Billing <billing@resend.dev>',
-                      to: emails,
-                      subject: '⚠️ Votre carte expire bientôt',
-                      html: `<p>Attention, la carte associée à <strong>${org.name}</strong> expire bientôt. <a href="https://reviewflow.vercel.app/#/billing">Mettre à jour</a></p>`
-                  });
+              let recipientEmail = null;
+              if (org.notification_settings?.alert_email) {
+                  recipientEmail = org.notification_settings.alert_email;
+              } else if (org.users && org.users.length > 0) {
+                  recipientEmail = org.users[0].email;
+              }
+
+              if (recipientEmail) {
+                  try {
+                      const resend = new Resend(resendApiKey);
+                      const { error: emailError } = await resend.emails.send({
+                          from: 'Reviewflow Billing <billing@resend.dev>',
+                          to: recipientEmail,
+                          subject: '⚠️ Votre carte expire bientôt',
+                          html: `<p>Attention, la carte associée à <strong>${org.name}</strong> expire bientôt. <a href="https://reviewflow.vercel.app/#/billing">Mettre à jour</a></p>`
+                      });
+                      
+                      if (emailError) {
+                          console.error("Resend API Error (Card Expiring):", JSON.stringify(emailError));
+                      }
+                  } catch (e: any) {
+                      console.error("Resend Exception (Card Expiring):", e.message);
+                  }
               }
           }
           break;

@@ -1,3 +1,4 @@
+
 import { Resend } from 'resend';
 
 export default async function handler(req: any, res: any) {
@@ -5,7 +6,8 @@ export default async function handler(req: any, res: any) {
   const resendApiKey = process.env.RESEND_API_KEY;
   
   if (!resendApiKey) {
-    return res.status(500).json({ error: 'RESEND_API_KEY manquante dans Vercel' });
+    console.error("ERREUR CRITIQUE: RESEND_API_KEY manquante dans les variables d'environnement Vercel.");
+    return res.status(500).json({ error: 'Configuration serveur incomplète (Email).' });
   }
 
   const resend = new Resend(resendApiKey);
@@ -16,16 +18,22 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const data = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: 'Reviewflow <onboarding@resend.dev>', 
       to: [to],
       subject: subject,
       html: html,
     });
 
+    if (error) {
+        console.error('Erreur API Resend détaillée:', JSON.stringify(error));
+        return res.status(500).json({ error: error.message || 'Erreur inconnue Resend' });
+    }
+
+    console.log('Email envoyé avec succès:', data);
     return res.status(200).json({ success: true, data });
   } catch (error: any) {
-    console.error('Erreur Resend:', error);
+    console.error('Exception lors de l\'envoi Resend:', error.message);
     return res.status(500).json({ error: error.message });
   }
 }

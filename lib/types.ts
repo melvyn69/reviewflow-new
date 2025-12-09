@@ -87,7 +87,7 @@ export interface User {
 export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'services' | 'health' | 'other' | string;
 
 export interface BrandSettings {
-    enabled: boolean; // Master switch for AI Identity
+    enabled: boolean;
     tone: string;
     description: string;
     knowledge_base: string;
@@ -109,6 +109,7 @@ export interface NotificationSettings {
     weekly_digest: boolean;
     digest_day: string;
     marketing_emails: boolean;
+    alert_email?: string;
 }
 
 export interface TwilioSettings {

@@ -22,6 +22,7 @@ serve(async (req: Request) => {
     const resendApiKey = Deno.env.get('RESEND_API_KEY')!;
 
     if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
+        console.error("Missing config: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or RESEND_API_KEY");
         throw new Error("Server Configuration Error: Missing keys.");
     }
 
@@ -29,11 +30,6 @@ serve(async (req: Request) => {
     const resend = new Resend(resendApiKey);
 
     // 2. Fetch Due Reports
-    // Logic: Get enabled reports where next_run_at is null (never run) or <= now()
-    // In a real production DB, this would be a SQL query on a `reports` table.
-    // For this context, we'll simulate fetching all configs stored in organizations
-    // and filtering them in memory (less efficient but compatible with the JSON structure).
-    
     const { data: orgs, error: orgError } = await supabase
         .from('organizations')
         .select('id, name, reports_config, users(id, email, role)');
@@ -52,10 +48,6 @@ serve(async (req: Request) => {
 
             // Check timing logic
             // Simple check: Is it due?
-            // Note: next_run_at logic should ideally be managed by the scheduler.
-            // Here we assume if it's "Time" to run based on a cron trigger running hourly.
-            
-            // For Demo/Robustness: We force run if no next_run_at set, or if passed.
             const nextRun = report.next_run_at ? new Date(report.next_run_at) : new Date(0);
             
             if (nextRun <= now) {
@@ -90,10 +82,7 @@ serve(async (req: Request) => {
                 if (recipientList.length > 0) {
                     try {
                         // 4. Generate & Send Email
-                        // Since we can't generate PDF easily in Edge Runtime without heavy libs,
-                        // we'll send a rich HTML email summary.
-                        
-                        await resend.emails.send({
+                        const { error: emailError } = await resend.emails.send({
                             from: 'Reviewflow Reporting <reports@resend.dev>',
                             to: recipientList,
                             subject: `📊 Votre Rapport ${report.name} - ${org.name}`,
@@ -116,10 +105,15 @@ serve(async (req: Request) => {
                             `
                         });
 
-                        report.last_run_status = 'success';
-                        processedCount++;
+                        if (emailError) {
+                            console.error(`Resend API Error for report ${report.id}:`, JSON.stringify(emailError));
+                            report.last_run_status = 'failure';
+                        } else {
+                            report.last_run_status = 'success';
+                            processedCount++;
+                        }
                     } catch (err) {
-                        console.error(`Failed to send report ${report.id}`, err);
+                        console.error(`Exception sending report ${report.id}`, err);
                         report.last_run_status = 'failure';
                     }
                 }

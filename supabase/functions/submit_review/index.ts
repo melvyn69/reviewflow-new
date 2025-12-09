@@ -99,40 +99,64 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- ALERTE EMAIL (Si note critique <= 3) ---
-    if (rating <= 3 && resendApiKey) {
-        try {
-            // 1. Trouver l'email de l'admin
-            const { data: location } = await supabase.from('locations').select('organization_id, name').eq('id', locationId).single()
-            
-            if (location?.organization_id) {
-                // On prend le premier utilisateur (owner/admin) de l'organisation
-                const { data: user } = await supabase.from('users').select('email').eq('organization_id', location.organization_id).limit(1).single()
+    if (rating <= 3) {
+        if (!resendApiKey) {
+            console.warn("RESEND_API_KEY manquante. Impossible d'envoyer l'alerte email.");
+        } else {
+            try {
+                // 1. Trouver les infos de l'admin et de l'organisation
+                const { data: location } = await supabase.from('locations').select('organization_id, name').eq('id', locationId).single()
                 
-                if (user?.email) {
-                    const resend = new Resend(resendApiKey)
-                    await resend.emails.send({
-                        from: 'Reviewflow Alerts <onboarding@resend.dev>',
-                        to: user.email,
-                        subject: `🚨 Alerte Avis Négatif (${rating}/5) - ${location.name}`,
-                        html: `
-                            <div style="font-family: sans-serif; padding: 20px; background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px;">
-                                <h2 style="color: #991b1b; margin-top: 0;">Nouvel avis critique reçu</h2>
-                                <p><strong>Note :</strong> ${rating}/5 ⭐</p>
-                                <p><strong>Message :</strong> ${finalBody || "Aucun message"}</p>
-                                <p><strong>Contact client :</strong> ${contact || "Non renseigné"}</p>
-                                <p><strong>Problèmes signalés :</strong> ${(tags || []).join(', ')}</p>
-                                ${staffAttributed ? `<p><strong>Staff concerné :</strong> ${staffAttributed}</p>` : ''}
-                                <br/>
-                                <a href="https://reviewflow.vercel.app" style="background-color: #dc2626; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Répondre maintenant</a>
-                            </div>
-                        `
-                    })
-                    console.log("Email d'alerte envoyé à", user.email)
+                if (location?.organization_id) {
+                    // Récupérer les paramètres de notification de l'organisation
+                    const { data: org } = await supabase
+                        .from('organizations')
+                        .select('notification_settings, users(email)')
+                        .eq('id', location.organization_id)
+                        .single();
+
+                    // Déterminer l'email destinataire
+                    let recipientEmail = null;
+                    if (org?.notification_settings?.alert_email) {
+                        recipientEmail = org.notification_settings.alert_email;
+                    } else if (org?.users && org.users.length > 0) {
+                        // Fallback au premier user (Owner)
+                        recipientEmail = org.users[0].email;
+                    }
+
+                    if (recipientEmail) {
+                        const resend = new Resend(resendApiKey)
+                        const { error: emailError } = await resend.emails.send({
+                            from: 'Reviewflow Alerts <onboarding@resend.dev>',
+                            to: recipientEmail,
+                            subject: `🚨 Alerte Avis Négatif (${rating}/5) - ${location.name}`,
+                            html: `
+                                <div style="font-family: sans-serif; padding: 20px; background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 8px;">
+                                    <h2 style="color: #991b1b; margin-top: 0;">Nouvel avis critique reçu</h2>
+                                    <p><strong>Note :</strong> ${rating}/5 ⭐</p>
+                                    <p><strong>Message :</strong> ${finalBody || "Aucun message"}</p>
+                                    <p><strong>Contact client :</strong> ${contact || "Non renseigné"}</p>
+                                    <p><strong>Problèmes signalés :</strong> ${(tags || []).join(', ')}</p>
+                                    ${staffAttributed ? `<p><strong>Staff concerné :</strong> ${staffAttributed}</p>` : ''}
+                                    <br/>
+                                    <a href="https://reviewflow.vercel.app" style="background-color: #dc2626; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Répondre maintenant</a>
+                                </div>
+                            `
+                        })
+                        
+                        if (emailError) {
+                            console.error("Erreur API Resend (Alert):", JSON.stringify(emailError));
+                        } else {
+                            console.log(`Email d'alerte envoyé avec succès à ${recipientEmail}`);
+                        }
+                    } else {
+                        console.warn("Aucun email destinataire trouvé pour l'alerte.");
+                    }
                 }
+            } catch (emailErr: any) {
+                console.error("Exception lors de l'envoi de l'alerte:", emailErr.message);
+                // On ne bloque pas la réponse si l'email échoue
             }
-        } catch (emailErr) {
-            console.error("Erreur envoi email alerte:", emailErr)
-            // On ne bloque pas la réponse si l'email échoue
         }
     }
 
