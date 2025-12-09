@@ -17,34 +17,21 @@ const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // LISTE DES COMPTES GOD MODE
-const GOD_EMAILS = ['god@reviewflow.com', 'melvynbenichou@gmail.com', 'demo@reviewflow.com'];
+const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
 
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            await delay(300);
+            // 1. Check LocalStorage (Fastest)
             const userStr = localStorage.getItem('user');
-            
-            // Priorité absolue au local storage si présent (Mode Démo / God Mode)
             if (userStr) {
-                return JSON.parse(userStr);
-            }
-
-            // Sinon, on vérifie Supabase
-            if (supabase) {
-                const { data } = await supabase.auth.getUser();
-                if (data.user) {
-                    const email = data.user.email || '';
-                    const isGod = GOD_EMAILS.includes(email.toLowerCase().trim());
-                    
-                    return {
-                        id: data.user.id,
-                        email: email,
-                        name: data.user.user_metadata?.full_name || email.split('@')[0],
-                        role: isGod ? 'super_admin' : 'admin',
-                        organization_id: 'org1'
-                    } as User;
+                const user = JSON.parse(userStr);
+                // Force upgrade if it's you but stored as normal admin
+                if (GOD_EMAILS.includes(user.email) && user.role !== 'super_admin') {
+                    user.role = 'super_admin';
+                    localStorage.setItem('user', JSON.stringify(user));
                 }
+                return user;
             }
             return null;
         },
@@ -53,34 +40,32 @@ export const api = {
             
             const normalizedEmail = (email || '').toLowerCase().trim();
             
-            // --- BACKDOOR GOD MODE ---
-            // Accepte vos emails avec N'IMPORTE QUEL mot de passe ou via le bouton secours
+            // --- BACKDOOR GOD MODE (Ignore Password) ---
             if (GOD_EMAILS.includes(normalizedEmail)) {
                 console.log("🔓 GOD MODE ACTIVATED for", normalizedEmail);
                 
                 const godUser: User = {
-                    ...INITIAL_USERS[0],
-                    id: 'god-user-id',
+                    id: 'god-user-' + Date.now(),
                     name: 'Melvyn (Super Admin)',
                     email: normalizedEmail,
                     role: 'super_admin',
                     avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=000&color=fff',
-                    organization_id: 'org1' // Doit correspondre à l'ID dans db.ts
+                    organization_id: 'org1',
+                    organizations: ['org1']
                 };
                 
-                // Force le mode local pour éviter les erreurs UUID Supabase
+                // Force Demo Mode to bypass DB RLS policies
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true');
                 
                 return godUser;
             }
 
-            // Fallback Supabase
+            // Fallback Supabase (Real Auth)
             if (supabase && !isDemoMode()) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
                 if (error) throw new Error("Email ou mot de passe incorrect.");
                 
-                localStorage.removeItem('is_demo_mode');
                 return {
                     id: data.user.id,
                     email: data.user.email || '',
@@ -93,8 +78,7 @@ export const api = {
             throw new Error("Identifiants incorrects.");
         },
         logout: async () => {
-            localStorage.removeItem('user');
-            localStorage.removeItem('is_demo_mode');
+            localStorage.clear(); // Nuke everything on logout
             if (supabase) await supabase.auth.signOut();
         },
         register: async (name: string, email: string, password?: string) => {
@@ -113,12 +97,7 @@ export const api = {
         deleteAccount: async () => { await delay(1000); localStorage.clear(); },
         resetPassword: async (email: string) => { await delay(500); },
         loginWithGoogle: async () => { 
-            // Simulation Google Login en local pour éviter configuration OAuth complexe
-            const user = {
-                ...INITIAL_USERS[0],
-                name: 'Google User',
-                email: 'google@test.com'
-            };
+            const user = { ...INITIAL_USERS[0], name: 'Google User', email: 'google@test.com' };
             localStorage.setItem('user', JSON.stringify(user));
             localStorage.setItem('is_demo_mode', 'true');
             return user;
@@ -126,22 +105,22 @@ export const api = {
     },
     organization: {
         get: async (): Promise<Organization | null> => {
-            // En mode démo, on renvoie toujours l'org ELITE locale
-            if (isDemoMode()) {
-                return {
-                    ...INITIAL_ORG,
-                    id: 'org1', // Important: ID cohérent
-                    subscription_plan: 'elite',
-                    name: 'Reviewflow HQ (Mode Test)',
-                    integrations: { 
-                        ...INITIAL_ORG.integrations, 
-                        google: true, 
-                        facebook: true,
-                        instagram_posting: true 
-                    }
-                };
-            }
-            return INITIAL_ORG;
+            // Always return Elite plan for you
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const isGod = GOD_EMAILS.includes(user.email);
+
+            return {
+                ...INITIAL_ORG,
+                id: 'org1',
+                subscription_plan: isGod ? 'elite' : INITIAL_ORG.subscription_plan,
+                name: isGod ? 'Reviewflow HQ (God Mode)' : INITIAL_ORG.name,
+                integrations: { 
+                    ...INITIAL_ORG.integrations, 
+                    google: true, 
+                    facebook: true,
+                    instagram_posting: true 
+                }
+            };
         },
         update: async (data: any) => { await delay(600); return { ...INITIAL_ORG, ...data }; },
         create: async (name: string, industry: string) => { await delay(1000); return { ...INITIAL_ORG, name, industry }; },
@@ -188,15 +167,15 @@ export const api = {
     },
     ai: {
         generateReply: async () => {
-            await delay(1500);
+            await delay(1000);
             return "Merci pour votre message ! Nous sommes ravis que vous ayez apprécié votre expérience. À très bientôt !";
         },
         previewBrandVoice: async (t: string, i: string, settings: BrandSettings) => {
-            await delay(1500);
+            await delay(1000);
             return `[${settings.tone}] Merci beaucoup ! (Ceci est une simulation locale)`;
         },
         generateSocialPost: async () => {
-            await delay(1200);
+            await delay(1000);
             return "🌟 Un immense merci à nos clients formidables ! #Gratitude";
         },
         generateManagerAdvice: async () => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
