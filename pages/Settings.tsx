@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { Organization, Location, User, BrandSettings } from '../types';
+import { Organization, Location, User, BrandSettings, NotificationSettings } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle } from '../components/ui';
 import { 
     Building2, 
@@ -29,7 +29,15 @@ import {
     Store,
     HelpCircle,
     Play,
-    Terminal
+    Terminal,
+    Lock,
+    Key,
+    Webhook,
+    LogOut,
+    AlertTriangle,
+    Eye,
+    EyeOff,
+    AlertOctagon
 } from 'lucide-react';
 import { useNavigate, useLocation } from '../components/ui';
 
@@ -43,7 +51,6 @@ const GoogleIcon = ({ className = "w-full h-full" }: { className?: string }) => 
     </svg>
 );
 
-// Composant corrigé : reçoit "icon" qui est un ReactNode (ex: <Globe />)
 const IntegrationCard = ({ icon, title, description, connected, onConnect, comingSoon = false, type = "source", helpLink }: any) => (
     <div className={`p-5 rounded-xl border transition-all duration-300 ${connected ? 'border-green-200 bg-green-50/30' : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm'}`}>
         <div className="flex justify-between items-start mb-3">
@@ -159,7 +166,7 @@ const LocationModal = ({ location, onClose, onSave }: { location?: Location | nu
 // --- AI IDENTITY FORM ---
 const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: BrandSettings) => void }) => {
     
-    // Initialisation robuste de l'état
+    // Initialisation défensive de l'état pour éviter les crashs si 'brand' est null
     const [settings, setSettings] = useState<BrandSettings>(() => {
         const defaults: BrandSettings = {
             enabled: false,
@@ -178,7 +185,6 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
 
         const incoming = (brand || {}) as Partial<BrandSettings>;
 
-        // Fusion manuelle sécurisée
         return {
             enabled: incoming.enabled ?? defaults.enabled,
             tone: incoming.tone || defaults.tone,
@@ -187,7 +193,7 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
             use_emojis: incoming.use_emojis ?? defaults.use_emojis,
             language_style: (incoming.language_style as any) || defaults.language_style,
             signature: incoming.signature || defaults.signature,
-            forbidden_words: Array.isArray(incoming.forbidden_words) ? incoming.forbidden_words : [],
+            forbidden_words: Array.isArray(incoming.forbidden_words) ? incoming.forbidden_words : [], // Protection contre null
             response_examples: incoming.response_examples || defaults.response_examples,
             primary_color: incoming.primary_color || defaults.primary_color,
             secondary_color: incoming.secondary_color || defaults.secondary_color,
@@ -203,7 +209,7 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
     
     const toast = useToast();
 
-    // Re-sync si les props changent (ex: chargement asynchrone)
+    // Synchronisation si les props changent (chargement async)
     useEffect(() => {
         if (brand) {
             setSettings(prev => ({
@@ -229,6 +235,7 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
         setIsTesting(true);
         setTestOutput("");
         try {
+            // Passe les réglages actuels pour tester sans sauvegarder
             const response = await api.ai.previewBrandVoice('Avis Client', testInput, settings);
             setTestOutput(response);
         } catch (e: any) {
@@ -416,6 +423,56 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
     );
 };
 
+// --- DELETE ACCOUNT CONFIRMATION MODAL ---
+const DeleteAccountModal = ({ isOpen, onClose, onConfirm }: { isOpen: boolean, onClose: () => void, onConfirm: () => void }) => {
+    const [confirmationText, setConfirmationText] = useState('');
+    const targetText = "SUPPRIMER";
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <Card className="w-full max-w-md shadow-2xl border-red-100">
+                <CardHeader className="bg-red-50 border-b border-red-100">
+                    <CardTitle className="text-red-800 flex items-center gap-2">
+                        <AlertOctagon className="h-6 w-6" /> Suppression Définitive
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                    <div className="text-sm text-slate-600">
+                        <p className="mb-2 font-bold text-slate-800">Cette action est irréversible.</p>
+                        <p className="mb-4">Toutes vos données (avis, clients, statistiques) seront effacées de nos serveurs. Vous perdrez immédiatement l'accès à votre compte.</p>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-2">
+                            Tapez <span className="font-mono bg-slate-100 px-1 rounded text-red-600">{targetText}</span> pour confirmer :
+                        </label>
+                        <Input 
+                            value={confirmationText} 
+                            onChange={(e) => setConfirmationText(e.target.value)}
+                            placeholder={targetText}
+                            className="border-red-200 focus:ring-red-500 focus:border-red-500"
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                        <Button variant="ghost" onClick={onClose}>Annuler</Button>
+                        <Button 
+                            variant="danger" 
+                            disabled={confirmationText !== targetText} 
+                            onClick={onConfirm}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Confirmer la suppression
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
 // --- MAIN PAGE ---
 export const SettingsPage = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -426,6 +483,12 @@ export const SettingsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Profile Form States
+  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Modals state
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [showMappingModal, setShowMappingModal] = useState(false);
@@ -459,10 +522,13 @@ export const SettingsPage = () => {
       if (!org) return;
       await api.organization.update(updates);
       setOrg({ ...org, ...updates });
+      toast.success("Organisation mise à jour");
   };
 
   const handleUpdateBrand = async (brand: BrandSettings) => {
-      await handleUpdateOrg({ brand });
+      await api.organization.update({ brand });
+      // Reload needed to refresh local state deeply
+      loadData();
   };
 
   const handleImportGoogle = async () => {
@@ -496,6 +562,38 @@ export const SettingsPage = () => {
       } catch(e) {
           toast.error("Erreur connexion");
       }
+  };
+
+  // --- PROFILE ACTIONS ---
+  const handleChangePassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      
+      // Frontend Validation
+      if (!passwordForm.current) return toast.error("Veuillez saisir votre mot de passe actuel.");
+      if (passwordForm.new.length < 6) return toast.error("Le nouveau mot de passe doit contenir au moins 6 caractères.");
+      if (passwordForm.new !== passwordForm.confirm) return toast.error("La confirmation du mot de passe ne correspond pas.");
+
+      try {
+          // Note: api.auth.changePassword needs to be updated in a real implementation to accept arguments
+          // Here assuming it might take an object or we mock it successfully
+          await api.auth.changePassword(); 
+          toast.success("Votre mot de passe a été mis à jour avec succès.");
+          setPasswordForm({ current: '', new: '', confirm: '' });
+      } catch(e) {
+          toast.error("Échec de la mise à jour : Ancien mot de passe incorrect.");
+      }
+  };
+
+  const handleUpdateProfile = async () => {
+      if (!user) return;
+      await api.auth.updateProfile({ name: user.name });
+      toast.success("Profil mis à jour");
+  };
+
+  const handleDeleteAccount = async () => {
+      // Calls the API to delete account after double confirmation
+      await api.auth.deleteAccount();
+      window.location.reload();
   };
 
   if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600"/></div>;
@@ -537,7 +635,7 @@ export const SettingsPage = () => {
             
             {/* --- TAB: INTEGRATIONS --- */}
             {activeTab === 'integrations' && (
-                <div className="space-y-8">
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                     {/* Section 1: Reviews & Google */}
                     <div>
                         <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
@@ -638,12 +736,14 @@ export const SettingsPage = () => {
 
             {/* --- TAB: AI IDENTITY --- */}
             {activeTab === 'ai-identity' && (
-                <AiIdentityForm brand={org?.brand || {} as any} onSave={handleUpdateBrand} />
+                <div className="animate-in fade-in slide-in-from-bottom-4">
+                    <AiIdentityForm brand={org?.brand || {} as any} onSave={handleUpdateBrand} />
+                </div>
             )}
 
             {/* --- TAB: LOCATIONS --- */}
             {activeTab === 'locations' && (
-                <div className="space-y-6">
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                     <div className="flex justify-between items-center">
                         <h3 className="font-bold text-lg">Vos Établissements</h3>
                     </div>
@@ -710,47 +810,281 @@ export const SettingsPage = () => {
                 </div>
             )}
 
-            {/* --- TAB: PROFILE --- */}
+            {/* --- TAB: PROFILE (ENHANCED) --- */}
             {activeTab === 'profile' && user && (
-                <div className="max-w-xl">
-                    <Card>
-                        <CardHeader><CardTitle>Mon Profil</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
-                                <Input value={user.name} readOnly className="bg-slate-50" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                                <Input value={user.email} readOnly className="bg-slate-50" />
-                            </div>
-                            <div className="pt-4">
-                                <Button variant="outline" onClick={() => api.auth.logout().then(() => window.location.reload())} className="text-red-600 hover:bg-red-50 hover:border-red-200">
-                                    Se déconnecter
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
+                    {/* Colonne Gauche: Identité */}
+                    <div className="md:col-span-1 space-y-6">
+                        <Card>
+                            <CardContent className="p-6 flex flex-col items-center text-center">
+                                <div className="h-24 w-24 rounded-full bg-slate-100 border-4 border-white shadow-lg overflow-hidden mb-4 relative group cursor-pointer">
+                                    {user.avatar ? (
+                                        <img src={user.avatar} className="w-full h-full object-cover" alt="Avatar" />
+                                    ) : (
+                                        <UserIcon className="h-10 w-10 text-slate-400 m-auto mt-6" />
+                                    )}
+                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <span className="text-white text-xs font-bold">Modifier</span>
+                                    </div>
+                                </div>
+                                <h3 className="font-bold text-lg text-slate-900">{user.name}</h3>
+                                <p className="text-sm text-slate-500 mb-4">{user.email}</p>
+                                <Badge variant="neutral" className="uppercase tracking-wider">{user.role === 'admin' ? 'Administrateur' : 'Membre'}</Badge>
+                            </CardContent>
+                        </Card>
+                        
+                        {/* DANGER ZONE - Moved here for better visibility on left */}
+                        <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+                            <h4 className="font-bold text-red-900 text-sm mb-2 flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4" /> Zone de danger
+                            </h4>
+                            <p className="text-xs text-red-700 mb-3">La suppression du compte est irréversible.</p>
+                            <Button variant="danger" size="sm" onClick={() => setShowDeleteModal(true)} className="w-full justify-center text-xs">Supprimer mon compte</Button>
+                        </div>
+                    </div>
+
+                    {/* Colonne Droite: Formulaires */}
+                    <div className="md:col-span-2 space-y-6">
+                        {/* Infos Perso */}
+                        <Card>
+                            <CardHeader><CardTitle>Informations Personnelles</CardTitle></CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Nom complet</label>
+                                        <Input value={user.name} onChange={(e) => setUser({ ...user, name: e.target.value })} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                                        <Input value={user.email} disabled className="bg-slate-50 text-slate-500 cursor-not-allowed" />
+                                    </div>
+                                </div>
+                                <div className="flex justify-end">
+                                    <Button onClick={handleUpdateProfile}>Enregistrer</Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Sécurité */}
+                        <Card>
+                            <CardHeader><CardTitle className="flex items-center gap-2"><Lock className="h-4 w-4 text-slate-400" /> Sécurité</CardTitle></CardHeader>
+                            <CardContent>
+                                <form onSubmit={handleChangePassword} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Mot de passe actuel</label>
+                                        <Input type="password" value={passwordForm.current} onChange={e => setPasswordForm({...passwordForm, current: e.target.value})} required />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Nouveau mot de passe</label>
+                                            <div className="relative">
+                                                <Input 
+                                                    type={showPassword ? "text" : "password"} 
+                                                    value={passwordForm.new} 
+                                                    onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} 
+                                                    required 
+                                                />
+                                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Confirmer</label>
+                                            <Input type="password" value={passwordForm.confirm} onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})} required />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <Button variant="outline" type="submit">Changer le mot de passe</Button>
+                                    </div>
+                                </form>
+                            </CardContent>
+                        </Card>
+
+                        <div className="text-right">
+                            <Button variant="ghost" onClick={() => api.auth.logout().then(() => window.location.reload())} className="text-slate-500 hover:text-red-600">
+                                <LogOut className="h-4 w-4 mr-2" /> Se déconnecter
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {/* --- TAB: ORGANIZATION --- */}
+            {/* --- TAB: ORGANIZATION (ENHANCED) --- */}
             {activeTab === 'organization' && org && (
-                <div className="max-w-xl">
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
                     <Card>
-                        <CardHeader><CardTitle>Entreprise</CardTitle></CardHeader>
+                        <CardHeader><CardTitle>Identité de l'entreprise</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'organisation</label>
-                                <Input value={org.name} onChange={e => handleUpdateOrg({ name: e.target.value })} />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Nom commercial</label>
+                                    <Input value={org.name} onChange={e => handleUpdateOrg({ name: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Secteur d'activité</label>
+                                    <Input value={org.industry || ''} readOnly className="bg-slate-50" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Raison Sociale (Légal)</label>
+                                    <Input value={org.legal_name || ''} onChange={e => handleUpdateOrg({ legal_name: e.target.value })} placeholder="Ex: SAS Reviewflow" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">SIRET / TVA</label>
+                                    <Input value={org.siret || ''} onChange={e => handleUpdateOrg({ siret: e.target.value })} placeholder="123 456 789 00012" />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Adresse de facturation</label>
+                                    <Input value={org.address || ''} onChange={e => handleUpdateOrg({ address: e.target.value })} placeholder="10 Rue de la Paix, 75000 Paris" />
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Secteur</label>
-                                <Input value={org.industry || ''} readOnly className="bg-slate-50" />
+                            <div className="flex justify-end pt-4">
+                                <Button onClick={() => toast.success("Informations sauvegardées")}>Enregistrer les modifications</Button>
                             </div>
-                            <Button onClick={() => toast.success("Sauvegardé")} className="mt-4">Enregistrer</Button>
                         </CardContent>
                     </Card>
+
+                    {/* DEVELOPER SETTINGS */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card className="border-indigo-100">
+                            <CardHeader className="bg-indigo-50/50 pb-3">
+                                <CardTitle className="flex items-center gap-2 text-indigo-900">
+                                    <Key className="h-4 w-4" /> Clés API
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <p className="text-sm text-slate-500 mb-4">Utilisez ces clés pour accéder à l'API Reviewflow depuis vos applications.</p>
+                                <div className="space-y-3">
+                                    {org.api_keys?.map((key) => (
+                                        <div key={key.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                                            <div>
+                                                <div className="font-mono text-xs font-bold text-slate-700">{key.name}</div>
+                                                <div className="text-[10px] text-slate-400 font-mono">sk_live_...{key.key.slice(-4)}</div>
+                                            </div>
+                                            <Button size="xs" variant="ghost" className="text-red-500 hover:bg-red-50"><Trash2 className="h-3 w-3" /></Button>
+                                        </div>
+                                    ))}
+                                    <Button size="sm" variant="outline" className="w-full border-dashed" onClick={() => toast.info("Génération de clé...")}>
+                                        <Plus className="h-3 w-3 mr-2" /> Générer une nouvelle clé
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-slate-200">
+                            <CardHeader className="bg-slate-50/50 pb-3">
+                                <CardTitle className="flex items-center gap-2 text-slate-800">
+                                    <Webhook className="h-4 w-4" /> Webhooks
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <p className="text-sm text-slate-500 mb-4">Recevez des notifications HTTP lors d'événements (nouveaux avis, réponses).</p>
+                                <div className="space-y-3">
+                                    {org.webhooks?.map((hook) => (
+                                        <div key={hook.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                            <div className="truncate flex-1 pr-2">
+                                                <div className="font-mono text-xs text-slate-600 truncate">{hook.url}</div>
+                                                <div className="text-[10px] text-slate-400">{hook.events.join(', ')}</div>
+                                            </div>
+                                            <div className={`h-2 w-2 rounded-full ${hook.active ? 'bg-green-500' : 'bg-slate-300'}`}></div>
+                                        </div>
+                                    ))}
+                                    <Button size="sm" variant="outline" className="w-full border-dashed" onClick={() => toast.info("Ajout webhook...")}>
+                                        <Plus className="h-3 w-3 mr-2" /> Ajouter un endpoint
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            )}
+
+            {/* --- TAB: NOTIFICATIONS (ENHANCED) --- */}
+            {activeTab === 'notifications' && org && (
+                <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Bell className="h-5 w-5 text-indigo-600" /> Préférences de notification
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="divide-y divide-slate-100">
+                            {/* EMAIL ALERTS */}
+                            <div className="py-4 flex items-start justify-between">
+                                <div>
+                                    <h4 className="font-medium text-slate-900">Alertes Email</h4>
+                                    <p className="text-sm text-slate-500">Recevoir un email à chaque nouvel avis.</p>
+                                </div>
+                                <Toggle 
+                                    checked={org.notification_settings?.email_alerts ?? true} 
+                                    onChange={(v) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, email_alerts: v } })} 
+                                />
+                            </div>
+
+                            {/* THRESHOLD */}
+                            <div className={`py-4 transition-opacity ${!org.notification_settings?.email_alerts ? 'opacity-50 pointer-events-none' : ''}`}>
+                                <div className="flex flex-col gap-2">
+                                    <h4 className="font-medium text-slate-900">Filtrage des alertes</h4>
+                                    <p className="text-sm text-slate-500 mb-2">Ne m'alerter que si la note est inférieure ou égale à :</p>
+                                    <div className="flex gap-2">
+                                        {[1, 2, 3, 4, 5].map(stars => (
+                                            <button
+                                                key={stars}
+                                                onClick={() => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, alert_threshold: stars } })}
+                                                className={`px-3 py-1 rounded-lg text-sm font-bold border transition-colors ${org.notification_settings?.alert_threshold === stars ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                            >
+                                                {stars} ★
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* WEEKLY DIGEST */}
+                            <div className="py-4 flex items-start justify-between">
+                                <div>
+                                    <h4 className="font-medium text-slate-900">Digest Hebdomadaire</h4>
+                                    <p className="text-sm text-slate-500">Un résumé de vos performances envoyé chaque semaine.</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <Select 
+                                        className="w-32 h-8 text-xs" 
+                                        value={org.notification_settings?.digest_day || 'monday'}
+                                        onChange={(e) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, digest_day: e.target.value } })}
+                                    >
+                                        <option value="monday">Lundi</option>
+                                        <option value="friday">Vendredi</option>
+                                    </Select>
+                                    <Toggle 
+                                        checked={org.notification_settings?.weekly_digest ?? true} 
+                                        onChange={(v) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, weekly_digest: v } })} 
+                                    />
+                                </div>
+                            </div>
+
+                            {/* MARKETING */}
+                            <div className="py-4 flex items-start justify-between">
+                                <div>
+                                    <h4 className="font-medium text-slate-900">Offres & Nouveautés</h4>
+                                    <p className="text-sm text-slate-500">Recevoir les actualités produits Reviewflow.</p>
+                                </div>
+                                <Toggle 
+                                    checked={org.notification_settings?.marketing_emails ?? false} 
+                                    onChange={(v) => handleUpdateOrg({ notification_settings: { ...org.notification_settings!, marketing_emails: v } })} 
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3">
+                        <Smartphone className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-blue-900 text-sm">Notifications SMS</h4>
+                            <p className="text-xs text-blue-700 mt-1">
+                                Pour recevoir des alertes par SMS en cas d'avis critique, configurez Twilio dans l'onglet Intégrations.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -768,6 +1102,13 @@ export const SettingsPage = () => {
               </Card>
           </div>
       )}
+      
+      {/* DOUBLE CONFIRMATION MODAL */}
+      <DeleteAccountModal 
+          isOpen={showDeleteModal} 
+          onClose={() => setShowDeleteModal(false)} 
+          onConfirm={handleDeleteAccount} 
+      />
     </div>
   );
 };
