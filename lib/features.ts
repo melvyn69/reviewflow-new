@@ -1,4 +1,5 @@
 
+
 import { Organization, User } from '../types';
 
 export type PlanId = 'free' | 'starter' | 'pro' | 'elite';
@@ -99,7 +100,16 @@ export const getPlanLimits = (planId: string) => {
     return PLANS[planId as PlanId]?.limits || PLANS.free.limits;
 };
 
-export const hasAccess = (org: Organization | null, feature: FeatureId): boolean => {
+// GOD MODE HELPER
+export const isGodMode = (user: User | null | undefined): boolean => {
+    return !!user?.is_super_admin;
+};
+
+export const hasAccess = (org: Organization | null, feature: FeatureId, user?: User | null): boolean => {
+    // 1. GOD MODE CHECK FIRST
+    if (user && isGodMode(user)) return true;
+
+    // 2. Standard Plan Check
     if (!org) return false;
     const plan = PLANS[org.subscription_plan as PlanId] || PLANS.free;
     return plan.features.includes(feature);
@@ -107,6 +117,8 @@ export const hasAccess = (org: Organization | null, feature: FeatureId): boolean
 
 export const canPerformAction = (user: User | null, requiredRole: UserRole): boolean => {
     if (!user) return false;
+    if (isGodMode(user)) return true; // Super Admin can do everything
+
     const roleHierarchy: UserRole[] = ['viewer', 'editor', 'manager', 'admin', 'super_admin'];
     const userLevel = roleHierarchy.indexOf(user.role);
     const requiredLevel = roleHierarchy.indexOf(requiredRole);

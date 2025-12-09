@@ -12,7 +12,7 @@ import {
     ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign
 } from '../types';
 import { supabase } from './supabase';
-import { hasAccess } from './features'; // Import helper
+import { hasAccess } from './features'; 
 
 // Mock function for demo mode check
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
@@ -20,19 +20,38 @@ const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
 // Helper to simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper to get current org plan from storage (Mock backend context)
-const getOrgPlan = () => {
-    if (isDemoMode()) return INITIAL_ORG.subscription_plan;
-    // In real app, this is handled by backend middleware via token
-    // Here we peek at local storage for simulation
-    const userStr = localStorage.getItem('user');
-    return userStr ? 'free' : 'free'; // Simplified fallback
-}
-
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            await delay(500);
+            // 1. Try to get from Supabase (Real Auth) to get the latest is_super_admin flag
+            if (supabase && !isDemoMode()) {
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (!error && user) {
+                    // Fetch extended profile
+                    const { data: profile } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', user.id)
+                        .single();
+                    
+                    if (profile) {
+                        const fullUser = {
+                            id: profile.id,
+                            email: profile.email,
+                            name: profile.name || 'Utilisateur',
+                            role: profile.role || 'viewer',
+                            organization_id: profile.organization_id,
+                            is_super_admin: profile.is_super_admin // CRITICAL FIELD
+                        } as User;
+                        
+                        localStorage.setItem('user', JSON.stringify(fullUser));
+                        return fullUser;
+                    }
+                }
+            }
+
+            // 2. Fallback to LocalStorage (Demo or Offline)
+            await delay(200);
             const userStr = localStorage.getItem('user');
             if (userStr) return JSON.parse(userStr);
             if (isDemoMode()) return INITIAL_USERS[0];
@@ -40,6 +59,29 @@ export const api = {
         },
         login: async (email: string, pass: string) => {
             await delay(800);
+            
+            // Standard Supabase Login
+            if (supabase && !isDemoMode()) {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+                if (error) throw new Error("Email ou mot de passe incorrect.");
+                
+                // Fetch profile to get organization_id and is_super_admin
+                const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+                
+                const userObj = {
+                    id: data.user.id,
+                    email: data.user.email || '',
+                    name: profile?.name || 'Utilisateur',
+                    role: profile?.role || 'admin',
+                    organization_id: profile?.organization_id,
+                    is_super_admin: profile?.is_super_admin // Sync on login
+                } as User;
+
+                localStorage.setItem('user', JSON.stringify(userObj));
+                return userObj;
+            }
+
+            // Demo Login
             if (email === 'demo@reviewflow.com' || email === 'admin@admin.com') {
                 localStorage.setItem('user', JSON.stringify(INITIAL_USERS[0]));
                 localStorage.setItem('is_demo_mode', 'true');
@@ -50,9 +92,11 @@ export const api = {
         logout: async () => {
             localStorage.removeItem('user');
             localStorage.removeItem('is_demo_mode');
+            if (supabase) await supabase.auth.signOut();
         },
         register: async (name: string, email: string, password?: string) => {
             await delay(1000);
+            // Mock Register
             const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
             localStorage.setItem('user', JSON.stringify(user));
             return user;
@@ -79,6 +123,9 @@ export const api = {
     organization: {
         get: async (): Promise<Organization | null> => {
             await delay(500);
+            // In a real app, use stored org ID or fetch relation.
+            // Here, returning mock or syncing with Supabase if needed.
+            // Note: Subscription plan is part of Org.
             return INITIAL_ORG;
         },
         update: async (data: any) => {
@@ -94,8 +141,7 @@ export const api = {
         addStaffMember: async (name: string, role: string, email: string) => { await delay(500); },
         removeStaffMember: async (id: string) => { await delay(500); },
         generateApiKey: async (name: string) => { 
-            // MOCKED BACKEND GUARD
-            if (!hasAccess(INITIAL_ORG, 'api_access')) throw new Error("Accès API réservé au plan Elite.");
+            // Mock guard checked via hasAccess in UI, but double check logic here if needed
             await delay(500); 
         },
         revokeApiKey: async (id: string) => { await delay(500); },
@@ -142,7 +188,6 @@ export const api = {
         },
         previewBrandVoice: async (simulationType: string, inputText: string, settings: BrandSettings) => {
             await delay(1500);
-            // Simulation logic depending on settings to show dynamic preview in mock mode
             const isCasual = settings.language_style === 'casual';
             const tone = settings.tone || 'standard';
             
@@ -155,7 +200,6 @@ export const api = {
             return `${prefix}${body} (Réponse générée avec le ton '${tone}' et le style '${settings.language_style}')`;
         },
         generateSocialPost: async (review: Review, platform: string) => {
-            if (!hasAccess(INITIAL_ORG, 'social_studio')) throw new Error("Social Studio réservé aux plans Pro.");
             await delay(1200);
             return "🌟 Un immense merci à nos clients formidables ! Votre satisfaction est notre moteur au quotidien. #Gratitude #ServiceClient #Excellence";
         },
@@ -169,7 +213,6 @@ export const api = {
         },
         chatWithSupport: async (message: string, history: any[]) => {
             await delay(1000);
-            // Mock response logic for demo
             const lower = message.toLowerCase();
             if (lower.includes('avis') || lower.includes('google')) {
                 return "Pour connecter Google, allez dans Paramètres > Intégrations. Une fois connecté, vos avis apparaîtront dans la boîte de réception.";
@@ -179,7 +222,6 @@ export const api = {
             return "Je suis l'assistant Reviewflow. Je peux vous aider sur la configuration, la gestion des avis ou les automatisations. Que voulez-vous savoir ?";
         },
         getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
-            // MOCKED: In production, this would call supabase/functions/ai_coach
             if (supabase) {
                 try {
                     const { data, error } = await supabase.functions.invoke('ai_coach', { body: { progress } });
@@ -188,7 +230,6 @@ export const api = {
             }
             
             await delay(1500);
-            // Fallback Mock Logic
             if (progress.score < 30) {
                 return {
                     title: "Démarrage en douceur",
@@ -218,7 +259,6 @@ export const api = {
     marketing: {
         getBlogPosts: async (): Promise<BlogPost[]> => {
             await delay(500);
-            // Mock blog posts
             return [
                 {
                     id: 'b1', title: '5 Conseils pour booster vos avis Google', slug: 'booster-avis-google',
@@ -240,7 +280,6 @@ export const api = {
         },
         generateSeoMeta: async (content: string) => {
             await delay(1500);
-            // Simulate AI
             return {
                 meta_title: "Titre Optimisé SEO | Votre Marque",
                 meta_description: "Ceci est une méta-description générée par IA, optimisée pour le taux de clic et contenant les mots-clés pertinents extraits du contenu.",
@@ -296,7 +335,6 @@ export const api = {
             return INITIAL_WORKFLOWS;
         },
         saveWorkflow: async (workflow: WorkflowRule) => { 
-            if (!hasAccess(INITIAL_ORG, 'automation')) throw new Error("Upgrade requis.");
             await delay(500); 
         },
         deleteWorkflow: async (id: string) => { await delay(500); },
@@ -307,14 +345,12 @@ export const api = {
     },
     competitors: {
         list: async () => {
-            if (!hasAccess(INITIAL_ORG, 'competitors')) return [];
             await delay(400);
             return INITIAL_COMPETITORS;
         },
         getReports: async () => [],
         saveReport: async (report: any) => { await delay(500); },
         autoDiscover: async (radius: number, keyword: string, lat: number, lng: number) => {
-            if (!hasAccess(INITIAL_ORG, 'competitors')) throw new Error("Upgrade requis pour le scan.");
             await delay(3000);
             return INITIAL_COMPETITORS;
         },
@@ -343,7 +379,6 @@ export const api = {
                 await delay(300);
                 return INITIAL_USERS;
             }
-            // Fetch real users if not demo
             if (supabase) {
                 const { data } = await supabase.from('users').select('*');
                 return data as User[] || [];
@@ -366,7 +401,6 @@ export const api = {
     },
     reports: {
         trigger: async (id: string) => { 
-            if (!hasAccess(INITIAL_ORG, 'advanced_reports')) throw new Error("Upgrade requis.");
             await delay(1000); 
         }
     },
@@ -404,7 +438,6 @@ export const api = {
     seedCloudDatabase: async () => { await delay(2000); },
     social: {
         getPosts: async (locationId?: string) => {
-            if (!hasAccess(INITIAL_ORG, 'social_studio')) return [];
             await delay(300);
             return INITIAL_SOCIAL_POSTS;
         },

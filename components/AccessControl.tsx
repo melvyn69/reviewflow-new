@@ -1,10 +1,11 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from './ui';
 import { Lock, Sparkles, ChevronRight } from 'lucide-react';
 import { Button, Card } from './ui';
 import { FeatureId, FEATURES_INFO, hasAccess } from '../lib/features';
-import { Organization } from '../types';
+import { Organization, User } from '../types';
+import { api } from '../lib/api';
 
 interface RestrictedFeatureProps {
     feature: FeatureId;
@@ -15,7 +16,23 @@ interface RestrictedFeatureProps {
 
 export const RestrictedFeature: React.FC<RestrictedFeatureProps> = ({ feature, org, children, fallback }) => {
     const navigate = useNavigate();
-    const isAllowed = hasAccess(org, feature);
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch user to check God Mode
+    useEffect(() => {
+        const checkUser = async () => {
+            const currentUser = await api.auth.getUser();
+            setUser(currentUser);
+            setLoading(false);
+        };
+        checkUser();
+    }, []);
+
+    // While checking, assume locked to avoid flicker, or render fallback/loader
+    if (loading) return null; 
+
+    const isAllowed = hasAccess(org, feature, user);
     const info = FEATURES_INFO[feature];
 
     if (isAllowed) {

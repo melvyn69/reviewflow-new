@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, ProBadge, Badge } from './ui';
 import { 
@@ -134,9 +135,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   };
 
   const plan = org?.subscription_plan || 'free';
+  const isGod = user?.is_super_admin;
   
-  // Helper to check access
-  const check = (feat: FeatureId) => !hasAccess(org, feat);
+  // Check Access Helper (includes user for God Mode check)
+  const check = (feat: FeatureId) => !hasAccess(org, feat, user);
 
   return (
     <>
@@ -167,9 +169,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
         {/* PLAN BADGE */}
         {org && (
             <div className="px-6 pt-6">
-                <div className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold uppercase tracking-wide ${plan === 'pro' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : plan === 'starter' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                    <span>Plan {plan === 'starter' ? 'Essential' : plan === 'pro' ? 'Growth' : 'Gratuit'}</span>
-                    {plan !== 'pro' && (
+                <div className={`flex items-center justify-between p-3 rounded-xl border text-xs font-bold uppercase tracking-wide ${isGod ? 'bg-red-50 border-red-100 text-red-700' : plan === 'pro' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : plan === 'starter' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                    <span>
+                        {isGod ? '⚡️ God Mode' : `Plan ${plan === 'starter' ? 'Essential' : plan === 'pro' ? 'Growth' : 'Gratuit'}`}
+                    </span>
+                    {!isGod && plan !== 'pro' && (
                         <Link to="/billing" onClick={onClose} className="text-[10px] underline hover:text-indigo-600">Upgrade</Link>
                     )}
                 </div>
@@ -206,7 +210,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           <SidebarItem to="/developers" icon={Terminal} label="Dev & API" onClick={onClose} isLocked={check('api_access')} />
           <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />
           
-          {user?.role === 'super_admin' && (
+          {(user?.role === 'super_admin' || isGod) && (
             <>
                 <div className="px-4 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-widest flex items-center gap-1">
                     <ShieldAlert className="h-3 w-3" /> {t('sidebar.admin')}
@@ -447,8 +451,9 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
                 className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-3 rounded-full transition-all border border-transparent hover:border-slate-200"
                 onClick={() => setShowUserMenu(!showUserMenu)}
             >
-                <div className="h-9 w-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border-2 border-indigo-50 text-sm">
+                <div className="h-9 w-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border-2 border-indigo-50 text-sm relative">
                     {user.name.charAt(0)}
+                    {user.is_super_admin && <span className="absolute -bottom-1 -right-1 text-xs">⚡️</span>}
                 </div>
                 <div className="text-right hidden md:block">
                   <div className="text-sm font-bold text-slate-700 leading-tight">{user.name}</div>
@@ -462,8 +467,8 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
                         <div className="text-sm font-bold text-slate-900">{user.name}</div>
                         <div className="text-xs text-slate-500 mb-3">{user.email}</div>
                         <div className="flex gap-2">
-                            <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded border border-indigo-100">
-                                {user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'Membre'}
+                            <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded border ${user.is_super_admin ? 'bg-red-50 text-red-600 border-red-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                                {user.is_super_admin ? 'Super Admin (God Mode)' : user.role === 'admin' ? 'Admin' : 'Membre'}
                             </span>
                         </div>
                     </div>

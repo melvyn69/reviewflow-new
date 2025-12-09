@@ -139,6 +139,7 @@ export interface User {
     avatar?: string;
     organization_id?: string;
     organizations?: string[]; // For super admin or multi-org
+    is_super_admin?: boolean; // GOD MODE FLAG
 }
 
 // Relaxed type to allow custom sectors from the UI while keeping backward compatibility

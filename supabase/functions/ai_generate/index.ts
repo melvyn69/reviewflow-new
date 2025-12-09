@@ -1,4 +1,5 @@
 
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenAI } from 'https://esm.sh/@google/genai'
 
@@ -35,35 +36,41 @@ Deno.serve(async (req: Request) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) throw new Error('Unauthorized')
 
-    const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+    // FETCH USER PROFILE TO CHECK GOD MODE
+    const { data: userProfile } = await supabase.from('users').select('organization_id, is_super_admin').eq('id', user.id).single();
     if (!userProfile?.organization_id) throw new Error("No organization linked");
 
     // --- ENFORCE PLAN LIMITS ---
     const orgId = userProfile.organization_id;
+    const isGodMode = !!userProfile.is_super_admin;
     
     // Fetch Org Data (Plan + Brand Identity)
     const { data: org } = await supabase.from('organizations').select('subscription_plan, brand, name, industry').eq('id', orgId).single();
     
-    const currentPlan = org?.subscription_plan || 'free';
-    const limit = PLAN_LIMITS[currentPlan] || 10;
     const brand = org?.brand || {};
 
-    // Fetch Usage for current month
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0,0,0,0);
+    // ONLY CHECK LIMITS IF NOT GOD MODE
+    if (!isGodMode) {
+        const currentPlan = org?.subscription_plan || 'free';
+        const limit = PLAN_LIMITS[currentPlan] || 10;
 
-    const { count, error: countError } = await supabase
-        .from('ai_usage')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', orgId)
-        .gte('created_at', startOfMonth.toISOString());
+        // Fetch Usage for current month
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0,0,0,0);
 
-    if (!countError && (count || 0) >= limit) {
-        return new Response(
-            JSON.stringify({ error: `LIMIT_REACHED: Vous avez atteint la limite de ${limit} réponses pour votre plan ${currentPlan}. Mettez à niveau pour continuer.` }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        const { count, error: countError } = await supabase
+            .from('ai_usage')
+            .select('*', { count: 'exact', head: true })
+            .eq('organization_id', orgId)
+            .gte('created_at', startOfMonth.toISOString());
+
+        if (!countError && (count || 0) >= limit) {
+            return new Response(
+                JSON.stringify({ error: `LIMIT_REACHED: Vous avez atteint la limite de ${limit} réponses pour votre plan ${currentPlan}. Mettez à niveau pour continuer.` }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
     }
     // ---------------------------
 
@@ -194,6 +201,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 5. Log Usage to Supabase (Skip for tests to be nice?)
+    // Log usage even for God Mode to track stats, but limits were bypassed
     if (task !== 'test_brand_voice') {
         try {
             await supabase.from('ai_usage').insert({
