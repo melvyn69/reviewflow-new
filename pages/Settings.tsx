@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, User, BrandSettings } from '../types';
@@ -176,7 +175,8 @@ const AiIdentityForm = ({ brand, onSave }: { brand: BrandSettings, onSave: (b: B
             logo_url: ''
         };
 
-        const incoming = brand || {};
+        // Fix: Cast to Partial<BrandSettings> to avoid "Property does not exist on type '{}'" error when brand is undefined/null
+        const incoming = (brand || {}) as Partial<BrandSettings>;
 
         // On fusionne manuellement pour s'assurer qu'aucune valeur NULL n'écrase une valeur par défaut critique (comme les tableaux)
         return {
