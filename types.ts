@@ -503,3 +503,24 @@ export interface BillingInvoice {
     pdf_url?: string;
     number: string;
 }
+
+// --- SUPPORT & TUTORIALS ---
+export interface Tutorial {
+    id: string;
+    title: string;
+    category: string;
+    description: string;
+    steps?: string[];
+    videoUrl?: string; // Loom or YouTube embed URL
+    duration?: string;
+    tags?: string[];
+}
+
+export interface ChatMessage {
+    id: string;
+    role: 'user' | 'model';
+    text: string;
+    timestamp: Date;
+}
+
+export type SupportUrgency = 'normal' | 'high' | 'critical';

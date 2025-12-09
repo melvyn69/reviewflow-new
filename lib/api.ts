@@ -7,7 +7,7 @@ import {
 import { 
     User, Organization, Review, AnalyticsSummary, WorkflowRule, 
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
-    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings
+    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial
 } from '../types';
 import { supabase } from './supabase';
 
@@ -149,6 +149,17 @@ export const api = {
         runCustomTask: async (payload: any) => {
             await delay(2000);
             return { result: "Analysis complete", confidence: 0.98 };
+        },
+        chatWithSupport: async (message: string, history: any[]) => {
+            await delay(1000);
+            // Mock response logic for demo
+            const lower = message.toLowerCase();
+            if (lower.includes('avis') || lower.includes('google')) {
+                return "Pour connecter Google, allez dans Paramètres > Intégrations. Une fois connecté, vos avis apparaîtront dans la boîte de réception.";
+            } else if (lower.includes('qr') || lower.includes('code')) {
+                return "Vous pouvez générer votre QR code dans le menu 'Collecte d'avis'. Il est disponible en plusieurs formats (PDF, PNG).";
+            }
+            return "Je suis l'assistant Reviewflow. Je peux vous aider sur la configuration, la gestion des avis ou les automatisations. Que voulez-vous savoir ?";
         }
     },
     analytics: {
@@ -356,6 +367,64 @@ export const api = {
                 }
                 return [];
             }
+        }
+    },
+    support: {
+        sendTicket: async (data: { name: string, email: string, subject: string, message: string, urgency: 'normal' | 'high' | 'critical' }) => {
+            if (isDemoMode()) {
+                await delay(1000);
+                return { success: true };
+            }
+            if (supabase) {
+                const { error } = await supabase.functions.invoke('send_support_ticket', { body: data });
+                if (error) throw error;
+            }
+        },
+        getTutorials: async (): Promise<Tutorial[]> => {
+            await delay(200);
+            return [
+                {
+                    id: 't1',
+                    title: 'Connecter sa fiche Google Business',
+                    category: 'Prise en main',
+                    description: 'Importez vos avis et synchronisez vos établissements en 2 minutes.',
+                    videoUrl: 'https://www.loom.com/embed/e5b8c04bca094dd8a5507925ab887002', // Fake ID
+                    steps: [
+                        'Allez dans Paramètres > Intégrations.',
+                        'Cliquez sur le bouton "Connecter" dans la carte Google Business Profile.',
+                        'Connectez-vous avec le compte Google qui gère vos fiches.',
+                        'Sélectionnez les établissements à importer et validez.'
+                    ],
+                    duration: '2:30'
+                },
+                {
+                    id: 't2',
+                    title: 'Créer un QR Code de collecte',
+                    category: 'Avis',
+                    description: 'Générez des supports physiques pour inciter vos clients à laisser un avis.',
+                    videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ', // Fake
+                    steps: [
+                        'Allez dans le menu "Collecte d\'avis".',
+                        'Choisissez l\'établissement concerné.',
+                        'Personnalisez les couleurs et le logo.',
+                        'Téléchargez le PDF prêt à imprimer (Affiche, Sticker, Carte).'
+                    ],
+                    duration: '4:15'
+                },
+                {
+                    id: 't3',
+                    title: 'Configurer l\'IA et le ton de marque',
+                    category: 'Configuration',
+                    description: 'Apprenez à l\'IA à parler comme vous.',
+                    steps: [
+                        'Allez dans Paramètres > Identité IA.',
+                        'Définissez le ton (Professionnel, Amical, etc.).',
+                        'Ajoutez des exemples de réponses types.',
+                        'Testez la configuration dans le simulateur en bas de page.'
+                    ],
+                    duration: '3:00'
+                }
+            ];
         }
     }
 };
