@@ -119,6 +119,11 @@ function AppRoutes() {
   return (
     <>
       <ScrollToTop />
+      {/* GOD MODE INDICATOR - IF YOU SEE THIS, THE CODE IS LIVE */}
+      <div className="fixed bottom-4 left-4 z-[9999] bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-xl animate-pulse pointer-events-none border-2 border-white">
+        GOD MODE V3 ACTIVE ⚡️
+      </div>
+      
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />

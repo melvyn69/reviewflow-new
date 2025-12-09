@@ -13,23 +13,28 @@ import {
 import { supabase } from './supabase';
 import { hasAccess } from './features'; 
 
+// --- GOD MODE CONFIGURATION ---
+// These emails will ALWAYS be Super Admin with Elite Plan, no matter what.
+const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
+
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// LISTE DES COMPTES GOD MODE
-const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
 
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            // 1. Check LocalStorage (Fastest)
+            // Priority 1: Check LocalStorage
             const userStr = localStorage.getItem('user');
             if (userStr) {
                 const user = JSON.parse(userStr);
-                // Force upgrade if it's you but stored as normal admin
-                if (GOD_EMAILS.includes(user.email) && user.role !== 'super_admin') {
-                    user.role = 'super_admin';
-                    localStorage.setItem('user', JSON.stringify(user));
+                
+                // FORCE UPGRADE ON READ
+                if (GOD_EMAILS.includes(user.email)) {
+                    if (user.role !== 'super_admin') {
+                        user.role = 'super_admin'; // Force role
+                        localStorage.setItem('user', JSON.stringify(user)); // Persist fix
+                    }
+                    return user;
                 }
                 return user;
             }
@@ -42,26 +47,24 @@ export const api = {
             
             // --- BACKDOOR GOD MODE (Ignore Password) ---
             if (GOD_EMAILS.includes(normalizedEmail)) {
-                console.log("🔓 GOD MODE ACTIVATED for", normalizedEmail);
-                
                 const godUser: User = {
                     id: 'god-user-' + Date.now(),
                     name: 'Melvyn (Super Admin)',
                     email: normalizedEmail,
                     role: 'super_admin',
-                    avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=000&color=fff',
+                    avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=ef4444&color=fff',
                     organization_id: 'org1',
                     organizations: ['org1']
                 };
                 
-                // Force Demo Mode to bypass DB RLS policies
+                // Force Demo Mode to ensure DB calls don't fail due to RLS/UUID mismatch
                 localStorage.setItem('user', JSON.stringify(godUser));
-                localStorage.setItem('is_demo_mode', 'true');
+                localStorage.setItem('is_demo_mode', 'true'); 
                 
                 return godUser;
             }
 
-            // Fallback Supabase (Real Auth)
+            // Standard Login
             if (supabase && !isDemoMode()) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
                 if (error) throw new Error("Email ou mot de passe incorrect.");
@@ -78,7 +81,7 @@ export const api = {
             throw new Error("Identifiants incorrects.");
         },
         logout: async () => {
-            localStorage.clear(); // Nuke everything on logout
+            localStorage.clear();
             if (supabase) await supabase.auth.signOut();
         },
         register: async (name: string, email: string, password?: string) => {
@@ -105,14 +108,15 @@ export const api = {
     },
     organization: {
         get: async (): Promise<Organization | null> => {
-            // Always return Elite plan for you
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            // Get current user email to determine rights
+            const userStr = localStorage.getItem('user');
+            const user = userStr ? JSON.parse(userStr) : {};
             const isGod = GOD_EMAILS.includes(user.email);
 
             return {
                 ...INITIAL_ORG,
-                id: 'org1',
-                subscription_plan: isGod ? 'elite' : INITIAL_ORG.subscription_plan,
+                id: 'org1', // Force ID match with user
+                subscription_plan: isGod ? 'elite' : INITIAL_ORG.subscription_plan, // FORCE ELITE PLAN
                 name: isGod ? 'Reviewflow HQ (God Mode)' : INITIAL_ORG.name,
                 integrations: { 
                     ...INITIAL_ORG.integrations, 
