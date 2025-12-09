@@ -46,7 +46,6 @@ const isGodEmail = (email?: string) => {
     if (!email) return false;
     const normalized = email.toLowerCase().trim();
     // Liste des emails administrateurs "God Mode"
-    // Ajout de demo@reviewflow.com ici pour garantir le plan Elite
     return ['god@reviewflow.com', 'melvynbenichou@gmail.com', 'demo@reviewflow.com'].includes(normalized);
 };
 
@@ -71,30 +70,33 @@ export const api = {
         login: async (email: string, pass: string) => {
             await delay(800);
             
-            const normalizedEmail = email.toLowerCase().trim();
+            const normalizedEmail = (email || '').toLowerCase().trim();
             
-            // GOD MODE LOGIN & DEMO SUPER ADMIN
-            // Le compte demo@reviewflow.com devient maintenant un Super Admin en God Mode
+            // EMERGENCY GOD MODE ACCESS
+            // Allows access if email matches specific admins, IGNORING PASSWORD for testing purposes
             if (
-                (normalizedEmail === 'god@reviewflow.com' && pass === 'godmode') || 
-                (normalizedEmail === 'melvynbenichou@gmail.com' && (pass === 'password' || pass === 'demo')) ||
-                (normalizedEmail === 'demo@reviewflow.com' && pass === 'demo')
+                normalizedEmail === 'god@reviewflow.com' ||
+                normalizedEmail === 'demo@reviewflow.com' || 
+                normalizedEmail === 'melvynbenichou@gmail.com'
             ) {
                 const godUser: User = {
                     ...INITIAL_USERS[0],
                     id: 'god-user-id',
-                    name: 'Super Admin (God Mode)',
+                    name: 'Super Admin',
                     email: normalizedEmail,
-                    role: 'super_admin', // FORCE SUPER ADMIN
-                    avatar: 'https://ui-avatars.com/api/?name=God+Mode&background=000&color=fff',
-                    organization_id: 'demo-org-id' 
+                    role: 'super_admin',
+                    avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=000&color=fff',
+                    organization_id: 'demo-org-id'
                 };
+                
+                // Force session storage
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true');
+                
                 return godUser;
             }
 
-            // Legacy/Standard Admin Login (if needed for testing restriction)
+            // Legacy/Standard Admin Login
             if (normalizedEmail === 'admin@admin.com' && pass === 'admin') {
                 localStorage.setItem('user', JSON.stringify(INITIAL_USERS[0]));
                 localStorage.setItem('is_demo_mode', 'true');
@@ -120,7 +122,7 @@ export const api = {
                 } as User;
             }
 
-            throw new Error("Identifiants incorrects. Pour le test, utilisez demo@reviewflow.com / demo");
+            throw new Error("Identifiants incorrects.");
         },
         logout: async () => {
             localStorage.removeItem('user');
