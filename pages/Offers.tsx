@@ -101,7 +101,7 @@ const CampaignBuilder = ({ offer, onClose, onSend }: { offer?: Offer | null, onC
                                 <Select value={segment} onChange={e => setSegment(e.target.value)}>
                                     <option value="all">Tous les clients (opt-in)</option>
                                     <option value="vip">Clients VIP (Top 20%)</option>
-                                    <option value="churn">Clients inactifs (> 3 mois)</option>
+                                    <option value="churn">Clients inactifs (&gt; 3 mois)</option>
                                     <option value="manual">Test (Moi uniquement)</option>
                                 </Select>
                                 <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
