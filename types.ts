@@ -249,6 +249,7 @@ export interface Organization {
     workflows?: WorkflowRule[];
     google_access_token?: string;
     google_refresh_token?: string;
+    reports_config?: ReportConfig[];
 }
 
 export type ReviewStatus = 'pending' | 'draft' | 'sent' | 'manual';
@@ -335,14 +336,48 @@ export interface AnalyticsSummary {
     problems_summary: string;
 }
 
+export interface ReportHistoryItem {
+    id: string;
+    date: string;
+    status: 'success' | 'failure';
+    recipient_count: number;
+    type: string;
+    locations_count: number;
+}
+
 export interface ReportConfig {
     id: string;
     name: string;
     format: 'pdf' | 'csv';
-    frequency: 'daily' | 'weekly' | 'monthly';
-    time: string;
     enabled: boolean;
     last_sent?: string;
+    last_run_status?: 'success' | 'failure';
+    next_run_at?: string;
+    
+    // Content Configuration
+    scope?: 'all' | 'custom';
+    location_ids?: string[];
+    metrics?: string[];
+    dateRange?: {
+        start: string;
+        end: string;
+    };
+
+    // Advanced Scheduling
+    schedule: {
+        frequency: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
+        day?: number; // Day of week (1=Mon) or Day of Month (1-31)
+        time: string; // "09:00"
+    };
+
+    // Advanced Distribution
+    distribution: {
+        roles: string[]; // e.g., ['admin', 'manager']
+        userIds: string[]; // Specific internal users
+        emails: string[]; // External emails
+    };
+
+    history?: ReportHistoryItem[];
 }
 
 export interface Competitor {

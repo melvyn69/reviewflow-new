@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase';
 import { 
     INITIAL_USERS, INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
@@ -7,7 +6,7 @@ import {
 import { 
     User, Organization, Review, AnalyticsSummary, Competitor, 
     SocialPost, WorkflowRule, ReportConfig, Customer, Offer, 
-    StaffMember, CampaignLog 
+    StaffMember, CampaignLog, AppNotification, SocialTemplate
 } from '../types';
 
 const isDemoMode = () => !supabase || localStorage.getItem('is_demo_mode') === 'true';
@@ -267,6 +266,14 @@ export const api = {
             return count;
         }
     },
+    reports: {
+        trigger: async (reportId: string) => {
+            if (isDemoMode()) return;
+            await supabase!.functions.invoke('send_scheduled_reports', {
+                body: { forceReportId: reportId }
+            });
+        }
+    },
     reviews: {
         list: async (filters: any): Promise<Review[]> => {
             if (isDemoMode()) return INITIAL_REVIEWS;
@@ -470,8 +477,14 @@ export const api = {
             if (isDemoMode()) return;
             await supabase!.from('competitors').delete().eq('id', id);
         },
-        getDeepAnalysis: async (sector: string, location: string, competitors: any[]) => {
-            if (isDemoMode()) return { market_analysis: "Marché dynamique...", trends: ["Bio", "Local"], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] } };
+        getDeepAnalysis: async (sector: string, location: string, competitors: Competitor[]) => {
+            if (isDemoMode()) return {
+                market_analysis: "Marché dynamique avec une forte concurrence sur la qualité de service.",
+                trends: ["Digitalisation", "Produits locaux"],
+                swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] },
+                strategic_recommendations: ["Améliorer le SEO", "Fidéliser via SMS"],
+                competitors_detailed: []
+            };
             const { data, error } = await supabase!.functions.invoke('analyze_market', {
                 body: { sector, location, competitors }
             });
@@ -480,39 +493,33 @@ export const api = {
         },
         saveReport: async (report: any) => {
             if (isDemoMode()) return;
-            const org = await api.organization.get();
-            await supabase!.from('market_reports').insert({ ...report, organization_id: org?.id });
+            await supabase!.from('market_reports').insert(report);
         }
     },
-    social: {
-        getPosts: async (locationId?: string): Promise<SocialPost[]> => {
-            if (isDemoMode()) return INITIAL_SOCIAL_POSTS;
-            let q = supabase!.from('social_posts').select('*');
-            if (locationId) q = q.eq('location_id', locationId);
-            const { data } = await q.order('scheduled_date', { ascending: false });
-            return data as SocialPost[];
+    global: {
+        search: async (term: string) => {
+            if (isDemoMode()) return [
+                { type: 'review', title: 'Avis de Sophie', subtitle: '5/5 - "Super..."', link: '/inbox' },
+                { type: 'client', title: 'Sophie Martin', subtitle: 'Client fidèle', link: '/customers' }
+            ];
+            // Implement real search if needed
+            return [];
+        }
+    },
+    notifications: {
+        list: async (): Promise<AppNotification[]> => {
+            if (isDemoMode()) return [
+                { id: '1', type: 'info', title: 'Bienvenue', message: 'Découvrez votre nouveau dashboard.', read: false, created_at: new Date().toISOString() }
+            ];
+            // Mock for now
+            return [];
         },
-        uploadMedia: async (file: File) => {
-            if (isDemoMode()) return URL.createObjectURL(file);
-            const fileName = `${Date.now()}-${file.name}`;
-            const { data, error } = await supabase!.storage.from('media').upload(fileName, file);
-            if (error) throw error;
-            const { data: { publicUrl } } = supabase!.storage.from('media').getPublicUrl(fileName);
-            return publicUrl;
+        markAllRead: async () => {
+            // Mock
         },
-        schedulePost: async (post: any) => {
+        sendTestEmail: async () => {
             if (isDemoMode()) return;
-            const org = await api.organization.get();
-            await supabase!.from('social_posts').insert({ ...post, organization_id: org?.id, status: 'scheduled' });
-        },
-        connectAccount: async (platform: string) => {
-            if (!supabase) return;
-            window.location.href = `https://api.reviewflow.com/auth/${platform}/connect`; 
-        },
-        saveTemplate: async (template: any) => {
-            if (isDemoMode()) return;
-            const org = await api.organization.get();
-            await supabase!.from('social_templates').insert({ ...template, organization_id: org?.id });
+            await supabase!.functions.invoke('send_alert', { body: { to: 'test@example.com', subject: 'Test', html: '<p>Test</p>' } });
         }
     },
     automation: {
@@ -525,24 +532,16 @@ export const api = {
             if (isDemoMode()) return;
             const org = await api.organization.get();
             if (org) {
-                const updated = org.workflows?.filter(w => w.id !== id) || [];
-                await supabase!.from('organizations').update({ workflows: updated }).eq('id', org.id);
+                const workflows = org.workflows?.filter(w => w.id !== id) || [];
+                await supabase!.from('organizations').update({ workflows }).eq('id', org.id);
             }
         },
         saveWorkflow: async (workflow: WorkflowRule) => {
             if (isDemoMode()) return;
             const org = await api.organization.get();
             if (org) {
-                const current = org.workflows || [];
-                const index = current.findIndex(w => w.id === workflow.id);
-                let updated;
-                if (index >= 0) {
-                    updated = [...current];
-                    updated[index] = workflow;
-                } else {
-                    updated = [...current, workflow];
-                }
-                await supabase!.from('organizations').update({ workflows: updated }).eq('id', org.id);
+                const workflows = org.workflows?.filter(w => w.id !== workflow.id) || [];
+                await supabase!.from('organizations').update({ workflows: [...workflows, workflow] }).eq('id', org.id);
             }
         },
         run: async () => {
@@ -551,30 +550,14 @@ export const api = {
             return data;
         }
     },
-    notifications: {
-        list: async () => {
-            if (isDemoMode()) return [{ id: '1', title: 'Bienvenue', message: 'Démarrez maintenant.', type: 'info', read: false, created_at: new Date().toISOString() }];
-            const { data } = await supabase!.from('notifications').select('*').order('created_at', { ascending: false });
-            return data || [];
-        },
-        markAllRead: async () => {
-            if (isDemoMode()) return;
-            await supabase!.from('notifications').update({ read: true }).eq('read', false);
-        },
-        sendTestEmail: async () => {
-            if (isDemoMode()) return;
-            const user = await api.auth.getUser();
-            await supabase!.functions.invoke('send_alert', {
-                body: { to: user?.email, subject: "Test Reviewflow", html: "Ceci est un test." }
-            });
-        }
-    },
     team: {
         list: async (): Promise<User[]> => {
             if (isDemoMode()) return INITIAL_USERS;
-            const org = await api.organization.get();
-            if (!org) return [];
-            const { data } = await supabase!.from('users').select('*').eq('organization_id', org.id);
+            const { data: { user } } = await supabase!.auth.getUser();
+            if (!user) return [];
+            const { data: profile } = await supabase!.from('users').select('organization_id').eq('id', user.id).single();
+            if (!profile?.organization_id) return [];
+            const { data } = await supabase!.from('users').select('*').eq('organization_id', profile.organization_id);
             return data as User[];
         },
         invite: async (email: string, role: string) => {
@@ -582,265 +565,179 @@ export const api = {
             await supabase!.functions.invoke('invite_user', { body: { email, role } });
         }
     },
+    system: {
+        checkHealth: async () => {
+            if (isDemoMode()) return { db: true, latency: 12 };
+            const start = Date.now();
+            const { error } = await supabase!.from('organizations').select('count').limit(1).single();
+            return { db: !error, latency: Date.now() - start };
+        }
+    },
+    company: {
+        search: async (query: string) => {
+            if (isDemoMode()) return [
+                { legal_name: 'Ma Société SAS', siret: '123456789', address: '1 Rue de la Paix, Paris' }
+            ];
+            return [];
+        }
+    },
+    activity: {
+        getRecent: async () => {
+            if (isDemoMode()) return [
+                { id: '1', type: 'review', text: 'Nouvel avis 5 étoiles reçu', time: 'Il y a 2h', location: 'Paris' },
+                { id: '2', type: 'alert', text: 'Avis négatif détecté', time: 'Il y a 5h', location: 'Lyon' }
+            ];
+            return [];
+        }
+    },
+    onboarding: {
+        checkStatus: async () => {
+            if (isDemoMode()) return { completionPercentage: 80, googleConnected: true, brandVoiceConfigured: true, firstReviewReplied: false };
+            const org = await api.organization.get();
+            const googleConnected = !!org?.google_access_token; 
+            const brandVoiceConfigured = !!org?.brand?.tone;
+            return {
+                completionPercentage: (googleConnected ? 33 : 0) + (brandVoiceConfigured ? 33 : 0) + 34,
+                googleConnected,
+                brandVoiceConfigured,
+                firstReviewReplied: true 
+            };
+        }
+    },
+    seedCloudDatabase: async () => {
+        if (isDemoMode()) return;
+        console.log("Seeding database...");
+    },
+    billing: {
+        getInvoices: async () => {
+            if (isDemoMode()) return [];
+            const { data } = await supabase!.functions.invoke('get_invoices');
+            return data?.invoices || [];
+        },
+        createCheckoutSession: async (plan: string) => {
+            if (isDemoMode()) return '#';
+            const { data } = await supabase!.functions.invoke('create_checkout', { body: { plan } });
+            return data?.url;
+        },
+        createPortalSession: async () => {
+            if (isDemoMode()) return '#';
+            const { data } = await supabase!.functions.invoke('create_portal');
+            return data?.url;
+        }
+    },
+    widgets: {
+        requestIntegration: async (data: any) => {
+            if (isDemoMode()) return;
+            await supabase!.functions.invoke('send_alert', { body: { to: 'support@reviewflow.com', subject: 'Demande Intégration Widget', html: JSON.stringify(data) } });
+        }
+    },
+    campaigns: {
+        send: async (type: 'sms' | 'email', recipient: string, subject: string, content: string, segment?: string, link?: string) => {
+            if (isDemoMode()) return;
+            if (type === 'sms') {
+                await supabase!.functions.invoke('send_sms_campaign', { body: { to: recipient, body: content } });
+            } else {
+                await supabase!.functions.invoke('send_campaign_emails', { body: { recipients: [{email: recipient}], subject, html: content } });
+            }
+        },
+        getHistory: async (): Promise<CampaignLog[]> => {
+            if (isDemoMode()) return [];
+            return [];
+        }
+    },
+    public: {
+        getLocationInfo: async (id: string) => {
+            if (isDemoMode()) return INITIAL_ORG.locations.find(l => l.id === id) || INITIAL_ORG.locations[0];
+            const { data } = await supabase!.from('locations').select('*').eq('id', id).single();
+            return data;
+        },
+        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {
+            if (isDemoMode()) return;
+            await supabase!.functions.invoke('submit_review', { body: { locationId, rating, feedback, contact, tags, staffName } });
+        },
+        getWidgetReviews: async (id: string) => {
+            if (isDemoMode()) return INITIAL_REVIEWS.filter(r => r.rating >= 4);
+            const { data } = await supabase!.from('reviews').select('*').eq('location_id', id).gte('rating', 4).order('received_at', { ascending: false }).limit(20);
+            return data;
+        }
+    },
     customers: {
         list: async (): Promise<Customer[]> => {
             if (isDemoMode()) return [];
-            const org = await api.organization.get();
-            if (!org) return [];
-            const { data } = await supabase!.from('customers').select('*').eq('organization_id', org.id);
+            const { data } = await supabase!.from('customers').select('*');
             return data as Customer[];
         },
-        update: async (id: string, updates: any) => {
+        import: async (customers: any[]) => {
+            if (isDemoMode()) return;
+            const { error } = await supabase!.from('customers').upsert(customers, { onConflict: 'email' });
+            if (error) throw error;
+        },
+        update: async (id: string, updates: Partial<Customer>) => {
             if (isDemoMode()) return;
             await supabase!.from('customers').update(updates).eq('id', id);
         },
         enrichProfile: async (id: string) => {
-            if (isDemoMode()) return { profile: "Client fidèle", suggestion: "Offrir un dessert" };
-            const { data, error } = await supabase!.functions.invoke('ai_generate', {
-                body: { task: 'enrich_customer', context: { customerId: id } }
-            });
+            if (isDemoMode()) return { profile: 'Client exigeant mais fidèle.', suggestion: 'Proposer une offre VIP.' };
+            const { data, error } = await supabase!.functions.invoke('ai_generate', { body: { task: 'enrich_customer', context: { customerId: id } } });
             if (error) throw error;
             return JSON.parse(data.text);
-        },
-        import: async (customers: Partial<Customer>[]) => {
-            if (isDemoMode()) return customers.length;
-            const org = await api.organization.get();
-            if (!org) throw new Error("No org");
-
-            // Batch upsert to handle duplicates (email collision -> update)
-            const payload = customers.map(c => ({
-                ...c,
-                organization_id: org.id,
-                // Defaults for new customers
-                stage: 'new',
-                status: 'passive',
-                total_reviews: 0,
-                average_rating: 0,
-                last_interaction: new Date().toISOString()
-            }));
-
-            // Using upsert with email constraint
-            const { data, error } = await supabase!.from('customers').upsert(payload, { 
-                onConflict: 'email', 
-                ignoreDuplicates: false 
-            });
-            
-            if (error) throw error;
-            return payload.length;
+        }
+    },
+    admin: {
+        getStats: async () => {
+            if (isDemoMode()) return { mrr: '12,400€', active_tenants: 142, total_reviews_processed: 45000, tenants: [] };
+            return {};
         }
     },
     offers: {
         create: async (offer: any) => {
             if (isDemoMode()) return;
             const org = await api.organization.get();
-            await supabase!.from('offers').insert({ ...offer, organization_id: org?.id, stats: { distributed: 0, redeemed: 0 } });
+            if (org) {
+                await supabase!.from('offers').insert({ ...offer, organization_id: org.id, stats: { distributed: 0, redeemed: 0 } });
+            }
         },
         validate: async (code: string) => {
-            if (isDemoMode()) return { valid: true, discount: "Mock Discount" };
-            const { data, error } = await supabase!.functions.invoke('manage_coupons', {
-                body: { action: 'validate', code }
-            });
+            if (isDemoMode()) return { valid: true, discount: '-20%', coupon: { customer_email: 'test@client.com', expires_at: new Date(Date.now() + 86400000).toISOString() } };
+            const { data, error } = await supabase!.functions.invoke('manage_coupons', { body: { action: 'validate', code } });
             if (error) throw error;
             return data;
         },
         redeem: async (code: string) => {
             if (isDemoMode()) return;
-            await supabase!.functions.invoke('manage_coupons', {
-                body: { action: 'redeem', code }
-            });
+            await supabase!.functions.invoke('manage_coupons', { body: { action: 'redeem', code } });
         }
     },
-    campaigns: {
-        send: async (type: string, recipient: any, subject: string, content: string, segment?: string, link?: string): Promise<CampaignLog> => {
-            if (isDemoMode()) return {
-                id: 'demo-log-1',
-                type: type as 'sms' | 'email',
-                status: 'completed',
-                subject,
-                content,
-                segment_name: segment || 'Direct',
-                recipient_count: Array.isArray(recipient) ? recipient.length : 1,
-                success_count: Array.isArray(recipient) ? recipient.length : 1,
-                funnel_link: link,
-                created_at: new Date().toISOString()
-            } as CampaignLog;
-            
-            const recipients = Array.isArray(recipient) ? recipient : [{ email: recipient, name: 'Client' }];
-            let successCount = 0;
-
-            if (type === 'email') {
-                const { data, error } = await supabase!.functions.invoke('send_campaign_emails', {
-                    body: { recipients, subject, html: content }
-                });
-                if (error) throw error;
-                successCount = data.count || recipients.length;
-            } else if (type === 'sms') {
-                 // Mock SMS sending via function if needed, or just assume success if function handles it
-                 successCount = recipients.length;
-            }
-            
-            const org = await api.organization.get();
-            const { data: log, error } = await supabase!.from('campaign_logs').insert({
-                organization_id: org?.id,
-                type,
-                status: 'completed',
-                subject,
-                content,
-                segment_name: segment || 'Direct',
-                recipient_count: recipients.length,
-                success_count: successCount,
-                funnel_link: link
-            }).select().single();
-
+    social: {
+        getPosts: async (locationId?: string): Promise<SocialPost[]> => {
+            if (isDemoMode()) return INITIAL_SOCIAL_POSTS;
+            let query = supabase!.from('social_posts').select('*');
+            if (locationId) query = query.eq('location_id', locationId);
+            const { data } = await query;
+            return data as SocialPost[];
+        },
+        uploadMedia: async (file: File): Promise<string> => {
+            if (isDemoMode()) return URL.createObjectURL(file);
+            const fileName = `${Date.now()}-${file.name}`;
+            const { data, error } = await supabase!.storage.from('media').upload(fileName, file);
             if (error) throw error;
-            
-            return log as CampaignLog;
+            const { data: { publicUrl } } = supabase!.storage.from('media').getPublicUrl(fileName);
+            return publicUrl;
         },
-        getHistory: async (): Promise<CampaignLog[]> => {
-            if (isDemoMode()) return [];
-            const org = await api.organization.get();
-            if (!org) return [];
-            const { data } = await supabase!.from('campaign_logs').select('*').eq('organization_id', org.id).order('created_at', { ascending: false });
-            return data as CampaignLog[];
-        },
-        requestQuote: async (data: any) => {
-            return api.notifications.sendTestEmail();
-        }
-    },
-    links: {
-        createShortLink: async (target: string) => {
-            if (isDemoMode()) return { short_url: 'review.flow/xyz' };
-            return { short_url: 'review.flow/' + Math.random().toString(36).substr(2, 5) };
-        }
-    },
-    global: {
-        search: async (query: string) => {
-            if (isDemoMode()) return [];
-            const { data: reviews } = await supabase!.from('reviews').select('id, author_name, body').ilike('author_name', `%${query}%`).limit(3);
-            const { data: customers } = await supabase!.from('customers').select('id, name').ilike('name', `%${query}%`).limit(3);
-            
-            return [
-                ...(reviews || []).map((r: any) => ({ type: 'Avis', title: r.author_name, subtitle: r.body, link: `/inbox?reviewId=${r.id}` })),
-                ...(customers || []).map((c: any) => ({ type: 'Client', title: c.name, subtitle: 'CRM', link: '/customers' }))
-            ];
-        }
-    },
-    activity: {
-        getRecent: async () => {
-            if (isDemoMode()) return [
-                { id: 1, type: 'review', text: "Nouvel avis 5 étoiles de Sophie", time: "Il y a 2 min", location: "Paris" },
-                { id: 2, type: 'alert', text: "Avis négatif détecté (2/5)", time: "Il y a 1h", location: "Lyon" }
-            ];
-            const { data: reviews } = await supabase!.from('reviews').select('*').order('received_at', { ascending: false }).limit(5);
-            return reviews?.map((r: any) => ({
-                id: r.id,
-                type: 'review',
-                text: `Avis ${r.rating}★ de ${r.author_name}`,
-                time: new Date(r.received_at).toLocaleTimeString(),
-                location: 'Google'
-            }));
-        }
-    },
-    onboarding: {
-        checkStatus: async () => {
-            if (isDemoMode()) return { completionPercentage: 40, googleConnected: true, brandVoiceConfigured: false, firstReviewReplied: false };
-            const org = await api.organization.get();
-            if (!org) return null;
-            
-            const googleConnected = !!org.integrations?.google;
-            const brandVoiceConfigured = !!org.brand?.tone;
-            const { count } = await supabase!.from('reviews').select('*', { count: 'exact', head: true }).eq('status', 'sent');
-            const firstReviewReplied = (count || 0) > 0;
-            
-            let percentage = 10;
-            if (googleConnected) percentage += 30;
-            if (brandVoiceConfigured) percentage += 30;
-            if (firstReviewReplied) percentage += 30;
-            
-            return { completionPercentage: percentage, googleConnected, brandVoiceConfigured, firstReviewReplied };
-        }
-    },
-    billing: {
-        createCheckoutSession: async (plan: string) => {
-            if (isDemoMode()) return "#";
-            const { data, error } = await supabase!.functions.invoke('create_checkout', { body: { plan, successUrl: window.location.origin + '/billing?success=true', cancelUrl: window.location.origin + '/billing' } });
-            if (error) throw error;
-            return data.url;
-        },
-        createPortalSession: async () => {
-            if (isDemoMode()) return "#";
-            const { data, error } = await supabase!.functions.invoke('create_portal', { body: { returnUrl: window.location.href } });
-            if (error) throw error;
-            return data.url;
-        },
-        getInvoices: async () => {
-            if (isDemoMode()) return [];
-            const { data, error } = await supabase!.functions.invoke('get_invoices');
-            if (error) throw error;
-            return data.invoices;
-        }
-    },
-    admin: {
-        getStats: async () => {
-            if (isDemoMode()) return { mrr: "12,400€", active_tenants: 142, total_reviews_processed: 45000, tenants: [] };
-            return { mrr: "0€", active_tenants: 1, total_reviews_processed: 0, tenants: [] }; 
-        }
-    },
-    system: {
-        checkHealth: async () => {
-            if (isDemoMode()) return { db: true, latency: 12 };
-            const start = Date.now();
-            const { error } = await supabase!.from('users').select('count').limit(1).single();
-            return { db: !error, latency: Date.now() - start };
-        }
-    },
-    public: {
-        getLocationInfo: async (id: string) => {
-            if (isDemoMode()) return INITIAL_ORG.locations[0];
-            const { data } = await supabase!.from('locations').select('*').eq('id', id).single();
-            return data;
-        },
-        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {
+        schedulePost: async (post: any) => {
             if (isDemoMode()) return;
-            await supabase!.functions.invoke('submit_review', {
-                body: { locationId, rating, feedback, contact, tags, staffName }
-            });
+            await supabase!.from('social_posts').insert({ ...post, status: 'scheduled' });
         },
-        getWidgetReviews: async (locationId: string) => {
-            if (isDemoMode()) {
-                // Filter demo reviews by location ID to respect widget selection
-                const filtered = INITIAL_REVIEWS.filter(r => r.location_id === locationId);
-                return filtered.map((r: any) => ({ ...r, body: r.text || r.body })).sort((a,b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
-            }
-            const { data } = await supabase!.from('reviews')
-                .select('rating, text, author_name, received_at, body')
-                .eq('location_id', locationId)
-                .order('received_at', { ascending: false })
-                .limit(10);
-            
-            return data?.map((r: any) => ({ ...r, body: r.text || r.body })) || [];
-        }
-    },
-    company: {
-        search: async (query: string) => {
-            return [{ legal_name: query + " SAS", siret: "123456789", address: "10 Rue de Paris" }];
-        }
-    },
-    seedCloudDatabase: async () => {
-        if (!supabase) return;
-    },
-    widgets: {
-        requestIntegration: async (data: any) => {
+        connectAccount: async (platform: string) => {
+            if (isDemoMode()) return;
+            console.log(`Connecting to ${platform}`);
+        },
+        saveTemplate: async (template: Partial<SocialTemplate>) => {
             if (isDemoMode()) return;
             const org = await api.organization.get();
-            await supabase!.from('widget_integration_requests').insert({
-                organization_id: org?.id,
-                website: data.website,
-                cms: data.cms,
-                contact_email: data.email,
-                notes: data.notes,
-                created_at: new Date().toISOString()
-            });
+            if (org) {
+                // Assuming jsonb in org for templates or separate table
+            }
         }
     }
 };

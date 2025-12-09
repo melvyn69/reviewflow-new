@@ -279,10 +279,18 @@ export const INITIAL_REPORTS: ReportConfig[] = [
     id: 'rep1',
     name: 'Rapport Mensuel Activité',
     format: 'pdf',
-    frequency: 'monthly',
-    time: '08:00',
     enabled: true,
-    last_sent: '2023-10-01'
+    last_sent: '2023-10-01',
+    schedule: {
+      frequency: 'monthly',
+      day: 1,
+      time: '08:00'
+    },
+    distribution: {
+      roles: ['admin'],
+      userIds: [],
+      emails: []
+    }
   }
 ];
 
