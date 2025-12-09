@@ -83,7 +83,8 @@ export interface User {
     organizations?: string[]; // For super admin or multi-org
 }
 
-export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'services' | 'health' | 'other';
+// Relaxed type to allow custom sectors from the UI while keeping backward compatibility
+export type IndustryType = 'restaurant' | 'hotel' | 'retail' | 'services' | 'health' | 'other' | string;
 
 export interface BrandSettings {
     tone: string;
@@ -134,6 +135,7 @@ export interface SavedReply {
     title: string;
     content: string;
     category: string;
+    created_at?: string;
 }
 
 export interface StaffMember {
@@ -224,6 +226,7 @@ export interface Organization {
     siret?: string;
     address?: string;
     industry?: IndustryType;
+    ai_usage_count?: number; // Added to fix type error
     subscription_plan: 'free' | 'starter' | 'pro' | 'elite';
     subscription_status?: 'active' | 'past_due' | 'canceled' | 'trialing' | 'unpaid';
     current_period_end?: string;

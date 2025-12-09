@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../lib/api';
 import { ReportConfig, AnalyticsSummary, Organization, User, ReportHistoryItem, StaffMember, Competitor } from '../types';
@@ -722,7 +723,8 @@ const ReportHistoryTable = ({ history }: { history: ReportHistoryItem[] }) => {
 export const ReportsPage = () => {
   const [reports, setReports] = useState<ReportConfig[]>([]);
   const [org, setOrg] = useState<Organization | null>(null);
-  const [team, setTeam] = useState<User[]>([]);
+  const [team, setTeam] = useState<User[]>([]); // Users for distribution
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]); // Staff for ranking
   const [activeTab, setActiveTab] = useState<'config' | 'history'>('config');
   const toast = useToast();
   
@@ -742,6 +744,10 @@ export const ReportsPage = () => {
         ]);
         setOrg(organization);
         setTeam(teamMembers);
+        
+        if (organization?.staff_members) {
+            setStaffMembers(organization.staff_members);
+        }
         
         // Mock data for demo UI
         setReports([
@@ -835,7 +841,7 @@ export const ReportsPage = () => {
               api.organization.get(),
               api.analytics.getOverview(),
               api.reviews.list({ status: 'all' }),
-              metrics.includes('staff_ranking') ? api.team.list() : Promise.resolve([]),
+              metrics.includes('staff_ranking') ? api.organization.get().then(o => o?.staff_members || []) : Promise.resolve([]),
               metrics.includes('competitors') ? api.competitors.list() : Promise.resolve([])
           ]);
 
