@@ -34,7 +34,6 @@ import { User } from './types';
 import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from './components/ui';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ShieldAlert, HelpCircle } from 'lucide-react';
 
 // ScrollToTop component
 const ScrollToTop = () => {
@@ -192,31 +191,6 @@ function AppRoutes() {
             </ProtectedRoute>
         } />
       </Routes>
-
-      {/* GLOBAL DEV TOOLS OVERLAY */}
-      <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 p-2 bg-white/90 backdrop-blur-md rounded-xl border border-slate-200 shadow-2xl transition-all hover:opacity-100 opacity-60 hover:bg-white">
-          <p className="text-[9px] uppercase font-black text-slate-400 text-center tracking-widest mb-1 select-none">Dev Access</p>
-          <button 
-              onClick={async () => {
-                  await api.auth.login('god@reviewflow.com', 'godmode');
-                  window.location.reload();
-              }}
-              className="flex items-center justify-center gap-2 p-3 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-all text-xs font-bold shadow-md hover:scale-105 active:scale-95"
-          >
-              <ShieldAlert className="h-4 w-4" />
-              God Mode
-          </button>
-          <button 
-              onClick={async () => {
-                  await api.auth.login('demo@reviewflow.com', 'demo');
-                  window.location.reload();
-              }}
-              className="flex items-center justify-center gap-2 p-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all text-xs font-bold shadow-sm"
-          >
-              <HelpCircle className="h-4 w-4 text-blue-500" />
-              Mode Démo
-          </button>
-      </div>
     </>
   );
 }

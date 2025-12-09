@@ -24,7 +24,7 @@ const isGodMode = () => {
     const userStr = localStorage.getItem('user');
     if (!userStr) return false;
     const user = JSON.parse(userStr);
-    return user.email === 'god@reviewflow.com';
+    return user.email === 'god@reviewflow.com' || user.email === 'melvynbenichou@gmail.com';
 };
 
 export const api = {
@@ -32,14 +32,21 @@ export const api = {
         getUser: async (): Promise<User | null> => {
             await delay(500);
             const userStr = localStorage.getItem('user');
-            if (userStr) return JSON.parse(userStr);
+            if (userStr) {
+                const user = JSON.parse(userStr);
+                // Force super_admin role for god emails
+                if (user.email === 'melvynbenichou@gmail.com' || user.email === 'god@reviewflow.com') {
+                    user.role = 'super_admin';
+                }
+                return user;
+            }
             if (isDemoMode()) return INITIAL_USERS[0];
             return null;
         },
         login: async (email: string, pass: string) => {
             await delay(800);
             
-            // GOD MODE LOGIN
+            // GOD MODE LOGIN (Explicit)
             if (email === 'god@reviewflow.com' && pass === 'godmode') {
                 const godUser: User = {
                     ...INITIAL_USERS[0],
@@ -48,6 +55,21 @@ export const api = {
                     email: 'god@reviewflow.com',
                     role: 'super_admin',
                     avatar: 'https://cdn-icons-png.flaticon.com/512/2622/2622075.png'
+                };
+                localStorage.setItem('user', JSON.stringify(godUser));
+                localStorage.setItem('is_demo_mode', 'true');
+                return godUser;
+            }
+
+            // AUTO-GOD MODE FOR MELVYN
+            if (email === 'melvynbenichou@gmail.com' && pass === 'password') {
+                const godUser: User = {
+                    ...INITIAL_USERS[0],
+                    id: 'melvyn-id',
+                    name: 'Melvyn Benichou',
+                    email: 'melvynbenichou@gmail.com',
+                    role: 'super_admin', // Auto promote to super admin
+                    avatar: 'https://ui-avatars.com/api/?name=Melvyn+Benichou&background=0D9488&color=fff'
                 };
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true');
@@ -68,6 +90,8 @@ export const api = {
         register: async (name: string, email: string, password?: string) => {
             await delay(1000);
             const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
+            // Auto promote if registering with specific email
+            if (email === 'melvynbenichou@gmail.com') user.role = 'super_admin';
             localStorage.setItem('user', JSON.stringify(user));
             return user;
         },
