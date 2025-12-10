@@ -575,6 +575,7 @@ export const api = {
                 const user = await api.auth.getUser();
                 // Count AI usage for current month
                 const startOfMonth = new Date(); startOfMonth.setDate(1);
+                // Note: ai_usage table must exist.
                 const { count } = await supabase.from('ai_usage').select('*', { count: 'exact', head: true }).gte('created_at', startOfMonth.toISOString()).eq('organization_id', user?.organization_id);
                 return count || 0;
             }
@@ -690,7 +691,7 @@ export const api = {
                 // Should invoke oauth function or redirect to endpoint
             }
         },
-        saveTemplate: async (tpl: Omit<SocialTemplate, 'id'> | SocialTemplate) => {
+        saveTemplate: async (tpl: any) => {
             if(supabase && !isDemoMode()) {
                 const user = await api.auth.getUser();
                 await supabase.from('social_templates').insert({ ...tpl, organization_id: user?.organization_id });
