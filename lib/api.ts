@@ -19,43 +19,48 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            if (supabase) {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user) {
-                    // Fetch full profile from DB
-                    const { data: profile } = await supabase
-                        .from('users')
-                        .select('*')
-                        .eq('id', session.user.id)
-                        .single();
-                    
-                    if (profile) {
-                        return {
-                            id: session.user.id,
-                            email: session.user.email!,
-                            name: profile.name || session.user.email!,
-                            role: profile.role || 'viewer',
-                            organization_id: profile.organization_id,
-                            organizations: [profile.organization_id],
-                            avatar: profile.avatar || session.user.user_metadata?.avatar_url,
-                            is_super_admin: profile.is_super_admin
-                        };
-                    }
+            if (!supabase) return null;
+            
+            try {
+                // 1. Get Session User from Supabase
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error || !session?.user) {
+                    return null;
                 }
+
+                // 2. Fetch full profile from DB
+                const { data: profile } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+                
+                return {
+                    id: session.user.id,
+                    email: session.user.email!,
+                    name: profile?.name || session.user.user_metadata?.full_name || session.user.email!,
+                    role: profile?.role || 'viewer',
+                    organization_id: profile?.organization_id,
+                    organizations: profile?.organization_id ? [profile.organization_id] : [],
+                    avatar: profile?.avatar || session.user.user_metadata?.avatar_url,
+                    is_super_admin: profile?.is_super_admin
+                };
+            } catch (e) {
+                console.error("Error checking user session:", e);
+                return null;
             }
-            return null;
         },
         login: async (email: string, pass: string) => {
             if (supabase) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
                 if (error) throw new Error(error.message);
                 
-                // Return temp user object, actual state will be loaded by getUser via App.tsx
                 return {
                     id: data.user.id,
                     email: data.user.email || '',
                     name: 'Utilisateur',
-                    role: 'admin', // Placeholder
+                    role: 'admin', 
                     organization_id: 'loading'
                 } as User;
             }
@@ -128,16 +133,18 @@ export const api = {
                     if (profile?.organization_id) {
                         const { data: org } = await supabase.from('organizations').select('*, locations(*)').eq('id', profile.organization_id).single();
                         
-                        // Check Google Connection status
-                        const googleConnected = !!org.google_refresh_token;
+                        // Check Google Connection status by existence of refresh token
+                        const googleConnected = !!org?.google_refresh_token;
                         
-                        return {
-                            ...org,
-                            integrations: {
-                                ...org.integrations,
-                                google: googleConnected
-                            }
-                        };
+                        if (org) {
+                            return {
+                                ...org,
+                                integrations: {
+                                    ...org.integrations,
+                                    google: googleConnected
+                                }
+                            };
+                        }
                     }
                 }
             }
@@ -213,13 +220,19 @@ export const api = {
                 if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
                 if (filters.status && filters.status !== 'all') query = query.eq('status', filters.status);
                 
+                // Pagination support
+                if (filters.limit) query = query.limit(filters.limit);
+                if (filters.page && filters.limit) {
+                    const from = filters.page * filters.limit;
+                    query = query.range(from, from + filters.limit - 1);
+                }
+
                 const { data } = await query;
                 return data || [];
             }
             return [];
         },
         getTimeline: (review: Review): ReviewTimelineEvent[] => {
-            // Simplified timeline logic
             const events: ReviewTimelineEvent[] = [
                 { id: '1', type: 'review_created', actor_name: review.author_name, date: review.received_at, content: 'Avis reçu' }
             ];
@@ -237,7 +250,7 @@ export const api = {
             if (supabase) {
                 await supabase.from('reviews').update({ 
                     status: 'draft',
-                    ai_reply: { text, needs_manual_validation: true } // Simplified
+                    ai_reply: { text, needs_manual_validation: true } 
                 }).eq('id', id);
             }
         },
@@ -257,7 +270,6 @@ export const api = {
             if (supabase) {
                 const user = await api.auth.getUser();
                 if (!user?.organization_id) return { todo: 0, done: 0 };
-                // Need locations
                 const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
                 const locIds = locations?.map((l: any) => l.id) || [];
                 
@@ -336,16 +348,13 @@ export const api = {
                 const { data, error } = await supabase.functions.invoke('ai_coach', {
                     body: { progress }
                 });
-                if (!error) return JSON.parse(data); // Expecting JSON string from function
+                if (!error) return JSON.parse(data); 
             }
             return { title: "Bienvenue", message: "Complétez votre profil pour avancer.", focus_area: "setup" };
         }
     },
     analytics: {
         getOverview: async (period?: string) => { 
-            // In a real app, this would be a Postgres function or Edge Function that aggregates data
-            // For now, returning basic computed data from fetched reviews could be heavy.
-            // We'll return mock structure but potentially real counts if we implemented a `get_analytics` RPC.
             return INITIAL_ANALYTICS; 
         }
     },
@@ -483,14 +492,10 @@ export const api = {
             if (supabase) await supabase.from('locations').delete().eq('id', id);
         },
         importFromGoogle: async () => {
-            // This triggers the fetch_google_locations Edge Function
             if (supabase) {
-                // Get Token first
+                // Try to get Access Token from current session or fallback to stored refresh token in function
                 const { data: { session } } = await supabase.auth.getSession();
                 const accessToken = session?.provider_token;
-                
-                // If no token in session (e.g. email login but org connected previously), 
-                // the function will try to use the stored Refresh Token.
                 
                 const { data, error } = await supabase.functions.invoke('fetch_google_locations', {
                     body: { accessToken } 
@@ -505,8 +510,8 @@ export const api = {
                     for (const loc of data) {
                         const { error: insertError } = await supabase.from('locations').upsert({
                             organization_id: user.organization_id,
-                            name: loc.title, // Google "title" is the business name
-                            external_reference: loc.name, // Google "name" is the ID resource
+                            name: loc.title,
+                            external_reference: loc.name,
                             address: loc.address,
                             connection_status: 'connected',
                             city: loc.address.split(',')[1]?.trim() || 'Inconnu'
