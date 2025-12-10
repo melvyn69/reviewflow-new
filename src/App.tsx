@@ -71,10 +71,10 @@ function AppRoutes() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 1. Lance la vérification
+    // 1. Check user initially
     checkUser();
 
-    // 2. Timeout de sécurité (3 sec max) pour ne jamais bloquer l'app sur le loader
+    // 2. Safety timeout to prevent infinite loading screen
     const safetyTimeout = setTimeout(() => {
         if (loading) {
             console.warn("Auth check timed out - Forcing load state release");
@@ -82,15 +82,20 @@ function AppRoutes() {
         }
     }, 3000);
 
-    // 3. Listener Supabase
+    // 3. Setup Supabase Auth Listener
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        // Save Google Tokens if present (from OAuth redirect)
         if (session.provider_token) {
             await api.organization.saveGoogleTokens();
         }
+        
+        // Refresh User State
         await checkUser();
         
-        if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
+        // Redirect logic if on auth pages
+        const hash = window.location.hash;
+        if (hash === '#/' || hash.includes('login') || hash.includes('register')) {
             navigate('/dashboard');
         }
       } else if (event === 'SIGNED_OUT') {
@@ -101,12 +106,13 @@ function AppRoutes() {
 
     return () => {
       clearTimeout(safetyTimeout);
-      authListener.data.subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
   const checkUser = async () => {
     try {
+      // Use the enhanced getUser from api.ts which handles both Supabase and God Mode
       const userData = await api.auth.getUser();
       setUser(userData);
     } catch (e) {
