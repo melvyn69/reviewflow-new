@@ -1,6 +1,4 @@
 
-
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenAI } from 'https://esm.sh/@google/genai'
 
@@ -69,8 +67,6 @@ Deno.serve(async (req: Request) => {
     // 2. Process each review
     for (const review of reviews) {
         // RATE LIMITING PROTECTION
-        // Gemini Free Tier: 15 RPM (Requests Per Minute) => 1 request every 4 seconds.
-        // Paid Tier: Much higher. We use a conservative 2s delay here to be safe.
         await sleep(2000); 
 
         const org = review.location?.organization
@@ -138,7 +134,6 @@ Deno.serve(async (req: Request) => {
                     // B. Email Alert (Mock)
                     if (action.type === 'email_alert') {
                         console.log(`[Email] Sending alert to ${action.config?.email_to} for review ${review.id}`)
-                        // Implementation note: Call Resend API here using Deno.env.get('RESEND_API_KEY')
                     }
 
                     // C. Tagging
@@ -220,10 +215,6 @@ Deno.serve(async (req: Request) => {
             } else {
                 console.error("DB Update Error", updateError)
             }
-        } else if (!matched) {
-            // No workflow matched.
-            // Optional: Auto-generate a draft anyway if "Default AI" is on?
-            // For now, we leave it as pending to be safe.
         }
     }
 

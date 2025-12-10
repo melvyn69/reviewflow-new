@@ -1,5 +1,4 @@
 
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { GoogleGenAI } from 'https://esm.sh/@google/genai'
 
@@ -77,13 +76,13 @@ Deno.serve(async (req: Request) => {
     // 2. Parse Body
     const { task, context, config } = await req.json()
     const ai = new GoogleGenAI({ apiKey: geminiKey })
+    // Using the latest flash model for speed
     const modelName = 'gemini-2.5-flash';
     let prompt = ""
 
     // --- HELPER: CONSTRUCT IDENTITY INSTRUCTIONS ---
-    // If brand.enabled is true, use stored settings. Otherwise fallback to generic or provided local override.
     const buildIdentityInstruction = () => {
-        if (!brand.enabled) return ""; // Use default generic persona if disabled
+        if (!brand.enabled) return ""; 
 
         return `
         RESPECTE IMPÉRATIVEMENT L'IDENTITÉ DE MARQUE SUIVANTE :
@@ -131,9 +130,7 @@ Deno.serve(async (req: Request) => {
         `;
     } 
     else if (task === 'test_brand_voice') {
-        // New Task for the "Test" button in Settings
         const { simulationType, inputText, simulationSettings } = context;
-        // simulationSettings allows testing "unsaved" settings from the UI
         const activeBrand = simulationSettings || brand;
         
         prompt = `
@@ -200,8 +197,7 @@ Deno.serve(async (req: Request) => {
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
     }
 
-    // 5. Log Usage to Supabase (Skip for tests to be nice?)
-    // Log usage even for God Mode to track stats, but limits were bypassed
+    // 5. Log Usage
     if (task !== 'test_brand_voice') {
         try {
             await supabase.from('ai_usage').insert({

@@ -30,7 +30,6 @@ Deno.serve(async (req: Request) => {
     // 2. Parse Input
     const { competitors, sector, location } = await req.json()
 
-    // Note: We allow analysis even with empty competitors list to get general market trends for the sector/location
     const hasCompetitors = competitors && competitors.length > 0;
 
     const ai = new GoogleGenAI({ apiKey: geminiKey })
@@ -87,19 +86,13 @@ Deno.serve(async (req: Request) => {
     // 4. Generate
     const result = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt
+        contents: prompt,
+        config: { responseMimeType: 'application/json' }
     })
-    let jsonString = result.text || ""
     
-    // Nettoyage basique du markdown si Gemini en met
-    jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-
-    const data = JSON.parse(jsonString);
-
-    return new Response(
-      JSON.stringify(data),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(result.text, { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
 
   } catch (error: any) {
     console.error("Analysis Error:", error);

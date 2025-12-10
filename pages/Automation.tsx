@@ -88,8 +88,8 @@ const WorkflowEditor = ({ workflow, onSave, onCancel }: { workflow: WorkflowRule
                     {workflow ? 'Modifier le Workflow' : 'Créer un Workflow'}
                 </h2>
                 <div className="flex gap-2">
-                    <Button variant="ghost" onClick={onCancel}>Annuler</Button>
-                    <Button icon={Save} onClick={handleSave} isLoading={saving}>Enregistrer</Button>
+                    <Button variant="ghost" onClick={() => onCancel()}>Annuler</Button>
+                    <Button icon={Save} onClick={() => handleSave()} isLoading={saving}>Enregistrer</Button>
                 </div>
             </div>
 
@@ -474,7 +474,7 @@ export const AutomationPage = () => {
         {/* Buttons are now safe inside RestrictedFeature, or visible if pro */}
         <RestrictedFeature feature="automation" org={org}>
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                <Button variant="primary" icon={Plane} onClick={handleRunManually} isLoading={isRunning} className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-200 w-full sm:w-auto justify-center">
+                <Button variant="primary" icon={Plane} onClick={() => handleRunManually()} isLoading={isRunning} className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-lg shadow-indigo-200 w-full sm:w-auto justify-center">
                     Actionner l'auto maintenant
                 </Button>
                 <Button icon={Plus} onClick={() => { setEditingWorkflow(null); setIsEditing(true); }} className="w-full sm:w-auto justify-center">Créer Manuellement</Button>
@@ -560,7 +560,7 @@ export const AutomationPage = () => {
                                   size="sm" 
                                   variant="outline" 
                                   className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                                  onClick={handleRunManually}
+                                  onClick={() => handleRunManually()}
                                   isLoading={isRunning}
                                   icon={Plane}
                               >
