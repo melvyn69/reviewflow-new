@@ -22,46 +22,52 @@ export const api = {
             if (!supabase) return null;
             
             try {
-                // 1. Get Session User from Supabase
-                const { data: { session }, error } = await supabase.auth.getSession();
+                // 1. Check Supabase Session
+                const { data: { user }, error } = await supabase.auth.getUser();
                 
-                if (error || !session?.user) {
-                    return null;
+                if (user) {
+                    // Fetch profile from DB
+                    const { data: profile } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', user.id)
+                        .single();
+                    
+                    return {
+                        id: user.id,
+                        email: user.email!,
+                        name: profile?.name || user.user_metadata?.full_name || user.email!,
+                        role: profile?.role || 'viewer',
+                        organization_id: profile?.organization_id,
+                        organizations: profile?.organization_id ? [profile.organization_id] : [],
+                        avatar: profile?.avatar || user.user_metadata?.avatar_url,
+                        is_super_admin: profile?.is_super_admin
+                    };
                 }
-
-                // 2. Fetch full profile from DB
-                const { data: profile } = await supabase
-                    .from('users')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
-                
-                return {
-                    id: session.user.id,
-                    email: session.user.email!,
-                    name: profile?.name || session.user.user_metadata?.full_name || session.user.email!,
-                    role: profile?.role || 'viewer',
-                    organization_id: profile?.organization_id,
-                    organizations: profile?.organization_id ? [profile.organization_id] : [],
-                    avatar: profile?.avatar || session.user.user_metadata?.avatar_url,
-                    is_super_admin: profile?.is_super_admin
-                };
             } catch (e) {
-                console.error("Error checking user session:", e);
-                return null;
+                console.error("Supabase auth check failed:", e);
             }
+
+            // 2. Fallback to LocalStorage (Legacy/Mock)
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                return JSON.parse(userStr);
+            }
+            
+            return null;
         },
         login: async (email: string, pass: string) => {
             if (supabase) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
                 if (error) throw new Error(error.message);
                 
+                // Return minimal user info, the rest is handled by getUser/onAuthStateChange
                 return {
                     id: data.user.id,
                     email: data.user.email || '',
                     name: 'Utilisateur',
-                    role: 'admin', 
-                    organization_id: 'loading'
+                    role: 'admin',
+                    organization_id: 'org1'
                 } as User;
             }
             throw new Error("Supabase non configuré.");
@@ -117,10 +123,8 @@ export const api = {
         resetPassword: async (email: string) => { 
             if (supabase) await supabase.auth.resetPasswordForEmail(email);
         },
-        loginWithGoogle: async () => {
-            if (supabase) {
-                await supabase.auth.signInWithOAuth({ provider: 'google' });
-            }
+        loginWithGoogle: async () => { 
+            // This is just a stub for manual calls, real OAuth is handled by connectGoogleBusiness
             return null;
         }
     },
@@ -148,7 +152,12 @@ export const api = {
                     }
                 }
             }
-            return null;
+            
+            // Fallback for Mock Mode
+            return {
+                ...INITIAL_ORG,
+                integrations: { ...INITIAL_ORG.integrations, google: false }
+            };
         },
         update: async (data: any) => { 
             if (supabase) {
@@ -160,7 +169,7 @@ export const api = {
             return data;
         },
         create: async (name: string, industry: string) => { 
-            // Created via Trigger usually, but explicit call here if needed
+            // Created via Trigger usually
             return null;
         },
         saveGoogleTokens: async () => {
