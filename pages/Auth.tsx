@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
 import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
-import { useNavigate, useLocation } from '../components/ui';
+import { useNavigate } from '../components/ui';
 
 interface AuthPageProps {
   onLoginSuccess: () => void;
@@ -17,7 +17,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
   
   // Form State
   const [email, setEmail] = useState('');
@@ -29,20 +28,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [step, setStep] = useState<'request' | 'verify'>('request');
-
-  useEffect(() => {
-      setIsLogin(initialMode === 'login');
-  }, [initialMode]);
-
-  useEffect(() => {
-      const hash = location.hash;
-      if (hash && hash.includes('error=')) {
-          const params = new URLSearchParams(hash.substring(1));
-          const errorDesc = params.get('error_description') || params.get('error') || 'Erreur de connexion';
-          setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '));
-          navigate(location.pathname, { replace: true });
-      }
-  }, [location, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +43,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
               setStep('verify');
           } else {
               if (newPassword !== confirmPassword) throw new Error("Les mots de passe ne correspondent pas");
-              // await api.auth.confirmResetPassword(email, resetCode, newPassword);
-              await new Promise(r => setTimeout(r, 1000));
+              // Confirmation logic would go here
               setSuccessMsg("Mot de passe mis à jour ! Vous pouvez vous connecter.");
               setIsReset(false);
               setIsLogin(true);
@@ -83,7 +67,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
       setIsLoading(true);
       setError(null);
       try {
-          await api.auth.connectGoogleBusiness(); // Reusing the method which initiates OAuth
+          await api.auth.connectGoogleBusiness(); 
       } catch (err: any) {
           setError(err.message || "Erreur de connexion Google");
           setIsLoading(false);
@@ -104,16 +88,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
               <span className="text-white font-extrabold text-2xl tracking-tighter">R</span>
            </div>
            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-               {isReset ? 'Récupération' : isLogin ? 'Heureux de vous revoir 👋' : 'Créer un compte'}
+               {isReset ? 'Récupération' : isLogin ? 'Connexion' : 'Créer un compte'}
            </h2>
-           <p className="text-sm text-slate-500 mt-2">
-             {isReset 
-                ? (step === 'request' ? 'Entrez votre email pour continuer' : 'Définissez votre nouveau mot de passe') 
-                : isLogin 
-                    ? 'Connectez-vous à votre espace Reviewflow' 
-                    : 'Commencez à gérer votre e-réputation dès aujourd\'hui'
-             }
-           </p>
         </div>
 
         <div className="p-8 pt-6">
@@ -144,7 +120,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            
             {error && (
               <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl flex items-start gap-2 border border-red-100 animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -194,43 +169,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                 </>
             )}
 
-            {isReset && step === 'verify' && (
-                <>
-                    <div className="space-y-1">
-                        <label className="text-sm font-bold text-slate-700 ml-1">Code reçu par email</label>
-                        <Input 
-                            required
-                            placeholder="123456" 
-                            className="bg-slate-50 border-slate-200 focus:bg-white text-center font-mono text-lg tracking-widest" 
-                            value={resetCode}
-                            onChange={(e) => setResetCode(e.target.value)}
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-sm font-bold text-slate-700 ml-1">Nouveau mot de passe</label>
-                        <Input 
-                            required
-                            type="password"
-                            placeholder="••••••••" 
-                            className="bg-slate-50 border-slate-200 focus:bg-white" 
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-sm font-bold text-slate-700 ml-1">Confirmer</label>
-                        <Input 
-                            required
-                            type="password"
-                            placeholder="••••••••" 
-                            className="bg-slate-50 border-slate-200 focus:bg-white" 
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
-                    </div>
-                </>
-            )}
-
             {!isReset && (
                 <div className="space-y-1">
                     <div className="flex justify-between items-center">
@@ -260,10 +198,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
             )}
 
             <Button type="submit" className="w-full mt-6 shadow-lg shadow-indigo-200 hover:shadow-indigo-300" size="lg" isLoading={isLoading}>
-              {isReset 
-                ? (step === 'request' ? 'Envoyer le lien' : 'Réinitialiser') 
-                : isLogin ? 'Se connecter' : 'Créer mon compte'
-              }
+              {isReset ? 'Envoyer le lien' : isLogin ? 'Se connecter' : 'Créer mon compte'}
             </Button>
 
             {isReset && (
