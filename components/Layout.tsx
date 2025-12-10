@@ -145,7 +145,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
       {isOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden backdrop-blur-sm"
-          onClick={onClose}
+          onClick={() => onClose()}
         />
       )}
 
@@ -161,7 +161,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
             </div>
             <span className="font-extrabold text-xl text-slate-900 tracking-tight">Reviewflow</span>
           </div>
-          <button onClick={onClose} className="lg:hidden text-slate-500 hover:text-slate-700">
+          <button onClick={() => onClose()} className="lg:hidden text-slate-500 hover:text-slate-700">
             <X className="h-6 w-6" />
           </button>
         </div>
@@ -174,7 +174,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
                         {isGod ? '⚡️ God Mode' : `Plan ${plan === 'starter' ? 'Essential' : plan === 'pro' ? 'Growth' : 'Gratuit'}`}
                     </span>
                     {!isGod && plan !== 'pro' && (
-                        <Link to="/billing" onClick={onClose} className="text-[10px] underline hover:text-indigo-600">Upgrade</Link>
+                        <Link to="/billing" onClick={() => onClose()} className="text-[10px] underline hover:text-indigo-600">Upgrade</Link>
                     )}
                 </div>
             </div>
@@ -183,39 +183,39 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
           <div className="px-4 mb-2 text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">{t('sidebar.platform')}</div>
           
-          <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
-          <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
-          <SidebarItem to="/marketing" icon={Megaphone} label="Marketing & SEO" onClick={onClose} />
-          <SidebarItem to="/progress" icon={Trophy} label="Progression" onClick={onClose} />
+          <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={() => onClose()} />
+          <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={() => onClose()} />
+          <SidebarItem to="/marketing" icon={Megaphone} label="Marketing & SEO" onClick={() => onClose()} />
+          <SidebarItem to="/progress" icon={Trophy} label="Progression" onClick={() => onClose()} />
           
-          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isLocked={check('social_studio')} />
-          <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
-          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isLocked={check('competitors')} />
+          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={() => onClose()} isLocked={check('social_studio')} />
+          <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={() => onClose()} />
+          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={() => onClose()} isLocked={check('competitors')} />
           
           <div className="px-4 mt-8 mb-2 text-xs font-bold text-slate-400 uppercase tracking-widest">{t('sidebar.collect')}</div>
-          <SidebarItem to="/collect" icon={QrCode} label="Outils de collecte" onClick={onClose} />
-          <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={onClose} />
-          <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
+          <SidebarItem to="/collect" icon={QrCode} label="Outils de collecte" onClick={() => onClose()} />
+          <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={() => onClose()} />
+          <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={() => onClose()} />
           
           <div className="px-4 mt-8 mb-2 text-xs font-bold text-slate-400 uppercase tracking-widest">Growth</div>
-          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isLocked={check('advanced_reports')} />
-          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isLocked={check('automation')} />
+          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={() => onClose()} isLocked={check('advanced_reports')} />
+          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={() => onClose()} isLocked={check('automation')} />
 
           <div className="px-4 mt-8 mb-2 text-xs font-bold text-slate-400 uppercase tracking-widest">{t('sidebar.org')}</div>
-          <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />
-          <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={onClose} />
-          <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
+          <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={() => onClose()} />
+          <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={() => onClose()} />
+          <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={() => onClose()} />
           
           <div className="px-4 mt-8 mb-2 text-xs font-bold text-slate-400 uppercase tracking-widest">Support</div>
-          <SidebarItem to="/developers" icon={Terminal} label="Dev & API" onClick={onClose} isLocked={check('api_access')} />
-          <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />
+          <SidebarItem to="/developers" icon={Terminal} label="Dev & API" onClick={() => onClose()} isLocked={check('api_access')} />
+          <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={() => onClose()} />
           
           {(user?.role === 'super_admin' || isGod) && (
             <>
                 <div className="px-4 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-widest flex items-center gap-1">
                     <ShieldAlert className="h-3 w-3" /> {t('sidebar.admin')}
                 </div>
-                <SidebarItem to="/admin" icon={ShieldAlert} label={t('sidebar.super_admin')} onClick={onClose} />
+                <SidebarItem to="/admin" icon={ShieldAlert} label={t('sidebar.super_admin')} onClick={() => onClose()} />
             </>
           )}
         
