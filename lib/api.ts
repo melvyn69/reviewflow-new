@@ -15,7 +15,8 @@ import { hasAccess } from './features';
 
 // --- GOD MODE CONFIGURATION ---
 // These emails will ALWAYS be Super Admin with Elite Plan, no matter what.
-const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
+// Removed real user emails to ensure they use real backend integration.
+const GOD_EMAILS = ['demo@reviewflow.com', 'god@reviewflow.com'];
 
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -28,6 +29,11 @@ export const api = {
             if (userStr) {
                 const user = JSON.parse(userStr);
                 
+                // SELF-HEALING: If user is not in GOD_EMAILS but is_demo_mode is true, clear it.
+                if (!GOD_EMAILS.includes(user.email) && isDemoMode()) {
+                    localStorage.removeItem('is_demo_mode');
+                }
+
                 // FORCE UPGRADE ON READ
                 if (GOD_EMAILS.includes(user.email)) {
                     if (user.role !== 'super_admin') {
@@ -54,6 +60,8 @@ export const api = {
                             is_super_admin: profile.is_super_admin
                         };
                         localStorage.setItem('user', JSON.stringify(fullUser));
+                        // Ensure demo mode is OFF for real authenticated users
+                        localStorage.removeItem('is_demo_mode');
                         return fullUser;
                     }
                 }
@@ -69,7 +77,7 @@ export const api = {
             if (GOD_EMAILS.includes(normalizedEmail)) {
                 const godUser: User = {
                     id: 'god-user-' + Date.now(),
-                    name: 'Melvyn (Super Admin)',
+                    name: 'Super Admin (Demo)',
                     email: normalizedEmail,
                     role: 'super_admin',
                     avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=ef4444&color=fff',

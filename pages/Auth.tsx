@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
@@ -99,18 +100,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
           setIsLoading(false);
       }
   };
-
-  const handleDemoLogin = async () => {
-      setIsLoading(true);
-      try {
-          await api.auth.login('demo@reviewflow.com', 'demo');
-          onLoginSuccess();
-      } catch (e: any) {
-          setError("Erreur démo: " + e.message);
-      } finally {
-          setIsLoading(false);
-      }
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden py-6 px-4 sm:px-6 lg:px-8">
@@ -311,19 +300,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                     {isLogin ? 'S\'inscrire' : 'Se connecter'}
                 </button>
                 </p>
-                
-                {/* Developer Mode Shortcut (Hidden in Prod) */}
-                {process.env.NODE_ENV === 'development' && (
-                    <div className="mt-6 pt-6 border-t border-slate-100">
-                        <button 
-                            onClick={handleDemoLogin}
-                            className="text-[10px] uppercase tracking-wider font-bold text-slate-300 hover:text-indigo-500 transition-colors flex items-center justify-center gap-1 mx-auto"
-                        >
-                            <HelpCircle className="h-3 w-3" />
-                            Dev Mode
-                        </button>
-                    </div>
-                )}
             </div>
           )}
         </div>
