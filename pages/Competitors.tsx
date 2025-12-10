@@ -32,7 +32,6 @@ import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
 import { useNavigate } from '../components/ui';
 
-// ... (Keep existing SonarRadar component)
 // --- SONAR RADAR COMPONENT ---
 const SonarRadar = ({ competitors, industry, className = "" }: { competitors: any[], industry: string, className?: string }) => {
     // Calculate aggregate metrics for the 4 axes
@@ -173,7 +172,7 @@ export const CompetitorsPage = () => {
         try {
             // Step 1
             setScanStep('Géolocalisation du secteur...');
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(resolve => setTimeout(() => resolve(true), 1500));
             
             const position = await new Promise<GeolocationPosition>((resolve, reject) => {
                 if (!navigator.geolocation) reject(new Error("Géolocalisation non supportée"));
@@ -188,7 +187,7 @@ export const CompetitorsPage = () => {
             
             // Step 3
             setScanStep('Analyse et importation...');
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(resolve => setTimeout(() => resolve(true), 1000));
 
             // Automatically add discovered competitors (simplified for demo)
             if (results && results.length > 0) {

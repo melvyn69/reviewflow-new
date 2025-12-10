@@ -100,7 +100,6 @@ const PricingCard = ({
 };
 
 const InvoiceTable = () => {
-    // ... same logic
     const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -167,23 +166,32 @@ const InvoiceTable = () => {
 
 // Subscription Status Component
 const SubscriptionStatus = ({ org, onPortal }: { org: Organization, onPortal: () => void }) => {
-    // ... same logic
     const status = org.subscription_status || 'active';
     const isPastDue = status === 'past_due' || status === 'unpaid';
     const renewalDate = org.current_period_end ? new Date(org.current_period_end).toLocaleDateString() : 'N/A';
     
+    // Only show portal button if stripe_customer_id exists
+    const canManage = !!org.stripe_customer_id;
+
     return (
-        <Card className={`border-l-4 ${isPastDue ? 'border-l-red-500' : 'border-l-green-500'}`}>
+        <Card className={`border-l-4 ${isPastDue ? 'border-l-red-500' : org.subscription_plan === 'free' ? 'border-l-slate-300' : 'border-l-green-500'}`}>
             <CardContent className="p-6">
                 <div className="flex justify-between items-start">
                     <div>
                         <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2">
-                            Statut de l'abonnement
-                            <Badge variant={isPastDue ? 'error' : 'success'} className="uppercase">
-                                {status.replace('_', ' ')}
-                            </Badge>
+                            Plan Actuel : {org.subscription_plan === 'free' ? 'Découverte' : org.subscription_plan === 'starter' ? 'Starter' : org.subscription_plan === 'pro' ? 'Growth' : 'Elite'}
+                            {org.subscription_plan !== 'free' && (
+                                <Badge variant={isPastDue ? 'error' : 'success'} className="uppercase">
+                                    {status.replace('_', ' ')}
+                                </Badge>
+                            )}
                         </h3>
-                        {org.cancel_at_period_end ? (
+                        
+                        {org.subscription_plan === 'free' ? (
+                            <p className="text-sm text-slate-500 mt-1">
+                                Vous êtes sur le plan gratuit. Passez à la vitesse supérieure pour débloquer plus de fonctionnalités.
+                            </p>
+                        ) : org.cancel_at_period_end ? (
                             <p className="text-sm text-amber-600 mt-1 flex items-center gap-1">
                                 <AlertCircle className="h-4 w-4" /> Résiliation programmée le {renewalDate}
                             </p>
@@ -200,7 +208,13 @@ const SubscriptionStatus = ({ org, onPortal }: { org: Organization, onPortal: ()
                         )}
                     </div>
                     <div>
-                        <Button variant="outline" size="sm" onClick={onPortal}>Gérer abonnement</Button>
+                        {canManage ? (
+                            <Button variant="outline" size="sm" onClick={onPortal}>Gérer abonnement</Button>
+                        ) : (
+                            <Button variant="outline" size="sm" disabled className="opacity-50 cursor-not-allowed">
+                                Gérer abonnement
+                            </Button>
+                        )}
                     </div>
                 </div>
             </CardContent>
@@ -254,7 +268,6 @@ export const BillingPage = () => {
     }, [location.search]);
 
     const pollForPlanUpdate = async () => {
-        // ... same polling logic
         let attempts = 0;
         const maxAttempts = 10;
         
@@ -321,13 +334,17 @@ export const BillingPage = () => {
     };
 
     const handleManageCards = async () => {
+        if (!org?.stripe_customer_id) {
+            toast.info("Aucun abonnement actif à gérer.");
+            return;
+        }
         setPortalLoading(true);
         try {
             const url = await api.billing.createPortalSession();
             if (url && url.startsWith('http')) {
                 window.location.href = url;
             } else {
-                toast.error("Impossible d'accéder au portail. Contactez le support.");
+                toast.error("Impossible d'accéder au portail.");
             }
         } catch (e: any) {
             toast.error("Erreur portail: " + e.message);
@@ -367,12 +384,10 @@ export const BillingPage = () => {
                 </div>
             </div>
 
-            {/* Status Section */}
-            {org.subscription_plan !== 'free' && (
-                <SubscriptionStatus org={org} onPortal={handleManageCards} />
-            )}
+            {/* Status Section - Always visible now */}
+            <SubscriptionStatus org={org} onPortal={handleManageCards} />
 
-            {/* NEW: Usage & Limits Section */}
+            {/* Usage & Limits Section */}
             <Card className="border border-slate-200">
                 <CardHeader className="border-b border-slate-100 bg-slate-50/50">
                     <CardTitle className="flex items-center gap-2 text-base text-slate-800">
