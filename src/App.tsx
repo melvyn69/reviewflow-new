@@ -71,10 +71,22 @@ function AppRoutes() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 1. Check user initially
+    const checkUser = async () => {
+        try {
+            const userData = await api.auth.getUser();
+            setUser(userData);
+        } catch (e) {
+            console.error("User check failed", e);
+            setUser(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 1. Initial check
     checkUser();
 
-    // 2. Safety timeout to prevent infinite loading screen
+    // 2. Safety timeout
     const safetyTimeout = setTimeout(() => {
         if (loading) {
             console.warn("Auth check timed out - Forcing load state release");
@@ -82,20 +94,16 @@ function AppRoutes() {
         }
     }, 3000);
 
-    // 3. Setup Supabase Auth Listener
+    // 3. Supabase Auth Listener
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        // Save Google Tokens if present (from OAuth redirect)
+        // Critical: Save tokens immediately when detected
         if (session.provider_token) {
             await api.organization.saveGoogleTokens();
         }
-        
-        // Refresh User State
         await checkUser();
         
-        // Redirect logic if on auth pages
-        const hash = window.location.hash;
-        if (hash === '#/' || hash.includes('login') || hash.includes('register')) {
+        if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
             navigate('/dashboard');
         }
       } else if (event === 'SIGNED_OUT') {
@@ -106,22 +114,10 @@ function AppRoutes() {
 
     return () => {
       clearTimeout(safetyTimeout);
+      // FIX: access subscription property directly on the returned data object from onAuthStateChange
       authListener.subscription.unsubscribe();
     };
   }, []);
-
-  const checkUser = async () => {
-    try {
-      // Use the enhanced getUser from api.ts which handles both Supabase and God Mode
-      const userData = await api.auth.getUser();
-      setUser(userData);
-    } catch (e) {
-      console.error("User check failed", e);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -139,11 +135,11 @@ function AppRoutes() {
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="login" onLoginSuccess={checkUser} />} />
+        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="login" onLoginSuccess={() => {}} />} />
         <Route path="/book-demo" element={<BookDemoPage />} />
         
         {/* Hidden Registration */}
-        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />} />
+        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" onLoginSuccess={() => {}} />} />
         
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />

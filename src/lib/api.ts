@@ -24,34 +24,51 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            // 1. GOD MODE / DEMO CHECK (Priority 1)
-            const localUserStr = localStorage.getItem('user');
-            if (localUserStr) {
-                const localUser = JSON.parse(localUserStr);
-                const isDemo = isDemoMode();
-                
-                // Si c'est un user God Mode ou qu'on est en mode démo forcé
-                if (isDemo || GOD_EMAILS.includes(localUser.email)) {
-                    // Force Super Admin role for God Emails just in case
-                    if (GOD_EMAILS.includes(localUser.email) && localUser.role !== 'super_admin') {
-                        localUser.role = 'super_admin'; 
-                        localStorage.setItem('user', JSON.stringify(localUser));
+            // 1. GOD MODE / DEMO CHECK (Priority 1: LocalStorage)
+            // We check local storage first to allow the backdoor to work without Supabase or network
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                try {
+                    const localUser = JSON.parse(userStr);
+                    const email = (localUser.email || '').toLowerCase();
+
+                    // If it is a God Email, we trust LocalStorage and ensure Super Admin role
+                    if (GOD_EMAILS.includes(email)) {
+                        if (localUser.role !== 'super_admin') {
+                            localUser.role = 'super_admin';
+                            localStorage.setItem('user', JSON.stringify(localUser));
+                        }
+                        // Ensure we are in demo mode context for these users to bypass RLS if needed locally
+                        localStorage.setItem('is_demo_mode', 'true');
+                        return localUser;
                     }
-                    return localUser;
+
+                    // If we are strictly in demo mode (e.g. no supabase config), return local user
+                    if (isDemoMode() && !supabase) {
+                        return localUser;
+                    }
+                } catch (e) {
+                    console.warn("Corrupt local user data", e);
+                    localStorage.removeItem('user');
                 }
             }
 
-            // 2. SUPABASE AUTH CHECK (Standard Flow)
+            // 2. SUPABASE AUTH CHECK (Priority 2: Real DB)
             if (supabase) {
                 const { data: { user: authUser }, error } = await supabase.auth.getUser();
                 
                 if (!error && authUser) {
-                    // Fetch profile details from public.users table to get organization_id
-                    const { data: profile } = await supabase
+                    // Fetch detailed profile from public.users table to get organization_id
+                    // This is crucial for linking the session to data
+                    const { data: profile, error: profileError } = await supabase
                         .from('users')
-                        .select('*')
+                        .select('organization_id, role, name, avatar_url, is_super_admin')
                         .eq('id', authUser.id)
                         .single();
+
+                    if (profileError) {
+                        console.warn("Profile fetch error (using fallback):", profileError.message);
+                    }
 
                     // Construct full User object
                     const appUser: User = {
@@ -60,17 +77,19 @@ export const api = {
                         name: profile?.name || authUser.user_metadata?.full_name || 'Utilisateur',
                         role: profile?.role || 'viewer',
                         organization_id: profile?.organization_id,
-                        avatar: profile?.avatar || undefined,
-                        // If user is super admin in DB, flag it
+                        avatar: profile?.avatar_url || undefined,
                         is_super_admin: profile?.is_super_admin || false
                     };
 
-                    // Update localStorage for faster subsequent access or UI checks
+                    // Update localStorage for consistency and cache
                     localStorage.setItem('user', JSON.stringify(appUser));
+                    
+                    // If we successfully got a Supabase user, ensure we are NOT in demo mode
+                    localStorage.removeItem('is_demo_mode');
                     
                     return appUser;
                 } else {
-                    // If Supabase says no session, clear local storage unless it was demo
+                    // If Supabase explicitly says no session, clear local storage (unless it was a forced demo mode)
                     if (!isDemoMode()) {
                         localStorage.removeItem('user');
                     }
@@ -111,10 +130,11 @@ export const api = {
                 if (error) throw new Error("Email ou mot de passe incorrect.");
                 
                 // 2. Fetch full user details using the logic we centralized in getUser
-                // This ensures we get the organization_id correctly
+                // This ensures we get the organization_id correctly immediately after login
                 const appUser = await api.auth.getUser();
                 
                 if (!appUser) {
+                    // Should not happen if signInWithPassword succeeded, but safety net
                     throw new Error("Erreur lors de la récupération du profil utilisateur.");
                 }
 
@@ -139,7 +159,7 @@ export const api = {
                 });
                 if (error) throw new Error(error.message);
                 
-                // Note: The public.users trigger in Supabase should handle creating the user record
+                // Return a temporary user object, getUser will flesh it out once confirmed/logged in
                 return { id: data.user?.id, email, name, role: 'admin' } as User;
             } else {
                 // Fallback / Demo
@@ -215,7 +235,8 @@ export const api = {
                 };
             }
 
-            // Real Data Fetch
+            // Real Data Fetch via Supabase
+            // user.organization_id should have been populated by api.auth.getUser()
             if (supabase && user?.organization_id) {
                 const { data: org, error } = await supabase
                     .from('organizations')
@@ -255,14 +276,17 @@ export const api = {
             if (supabase) {
                 const { data: { session } } = await supabase.auth.getSession();
                 
-                if (session?.provider_token) {
+                // We verify we have a session first
+                if (session?.user) {
+                    // Find the user's organization to update
                     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', session.user.id).single();
                     
-                    if (profile?.organization_id) {
+                    if (profile?.organization_id && session.provider_token) {
                         const updates: any = {
                             google_access_token: session.provider_token
                         };
                         
+                        // Only update refresh token if provided (it comes only on first consent or explicit re-consent)
                         if (session.provider_refresh_token) {
                             updates.google_refresh_token = session.provider_refresh_token;
                         }
