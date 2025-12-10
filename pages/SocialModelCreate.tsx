@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Card, CardContent, Button, Input, useToast, Badge } from '../components/ui';
 import { ArrowLeft, Save, Palette, Layout, Type, Tag, X } from 'lucide-react';
@@ -38,7 +39,7 @@ export const SocialModelCreatePage = () => {
                     font: fontStyle
                 },
                 tags
-            });
+            } as any);
             toast.success("Modèle créé avec succès !");
             setTimeout(() => navigate('/social'), 500);
         } catch (e) {
