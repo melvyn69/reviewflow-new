@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, User, BrandSettings, NotificationSettings } from '../types';
@@ -507,6 +508,23 @@ export const SettingsPage = () => {
     loadData();
   }, [location.search]);
 
+  // Sync Google tokens on mount (especially after OAuth redirect)
+  useEffect(() => {
+      const syncGoogle = async () => {
+          try {
+              const synced = await api.organization.saveGoogleTokens();
+              if (synced) {
+                  // Reload org data if sync was successful
+                  const orgData = await api.organization.get();
+                  setOrg(orgData);
+              }
+          } catch (e) {
+              console.error("Failed to sync Google tokens on mount", e);
+          }
+      };
+      syncGoogle();
+  }, []);
+
   useEffect(() => {
       if (activeTab === 'team') {
           loadTeam();
@@ -773,10 +791,11 @@ export const SettingsPage = () => {
                             onClick={handleImportGoogle} 
                             icon={UploadCloud}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                            disabled={!org?.integrations?.google}
                         >
                             Importer depuis Google
                         </Button>
-                        <Button variant="outline" onClick={() => setShowMappingModal(true)} icon={LinkIcon}>Mapper Google</Button>
+                        <Button variant="outline" onClick={() => setShowMappingModal(true)} icon={LinkIcon} disabled={!org?.integrations?.google}>Mapper Google</Button>
                         <Button icon={Plus} onClick={() => { setEditingLocation(null); setShowLocationModal(true); }} className="ml-auto">Ajouter manuellement</Button>
                     </div>
 

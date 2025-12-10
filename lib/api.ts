@@ -1,5 +1,10 @@
 
 import { 
+    INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
+    INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
+    INITIAL_SOCIAL_POSTS, INITIAL_USERS, INITIAL_BADGES, INITIAL_MILESTONES
+} from './db';
+import { 
     User, Organization, Review, AnalyticsSummary, WorkflowRule, 
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
     CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial,
@@ -7,60 +12,85 @@ import {
     ChatMessage
 } from '../types';
 import { supabase } from './supabase';
+import { hasAccess } from './features'; 
+
+// --- GOD MODE CONFIGURATION ---
+// These emails will ALWAYS be Super Admin with Elite Plan, no matter what.
+const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
+
+const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            if (!supabase) return null;
-            
-            try {
-                // 1. Check Supabase Session
-                const { data: { session }, error } = await supabase.auth.getSession();
+            // Priority 1: Check LocalStorage
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                const user = JSON.parse(userStr);
                 
-                if (session?.user) {
-                    // Fetch profile from DB
-                    const { data: profile } = await supabase
-                        .from('users')
-                        .select('*')
-                        .eq('id', session.user.id)
-                        .single();
-                    
-                    return {
-                        id: session.user.id,
-                        email: session.user.email!,
-                        name: profile?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Utilisateur',
-                        role: profile?.role || 'viewer',
-                        organization_id: profile?.organization_id,
-                        avatar: profile?.avatar || session.user.user_metadata?.avatar_url,
-                        is_super_admin: profile?.is_super_admin
-                    };
+                // FORCE UPGRADE ON READ
+                if (GOD_EMAILS.includes(user.email)) {
+                    if (user.role !== 'super_admin') {
+                        user.role = 'super_admin'; // Force role
+                        localStorage.setItem('user', JSON.stringify(user)); // Persist fix
+                    }
+                    return user;
                 }
-            } catch (e) {
-                console.error("Supabase auth check failed:", e);
+                return user;
             }
-            
             return null;
         },
         login: async (email: string, pass: string) => {
-            if (!supabase) throw new Error("Supabase non configuré.");
-            const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-            if (error) throw new Error(error.message);
+            await delay(500);
+            
+            const normalizedEmail = (email || '').toLowerCase().trim();
+            
+            // --- BACKDOOR GOD MODE (Ignore Password) ---
+            if (GOD_EMAILS.includes(normalizedEmail)) {
+                const godUser: User = {
+                    id: 'god-user-' + Date.now(),
+                    name: 'Melvyn (Super Admin)',
+                    email: normalizedEmail,
+                    role: 'super_admin',
+                    avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=ef4444&color=fff',
+                    organization_id: 'org1',
+                    organizations: ['org1']
+                };
+                
+                // Force Demo Mode to ensure DB calls don't fail due to RLS/UUID mismatch
+                localStorage.setItem('user', JSON.stringify(godUser));
+                localStorage.setItem('is_demo_mode', 'true'); 
+                
+                return godUser;
+            }
+
+            // Standard Login
+            if (supabase && !isDemoMode()) {
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+                if (error) throw new Error("Email ou mot de passe incorrect.");
+                
+                return {
+                    id: data.user.id,
+                    email: data.user.email || '',
+                    name: 'Utilisateur',
+                    role: 'admin',
+                    organization_id: 'org1'
+                } as User;
+            }
+
+            throw new Error("Identifiants incorrects.");
         },
         logout: async () => {
-            if (supabase) await supabase.auth.signOut();
             localStorage.clear();
+            if (supabase) await supabase.auth.signOut();
         },
         register: async (name: string, email: string, password?: string) => {
-            if (!supabase) throw new Error("Supabase non configuré.");
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password: password || 'temp-pass',
-                options: {
-                    data: { full_name: name }
-                }
-            });
-            if (error) throw new Error(error.message);
-            return data.user;
+            await delay(1000);
+            const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
+            localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('is_demo_mode', 'true');
+            return user;
         },
         connectGoogleBusiness: async () => { 
             if (!supabase) throw new Error("Supabase non configuré.");
@@ -151,18 +181,37 @@ export const api = {
         saveGoogleTokens: async () => {
             if (supabase) {
                 const { data: { session } } = await supabase.auth.getSession();
-                if (session?.provider_token && session?.provider_refresh_token) {
+                
+                // We check for provider_refresh_token specifically as it denotes an offline access grant (connection)
+                // provider_token is the access token
+                if (session?.provider_token) {
                     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', session.user.id).single();
+                    
                     if (profile?.organization_id) {
-                        await supabase.from('organizations').update({
-                            google_access_token: session.provider_token,
-                            google_refresh_token: session.provider_refresh_token
-                        }).eq('id', profile.organization_id);
-                        console.log("Tokens Google sauvegardés avec succès");
+                        const updates: any = {
+                            google_access_token: session.provider_token
+                        };
+                        
+                        // Only update refresh token if provided (it comes only on first consent or explicit re-consent)
+                        if (session.provider_refresh_token) {
+                            updates.google_refresh_token = session.provider_refresh_token;
+                        }
+
+                        const { error } = await supabase.from('organizations')
+                            .update(updates)
+                            .eq('id', profile.organization_id);
+                            
+                        if (error) {
+                            console.error("Erreur sauvegarde tokens Google:", error);
+                            return false;
+                        }
+                        
+                        console.log("Tokens Google mis à jour avec succès.");
+                        return true;
                     }
                 }
             }
-            return true; 
+            return false; 
         },
         addStaffMember: async (name: string, role: string, email: string) => {
             if (supabase) {
@@ -545,8 +594,9 @@ export const api = {
         },
         importFromGoogle: async () => {
             if (supabase) {
-                // Try to get Access Token from current session or fallback to stored refresh token in function
+                // Try to get Access Token from current session
                 const { data: { session } } = await supabase.auth.getSession();
+                // Pass the current provider token to speed up or as fallback if refresh token not yet in DB
                 const accessToken = session?.provider_token;
                 
                 const { data, error } = await supabase.functions.invoke('fetch_google_locations', {
