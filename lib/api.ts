@@ -134,10 +134,10 @@ export const api = {
         removeStaffMember: async (id: string) => { await delay(500); },
         generateApiKey: async (name: string) => { await delay(500); },
         revokeApiKey: async (id: string) => { await delay(500); },
-        saveWebhook: async () => { await delay(500); },
-        testWebhook: async () => { await delay(1000); return true; },
-        deleteWebhook: async () => { await delay(500); },
-        simulatePlanChange: async () => { await delay(1000); }
+        saveWebhook: async (webhook: any) => { await delay(500); },
+        testWebhook: async (id: string) => { await delay(1000); return true; },
+        deleteWebhook: async (id: string) => { await delay(500); },
+        simulatePlanChange: async (plan: string) => { await delay(1000); }
     },
     reviews: {
         list: async (filters: any): Promise<Review[]> => {
@@ -159,8 +159,8 @@ export const api = {
         archive: async (id: string) => { await delay(300); },
         unarchive: async (id: string) => { await delay(300); },
         getCounts: async () => ({ todo: 5, done: 120 }),
-        subscribe: (callback: (payload: any) => void) => ({ unsubscribe: () => {} }),
-        uploadCsv: async () => { await delay(1000); return 15; }
+        subscribe: (callback: any) => ({ unsubscribe: () => {} }),
+        uploadCsv: async (file: File) => { await delay(1000); return 15; }
     },
     notifications: {
         list: async () => [],
@@ -171,7 +171,7 @@ export const api = {
         search: async (query: string) => []
     },
     ai: {
-        generateReply: async (review: Review, config: any) => {
+        generateReply: async (review: Review, config?: any) => {
             await delay(1000);
             return "Merci pour votre message ! Nous sommes ravis que vous ayez apprécié votre expérience. À très bientôt !";
         },
@@ -179,11 +179,11 @@ export const api = {
             await delay(1000);
             return `[${settings.tone}] Merci beaucoup ! (Ceci est une simulation locale)`;
         },
-        generateSocialPost: async (review: Review, platform: string) => {
+        generateSocialPost: async (context: any, platform: string) => {
             await delay(1000);
             return "🌟 Un immense merci à nos clients formidables ! #Gratitude";
         },
-        generateManagerAdvice: async (staff: StaffMember, rank: number, type: string) => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
+        generateManagerAdvice: async (member: any, rank: number, type: string) => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
         runCustomTask: async (payload: any) => { await delay(2000); return { result: "Success" }; },
         chatWithSupport: async (msg: string, history?: ChatMessage[]) => { await delay(1000); return "Je suis l'assistant de test. Tout fonctionne !"; },
         getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
@@ -207,7 +207,7 @@ export const api = {
             keywords: [], ai_analysis: { strengths: [], weaknesses: [], opportunities: [] }
         }),
         generateRichSnippet: async (data: any) => "{}",
-        generateCampaignContent: async (prompt: string, budget: number) => ({ sms: "", email_subject: "", email_body: "", social_caption: "" })
+        generateCampaignContent: async (prompt: string, budget: number) => ({ sms: "Contenu SMS généré", email_subject: "Objet Email", email_body: "Contenu Email", social_caption: "Contenu Social" })
     },
     automation: {
         getWorkflows: async () => { await delay(300); return INITIAL_WORKFLOWS; },
@@ -220,7 +220,7 @@ export const api = {
         getReports: async () => [],
         saveReport: async (data?: any) => {},
         autoDiscover: async (radius: number, keyword: string, lat: number, lng: number) => { await delay(2000); return INITIAL_COMPETITORS; },
-        getDeepAnalysis: async (sector: string, location: string, competitors: any[]) => ({ market_analysis: "Analyse...", trends: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, competitors_detailed: [] }),
+        getDeepAnalysis: async (sector: string, location: string, competitors: any[]) => ({ market_analysis: "Analyse...", trends: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, competitors_detailed: [] } as any),
         create: async (data: any) => {},
         delete: async (id: string) => {}
     },
@@ -234,7 +234,7 @@ export const api = {
     billing: {
         getInvoices: async () => [],
         getUsage: async () => 450,
-        createCheckoutSession: async (plan: string) => "https://checkout.stripe.com/mock",
+        createCheckoutSession: async (planId: string) => "https://checkout.stripe.com/mock",
         createPortalSession: async () => "https://billing.stripe.com/mock"
     },
     locations: {
@@ -264,7 +264,7 @@ export const api = {
     },
     public: {
         getLocationInfo: async (id: string) => INITIAL_ORG.locations.find(l => l.id === id) || null,
-        getWidgetReviews: async (locationId: string) => INITIAL_REVIEWS,
+        getWidgetReviews: async (id: string) => INITIAL_REVIEWS,
         submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {}
     },
     widgets: {
@@ -289,7 +289,7 @@ export const api = {
         checkHealth: async () => ({ db: true, latency: 45 })
     },
     admin: {
-        getStats: async () => ({ mrr: "0 €", active_tenants: 0, total_reviews_processed: 0, tenants: [] })
+        getStats: async () => ({ mrr: "0 €", active_tenants: 0, total_reviews_processed: 0, tenants: [] } as any)
     },
     google: {
         fetchAllGoogleLocations: async () => [],
@@ -305,7 +305,7 @@ export const api = {
     progression: {
         get: async (): Promise<ClientProgress> => ({
             score: 100,
-            level: 'Expert',
+            level: 'Expert' as any,
             steps: { google_connected: true, establishment_configured: true, funnel_active: true, first_review_replied: true, widget_installed: true, automation_active: true, social_active: true },
             next_actions: []
         }),

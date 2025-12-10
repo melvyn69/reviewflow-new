@@ -83,7 +83,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
       setIsLoading(true);
       setError(null);
       try {
-          await api.auth.connectGoogleBusiness(); // Reusing the method which initiates OAuth
+          await api.auth.connectGoogleBusiness(); 
       } catch (err: any) {
           setError(err.message || "Erreur de connexion Google");
           setIsLoading(false);
