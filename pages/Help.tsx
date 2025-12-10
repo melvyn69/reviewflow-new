@@ -8,7 +8,7 @@ import { SupportChatbot } from '../components/SupportChatbot';
 
 // --- COMPONENTS ---
 
-const TutorialCard = ({ tutorial, onClick }: { tutorial: Tutorial, onClick: () => void }) => (
+const TutorialCard: React.FC<{ tutorial: Tutorial, onClick: () => void }> = ({ tutorial, onClick }) => (
     <div 
         onClick={onClick}
         className="group flex flex-col bg-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg transition-all cursor-pointer overflow-hidden h-full"

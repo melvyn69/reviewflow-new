@@ -8,11 +8,11 @@ import {
     User, Organization, Review, AnalyticsSummary, WorkflowRule, 
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
     CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial,
-    ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign
+    ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign,
+    Location
 } from '../types';
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase } from './supabase';
 import { hasAccess } from './features'; 
-import { GoogleGenAI } from "@google/genai";
 
 // --- GOD MODE CONFIGURATION ---
 // These emails will ALWAYS be Super Admin with Elite Plan, no matter what.
@@ -130,13 +130,13 @@ export const api = {
         update: async (data: any) => { await delay(600); return { ...INITIAL_ORG, ...data }; },
         create: async (name: string, industry: string) => { await delay(1000); return { ...INITIAL_ORG, name, industry }; },
         saveGoogleTokens: async () => { return true; },
-        addStaffMember: async (name: string, role: string, email: string) => { await delay(500); },
-        removeStaffMember: async (id: string) => { await delay(500); },
-        generateApiKey: async (name: string) => { await delay(500); },
-        revokeApiKey: async (id: string) => { await delay(500); },
-        saveWebhook: async (url: string, events: string[]) => { await delay(500); },
+        addStaffMember: async () => { await delay(500); },
+        removeStaffMember: async () => { await delay(500); },
+        generateApiKey: async () => { await delay(500); },
+        revokeApiKey: async () => { await delay(500); },
+        saveWebhook: async () => { await delay(500); },
         testWebhook: async () => { await delay(1000); return true; },
-        deleteWebhook: async (id: string) => { await delay(500); },
+        deleteWebhook: async () => { await delay(500); },
         simulatePlanChange: async () => { await delay(1000); }
     },
     reviews: {
@@ -151,16 +151,16 @@ export const api = {
             { id: '1', type: 'review_created', actor_name: review.author_name, date: review.received_at, content: 'Avis reçu' },
             { id: '2', type: 'ai_analysis', actor_name: 'IA Gemini', date: review.received_at, content: 'Analyse terminée' },
         ],
-        reply: async (id: string, text: string) => { await delay(500); },
-        saveDraft: async (id: string, text: string) => { await delay(500); },
+        reply: async () => { await delay(500); },
+        saveDraft: async () => { await delay(500); },
         addNote: async (id: string, text: string) => ({ id: Date.now().toString(), text, author_name: 'Moi', created_at: new Date().toISOString() }),
-        addTag: async (id: string, tag: string) => { await delay(200); },
-        removeTag: async (id: string, tag: string) => { await delay(200); },
-        archive: async (id: string) => { await delay(300); },
-        unarchive: async (id: string) => { await delay(300); },
+        addTag: async () => { await delay(200); },
+        removeTag: async () => { await delay(200); },
+        archive: async () => { await delay(300); },
+        unarchive: async () => { await delay(300); },
         getCounts: async () => ({ todo: 5, done: 120 }),
-        subscribe: (callback: any) => ({ unsubscribe: () => {} }),
-        uploadCsv: async (file: File) => { await delay(1000); return 15; }
+        subscribe: () => ({ unsubscribe: () => {} }),
+        uploadCsv: async () => { await delay(1000); return 15; }
     },
     notifications: {
         list: async () => [],
@@ -168,10 +168,10 @@ export const api = {
         sendTestEmail: async () => { await delay(1000); }
     },
     global: {
-        search: async (query: string) => []
+        search: async () => []
     },
     ai: {
-        generateReply: async (review: Review, config: any) => {
+        generateReply: async () => {
             await delay(1000);
             return "Merci pour votre message ! Nous sommes ravis que vous ayez apprécié votre expérience. À très bientôt !";
         },
@@ -179,13 +179,13 @@ export const api = {
             await delay(1000);
             return `[${settings.tone}] Merci beaucoup ! (Ceci est une simulation locale)`;
         },
-        generateSocialPost: async (review: Review, platform: string) => {
+        generateSocialPost: async () => {
             await delay(1000);
             return "🌟 Un immense merci à nos clients formidables ! #Gratitude";
         },
-        generateManagerAdvice: async (member: StaffMember, rank: number, type: string) => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
-        runCustomTask: async (payload: any) => { await delay(2000); return { result: "Success" }; },
-        chatWithSupport: async (msg: string, history: any[]) => { await delay(1000); return "Je suis l'assistant de test. Tout fonctionne !"; },
+        generateManagerAdvice: async () => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
+        runCustomTask: async () => { await delay(2000); return { result: "Success" }; },
+        chatWithSupport: async () => { await delay(1000); return "Je suis l'assistant de test. Tout fonctionne !"; },
         getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
             await delay(1000);
             return {
@@ -196,7 +196,7 @@ export const api = {
         }
     },
     analytics: {
-        getOverview: async (period: string = '30j') => { await delay(500); return INITIAL_ANALYTICS; }
+        getOverview: async () => { await delay(500); return INITIAL_ANALYTICS; }
     },
     marketing: {
         getBlogPosts: async () => [],
@@ -226,88 +226,22 @@ export const api = {
     },
     team: {
         list: async () => INITIAL_USERS,
-        invite: async (email: string, role: string, firstName?: string, lastName?: string) => ({ success: true })
+        invite: async () => ({ success: true })
     },
     reports: {
-        trigger: async (id: string) => { await delay(1000); }
+        trigger: async () => { await delay(1000); }
     },
     billing: {
         getInvoices: async () => [],
         getUsage: async () => 450,
-        createCheckoutSession: async (planId?: string) => "https://checkout.stripe.com/mock",
+        createCheckoutSession: async () => "https://checkout.stripe.com/mock",
         createPortalSession: async () => "https://billing.stripe.com/mock"
     },
     locations: {
-        update: async (id: string, data: any) => {
-            if (isSupabaseConfigured() && !isDemoMode()) {
-                await supabase.from('locations').update(data).eq('id', id);
-            }
-        },
-        create: async (data: any) => {
-            const user = await api.auth.getUser();
-            if (isSupabaseConfigured() && !isDemoMode() && user?.organization_id) {
-                await supabase.from('locations').insert({ ...data, organization_id: user.organization_id });
-            }
-        },
-        delete: async (id: string) => {
-            if (isSupabaseConfigured() && !isDemoMode()) {
-                await supabase.from('locations').delete().eq('id', id);
-            }
-        },
-        importFromGoogle: async () => {
-            if (!isSupabaseConfigured() || isDemoMode()) {
-                await delay(2000); return 2; // Mock
-            }
-
-            // REAL IMPORT LOGIC using Session Token (Access Token)
-            const { data: { session } } = await supabase.auth.getSession();
-            const accessToken = session?.provider_token;
-            
-            if (!accessToken) {
-                throw new Error("Token Google manquant. Veuillez reconnecter votre compte Google dans les paramètres.");
-            }
-
-            // 1. Call Edge Function to fetch locations from Google API
-            const { data: locations, error } = await supabase.functions.invoke('fetch_google_locations', {
-                body: { accessToken }
-            });
-
-            if (error) throw new Error(error.message || "Erreur lors de la récupération des établissements Google.");
-            if (!locations || locations.length === 0) return 0;
-
-            // 2. Save locations to Supabase
-            const user = await api.auth.getUser();
-            if (!user?.organization_id) throw new Error("Organisation introuvable.");
-
-            let importedCount = 0;
-            for (const loc of locations) {
-                // Upsert based on external_reference (Google Resource Name)
-                const { error: insertError } = await supabase.from('locations').upsert({
-                    organization_id: user.organization_id,
-                    name: loc.title, // 'title' from GMB API is the business name
-                    external_reference: loc.name, // 'name' from GMB API is the ID resource
-                    address: loc.address,
-                    city: loc.address?.split(',').pop()?.trim() || 'Ville inconnue', // Basic parsing
-                    country: 'France', // Default or parse from address
-                    connection_status: 'connected',
-                    platform_rating: 0 // Will be updated by sync
-                }, { onConflict: 'external_reference' });
-
-                if (!insertError) {
-                    importedCount++;
-                    // Trigger initial reviews sync for this location (Fire & Forget)
-                    supabase.functions.invoke('fetch_google_reviews', {
-                        body: { 
-                            locationId: null, // Let function find ID by name or fetch logic
-                            googleLocationName: loc.name,
-                            organizationId: user.organization_id
-                        }
-                    }).catch(console.error);
-                }
-            }
-
-            return importedCount;
-        }
+        update: async () => {},
+        create: async () => {},
+        delete: async () => {},
+        importFromGoogle: async () => { await delay(2000); return 2; }
     },
     activity: {
         getRecent: async () => []
@@ -322,34 +256,37 @@ export const api = {
     },
     seedCloudDatabase: async () => {},
     social: {
-        getPosts: async (locationId?: string) => INITIAL_SOCIAL_POSTS,
-        schedulePost: async (post: any) => {},
-        uploadMedia: async (file: File) => "https://via.placeholder.com/500",
-        connectAccount: async (platform: string) => {},
-        saveTemplate: async (template: any) => {}
+        getPosts: async () => INITIAL_SOCIAL_POSTS,
+        schedulePost: async () => {},
+        uploadMedia: async () => "https://via.placeholder.com/500",
+        connectAccount: async () => {},
+        saveTemplate: async () => {}
     },
     public: {
-        getLocationInfo: async (id: string) => INITIAL_ORG.locations.find(l => l.id === id) || null,
-        getWidgetReviews: async (id: string) => INITIAL_REVIEWS,
-        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {}
+        getLocationInfo: async (id: string) => {
+            const { data } = await supabase!.from('locations').select('*').eq('id', id).single();
+            return data as Location;
+        },
+        getWidgetReviews: async () => INITIAL_REVIEWS,
+        submitFeedback: async () => {}
     },
     widgets: {
         requestIntegration: async () => {}
     },
     campaigns: {
-        send: async (channel: string, to: string, subject: string, content: string, segment: string, link?: string) => {},
+        send: async () => {},
         getHistory: async () => []
     },
     offers: {
-        validate: async (code: string) => ({ valid: false, reason: 'Code inconnu' }),
-        redeem: async (code: string) => {},
-        create: async (data: any) => {}
+        validate: async () => ({ valid: false, reason: 'Code inconnu' }),
+        redeem: async () => {},
+        create: async () => {}
     },
     customers: {
         list: async () => [],
-        update: async (id: string, data: any) => {},
-        import: async (data: any[]) => {},
-        enrichProfile: async (id: string) => ({ profile: "...", suggestion: "..." })
+        update: async () => {},
+        import: async () => {},
+        enrichProfile: async () => ({ profile: "...", suggestion: "..." })
     },
     system: {
         checkHealth: async () => ({ db: true, latency: 45 })
@@ -362,10 +299,10 @@ export const api = {
         syncReviewsForLocation: async () => { await delay(2000); return 5; }
     },
     company: {
-        search: async (query: string) => []
+        search: async () => []
     },
     support: {
-        sendTicket: async (data: any) => {},
+        sendTicket: async () => {},
         getTutorials: async () => []
     },
     progression: {

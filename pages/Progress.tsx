@@ -12,7 +12,7 @@ const LEVEL_COLORS = {
     'Expert': 'bg-amber-500'
 };
 
-const BadgeCard = ({ badge }: { badge: BadgeType }) => {
+const BadgeCard: React.FC<{ badge: BadgeType }> = ({ badge }) => {
     const Icon = {
         User: Star,
         MessageSquare: MessageSquareIcon,
