@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, ProBadge, Badge } from './ui';
 import { 
@@ -37,7 +38,7 @@ import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
-import { hasAccess, FeatureId } from '../lib/features';
+import { hasAccess, FeatureId, isFeatureActive } from '../lib/features';
 
 // Sidebar Item Component
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isLocked = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isLocked?: boolean }) => {
@@ -140,6 +141,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   // Check Access Helper (includes user for God Mode check)
   const check = (feat: FeatureId) => !hasAccess(org, feat, user);
 
+  // Check Beta Flags
+  const showMarketing = isFeatureActive('MARKETING_MODULE', user);
+
   return (
     <>
       {isOpen && (
@@ -185,7 +189,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={() => onClose()} />
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={() => onClose()} />
-          <SidebarItem to="/marketing" icon={Megaphone} label="Marketing & SEO" onClick={() => onClose()} />
+          
+          {showMarketing && (
+            <SidebarItem to="/marketing" icon={Megaphone} label="Marketing & SEO" onClick={() => onClose()} />
+          )}
+          
           <SidebarItem to="/progress" icon={Trophy} label="Progression" onClick={() => onClose()} />
           
           <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={() => onClose()} isLocked={check('social_studio')} />

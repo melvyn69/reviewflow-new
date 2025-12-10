@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
@@ -35,6 +36,7 @@ import { User } from './types';
 import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from './components/ui';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { isFeatureActive } from './lib/features';
 
 // ScrollToTop component
 const ScrollToTop = () => {
@@ -155,7 +157,17 @@ function AppRoutes() {
                     <Routes>
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
-                        <Route path="marketing" element={<MarketingPage />} />
+                        
+                        {/* FEATURE FLAG PROTECTION: MARKETING */}
+                        <Route 
+                            path="marketing" 
+                            element={
+                                isFeatureActive('MARKETING_MODULE', user) 
+                                ? <MarketingPage /> 
+                                : <Navigate to="/dashboard" replace />
+                            } 
+                        />
+                        
                         <Route path="progress" element={<ProgressPage />} />
                         <Route path="social" element={<SocialPage />} /> 
                         <Route path="social/models/create" element={<SocialModelCreatePage />} />

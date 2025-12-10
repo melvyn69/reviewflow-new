@@ -14,6 +14,14 @@ export type FeatureId =
 
 export type UserRole = 'super_admin' | 'admin' | 'manager' | 'editor' | 'viewer';
 
+// --- FEATURE FLAGS (ON/OFF) ---
+// Mettez à 'false' pour cacher une fonctionnalité aux clients (Maintenance ou Beta)
+// Les Super Admins voient TOUJOURS tout, peu importe cette valeur.
+export const BETA_FLAGS = {
+    MARKETING_MODULE: false, // Exemple: Le module Marketing est caché pour les clients
+    DEVELOPERS_API: true     // L'API est visible
+};
+
 interface PlanDefinition {
     label: string;
     features: FeatureId[];
@@ -103,6 +111,13 @@ export const getPlanLimits = (planId: string) => {
 // GOD MODE HELPER
 export const isGodMode = (user: User | null | undefined): boolean => {
     return !!user?.is_super_admin;
+};
+
+// Vérifie si une fonctionnalité est "Techniquement" active (Feature Flag)
+// Si flag = false, seul le Super Admin la voit.
+export const isFeatureActive = (flag: keyof typeof BETA_FLAGS, user?: User | null): boolean => {
+    if (user && isGodMode(user)) return true; // God Mode voit tout
+    return BETA_FLAGS[flag];
 };
 
 export const hasAccess = (org: Organization | null, feature: FeatureId, user?: User | null): boolean => {
