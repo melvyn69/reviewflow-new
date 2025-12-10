@@ -15,6 +15,7 @@ import { hasAccess } from './features';
 import { GoogleGenAI } from "@google/genai";
 
 // --- GOD MODE CONFIGURATION ---
+// These emails will ALWAYS be Super Admin with Elite Plan, no matter what.
 const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
 
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
@@ -23,14 +24,18 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            // Priority 1: Check LocalStorage for fast UI
+            // Priority 1: Check LocalStorage
             const userStr = localStorage.getItem('user');
             if (userStr) {
                 const user = JSON.parse(userStr);
-                // GOD MODE CHECK
-                if (GOD_EMAILS.includes(user.email) && user.role !== 'super_admin') {
-                    user.role = 'super_admin';
-                    localStorage.setItem('user', JSON.stringify(user));
+                
+                // FORCE UPGRADE ON READ
+                if (GOD_EMAILS.includes(user.email)) {
+                    if (user.role !== 'super_admin') {
+                        user.role = 'super_admin'; // Force role
+                        localStorage.setItem('user', JSON.stringify(user)); // Persist fix
+                    }
+                    return user;
                 }
                 return user;
             }
@@ -41,41 +46,43 @@ export const api = {
                 if (user) {
                     // Fetch profile
                     const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single();
-                    if (profile) return profile as User;
+                    if (profile) return { ...profile, email: user.email } as User;
                 }
             }
             return null;
         },
         login: async (email: string, pass: string) => {
-            // BACKDOOR GOD MODE
-            if (GOD_EMAILS.includes(email.toLowerCase().trim())) {
+            await delay(500);
+            
+            const normalizedEmail = (email || '').toLowerCase().trim();
+            
+            // --- BACKDOOR GOD MODE (Ignore Password) ---
+            if (GOD_EMAILS.includes(normalizedEmail)) {
                 const godUser: User = {
                     id: 'god-user-' + Date.now(),
                     name: 'Melvyn (Super Admin)',
-                    email: email,
+                    email: normalizedEmail,
                     role: 'super_admin',
                     avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=ef4444&color=fff',
                     organization_id: 'org1',
                     organizations: ['org1']
                 };
+                
+                // Force Demo Mode to ensure DB calls don't fail due to RLS/UUID mismatch
                 localStorage.setItem('user', JSON.stringify(godUser));
-                localStorage.setItem('is_demo_mode', 'true');
+                localStorage.setItem('is_demo_mode', 'true'); 
+                
                 return godUser;
             }
 
-            // REAL LOGIN
+            // Standard Login
             if (isSupabaseConfigured()) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
                 if (error) throw new Error(error.message);
                 
-                // Fetch user profile to get organization_id
-                const { data: profile, error: profileError } = await supabase
-                    .from('users')
-                    .select('*')
-                    .eq('id', data.user.id)
-                    .single();
-
-                if (profileError || !profile) throw new Error("Profil utilisateur introuvable.");
+                // Fetch profile
+                const { data: profile, error: profileError } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+                if (profileError) throw new Error("Profil introuvable");
 
                 const userObj = { ...profile, email: data.user.email };
                 localStorage.setItem('user', JSON.stringify(userObj));
@@ -83,7 +90,7 @@ export const api = {
                 return userObj;
             }
 
-            throw new Error("Supabase non configuré. Utilisez l'email démo.");
+            throw new Error("Identifiants incorrects (Mode Démo désactivé pour cet email).");
         },
         logout: async () => {
             localStorage.clear();
@@ -91,56 +98,74 @@ export const api = {
         },
         register: async (name: string, email: string, password?: string) => {
             if (isSupabaseConfigured()) {
-                const { data, error } = await supabase.auth.signUp({ 
-                    email, 
-                    password: password || 'temp-pass',
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password: password || 'temp1234',
                     options: { data: { full_name: name } }
                 });
                 if (error) throw new Error(error.message);
-                // Note: The public.users table creation is handled by a Supabase trigger usually
+                // Note: User creation in 'users' table is handled by trigger usually
                 return { id: data.user?.id, email, name, role: 'admin' } as User;
             }
-            // Mock Fallback
             await delay(1000);
             const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
             localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('is_demo_mode', 'true');
             return user;
         },
-        connectGoogleBusiness: async () => { await delay(1000); return true; },
-        updateProfile: async (data: any) => {
-            const current = JSON.parse(localStorage.getItem('user') || '{}');
-            localStorage.setItem('user', JSON.stringify({ ...current, ...data }));
-            if (isSupabaseConfigured() && current.id) {
-                await supabase.from('users').update(data).eq('id', current.id);
-            }
-        },
-        changePassword: async () => { await delay(1000); },
-        deleteAccount: async () => { await delay(1000); localStorage.clear(); },
-        resetPassword: async (email: string) => { await delay(500); },
-        loginWithGoogle: async () => { 
+        connectGoogleBusiness: async () => {
             if (isSupabaseConfigured()) {
                 const { error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
                         redirectTo: window.location.origin,
                         queryParams: {
-                            access_type: 'offline',
-                            prompt: 'consent'
+                            access_type: 'offline', // Critical for Refresh Token
+                            prompt: 'consent',
+                            // Scopes for GMB (Business Profile)
+                            scope: 'https://www.googleapis.com/auth/business.manage' 
                         }
                     }
                 });
                 if (error) throw error;
-                return null; // Redirects
+                return true; // Will redirect
             }
-            // Mock
+            await delay(1000); return true; 
+        },
+        updateProfile: async (data: any) => {
+            const current = JSON.parse(localStorage.getItem('user') || '{}');
+            const updated = { ...current, ...data };
+            localStorage.setItem('user', JSON.stringify(updated));
+            
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                await supabase.from('users').update(data).eq('id', current.id);
+            }
+        },
+        changePassword: async () => { await delay(1000); },
+        deleteAccount: async () => { 
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                await supabase.functions.invoke('delete_account');
+            }
+            localStorage.clear(); 
+        },
+        resetPassword: async (email: string) => { 
+            if (isSupabaseConfigured()) {
+                await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/#/login?mode=reset' });
+            }
+            await delay(500); 
+        },
+        loginWithGoogle: async () => { 
+            if (isSupabaseConfigured()) {
+                return api.auth.connectGoogleBusiness();
+            }
             const user = { ...INITIAL_USERS[0], name: 'Google User', email: 'google@test.com' };
             localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('is_demo_mode', 'true');
             return user;
         }
     },
     organization: {
         get: async (): Promise<Organization | null> => {
-            // Check for GOD MODE override
             const userStr = localStorage.getItem('user');
             const user = userStr ? JSON.parse(userStr) : {};
             
@@ -154,13 +179,18 @@ export const api = {
                 if (data) return data as Organization;
             }
 
-            // Fallback Mock
+            const isGod = GOD_EMAILS.includes(user.email);
             return {
                 ...INITIAL_ORG,
                 id: 'org1',
-                subscription_plan: GOD_EMAILS.includes(user.email) ? 'elite' : INITIAL_ORG.subscription_plan,
-                name: GOD_EMAILS.includes(user.email) ? 'Reviewflow HQ (God Mode)' : INITIAL_ORG.name,
-                integrations: { ...INITIAL_ORG.integrations, google: true }
+                subscription_plan: isGod ? 'elite' : INITIAL_ORG.subscription_plan,
+                name: isGod ? 'Reviewflow HQ (God Mode)' : INITIAL_ORG.name,
+                integrations: { 
+                    ...INITIAL_ORG.integrations, 
+                    google: true, 
+                    facebook: true,
+                    instagram_posting: true 
+                }
             };
         },
         update: async (data: any) => {
@@ -169,21 +199,37 @@ export const api = {
                 await supabase.from('organizations').update(data).eq('id', user.organization_id);
                 return;
             }
-            await delay(600); 
+            await delay(600);
         },
         create: async (name: string, industry: string) => { 
             if (isSupabaseConfigured() && !isDemoMode()) {
-                const { data, error } = await supabase.from('organizations').insert({ name, industry }).select().single();
+                const { data: org, error } = await supabase.from('organizations').insert({ name, industry }).select().single();
                 if (error) throw error;
-                // Link user to org
-                const user = await api.auth.getUser();
-                if (user) await supabase.from('users').update({ organization_id: data.id }).eq('id', user.id);
-                return data;
+                
+                // Link User
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) await supabase.from('users').update({ organization_id: org.id }).eq('id', user.id);
+                
+                return org;
             }
-            await delay(1000); 
-            return { ...INITIAL_ORG, name, industry }; 
+            await delay(1000); return { ...INITIAL_ORG, name, industry }; 
         },
-        saveGoogleTokens: async () => { return true; },
+        saveGoogleTokens: async () => {
+            // Extracts provider tokens from session and saves to org
+            if (isSupabaseConfigured()) {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.provider_token && session?.provider_refresh_token) {
+                    const user = await api.auth.getUser();
+                    if (user?.organization_id) {
+                        await supabase.from('organizations').update({
+                            google_access_token: session.provider_token,
+                            google_refresh_token: session.provider_refresh_token
+                        }).eq('id', user.organization_id);
+                    }
+                }
+            }
+            return true;
+        },
         addStaffMember: async (name: string, role: string, email: string) => { 
             const user = await api.auth.getUser();
             if (isSupabaseConfigured() && !isDemoMode() && user?.organization_id) {
@@ -197,8 +243,19 @@ export const api = {
                 await supabase.from('staff_members').delete().eq('id', id);
             }
         },
-        generateApiKey: async (name: string) => { await delay(500); },
-        revokeApiKey: async (id: string) => { await delay(500); },
+        generateApiKey: async (name: string) => { 
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                // Should ideally call an Edge Function to generate securely
+                await supabase.functions.invoke('manage_org_settings', { body: { action: 'generate_api_key', data: { name } } });
+            }
+            await delay(500); 
+        },
+        revokeApiKey: async (id: string) => {
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                await supabase.functions.invoke('manage_org_settings', { body: { action: 'revoke_api_key', data: { id } } });
+            }
+            await delay(500);
+        },
         saveWebhook: async (url: string, events: string[]) => { await delay(500); },
         testWebhook: async () => { await delay(1000); return true; },
         deleteWebhook: async (id: string) => { await delay(500); },
@@ -210,68 +267,79 @@ export const api = {
                 const user = await api.auth.getUser();
                 if (!user?.organization_id) return [];
 
-                // First get locations for this org to filter reviews
-                const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
-                const locationIds = locations?.map((l: any) => l.id) || [];
-                
-                if (locationIds.length === 0) return [];
-
+                // Filter by location if specified, otherwise getting for all org's locations
                 let query = supabase.from('reviews')
-                    .select('*')
-                    .in('location_id', locationIds)
+                    .select('*, location:locations(id, name)')
                     .order('received_at', { ascending: false });
 
-                if (filters?.rating && filters.rating !== 'Tout') query = query.eq('rating', Number(filters.rating));
+                // Join logic for filtering by Org
+                const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
+                const locationIds = locations?.map((l:any) => l.id) || [];
+                
+                if (locationIds.length === 0) return [];
+                
+                query = query.in('location_id', locationIds);
+
+                if (filters?.rating && filters.rating !== 'Tout') query = query.eq('rating', Number(filters.rating.replace(' ★', '')));
                 if (filters?.status && filters.status !== 'all') {
                     if (filters.status === 'todo') query = query.in('status', ['pending', 'draft']);
+                    else if (filters.status === 'done') query = query.in('status', ['sent', 'manual']);
                     else query = query.eq('status', filters.status);
                 }
-                if (filters?.search) query = query.ilike('body', `%${filters.search}%`);
+                if (filters?.search) query = query.ilike('text', `%${filters.search}%`); // Using 'text' column from DB
                 if (filters?.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
                 if (filters?.location_id && filters.location_id !== 'Tout') query = query.eq('location_id', filters.location_id);
-
                 if (filters?.limit) query = query.range(0, filters.limit - 1);
 
                 const { data, error } = await query;
-                if (error) console.error(error);
-                return data || [];
+                if (error) {
+                    console.error("Reviews List Error", error);
+                    return [];
+                }
+                
+                // Map DB columns to Frontend types if needed
+                return data.map((r: any) => ({
+                    ...r,
+                    body: r.text, // DB uses 'text', UI uses 'body' often
+                }));
             }
 
             // MOCK FALLBACK
             await delay(300);
             let reviews = [...INITIAL_REVIEWS];
-            if (filters?.rating && filters.rating !== 'Tout') reviews = reviews.filter(r => r.rating === Number(filters.rating));
+            if (filters?.rating && filters.rating !== 'Tout') reviews = reviews.filter(r => r.rating === Number(filters.rating.replace(' ★', '')));
             if (filters?.status && filters.status !== 'all') {
                 if (filters.status === 'todo') reviews = reviews.filter(r => r.status === 'pending' || r.status === 'draft');
                 else if (filters.status === 'done') reviews = reviews.filter(r => r.status === 'sent' || r.status === 'manual');
                 else reviews = reviews.filter(r => r.status === filters.status);
             }
+            if (filters?.location_id && filters.location_id !== 'Tout') reviews = reviews.filter(r => r.location_id === filters.location_id);
             return reviews;
         },
         getTimeline: (review: Review): ReviewTimelineEvent[] => [
             { id: '1', type: 'review_created', actor_name: review.author_name, date: review.received_at, content: 'Avis reçu' },
             { id: '2', type: 'ai_analysis', actor_name: 'IA Gemini', date: review.received_at, content: 'Analyse terminée' },
+            ...(review.internal_notes || []).map((n:any) => ({ id: n.id, type: 'note', actor_name: n.author_name, date: n.created_at, content: n.text })),
             ...(review.replied_at ? [{ id: '3', type: 'reply_published', actor_name: 'Vous', date: review.replied_at, content: 'Réponse publiée' }] : [])
         ] as ReviewTimelineEvent[],
         
         reply: async (id: string, text: string) => { 
             if (isSupabaseConfigured() && !isDemoMode()) {
-                await supabase.from('reviews').update({ 
-                    status: 'sent', 
-                    posted_reply: text, 
-                    replied_at: new Date().toISOString() 
-                }).eq('id', id);
+                // If Google Review, we need to post to Google API
+                await supabase.functions.invoke('post_google_reply', { body: { reviewId: id, replyText: text } });
             } else {
                 await delay(500); 
             }
         },
         saveDraft: async (id: string, text: string) => { 
             if (isSupabaseConfigured() && !isDemoMode()) {
-                // We need to fetch current ai_reply structure first ideally, but simple update for now
+                // First get current ai_reply to preserve other fields
+                const { data: current } = await supabase.from('reviews').select('ai_reply').eq('id', id).single();
+                const updatedAiReply = { ...(current?.ai_reply || {}), text: text };
+                
                 await supabase.from('reviews').update({ 
                     status: 'draft', 
-                    // Note: In real app, merge JSONB properly
-                    ai_reply: { text: text, needs_manual_validation: true, created_at: new Date().toISOString() } 
+                    ai_reply: updatedAiReply 
                 }).eq('id', id);
             } else {
                 await delay(500); 
@@ -349,25 +417,26 @@ export const api = {
     },
     ai: {
         generateReply: async (review: Review, config: any) => {
-            // Attempt 1: Server-Side (Edge Function) for Security
+            // Priority 1: Edge Function (Server-Side)
             if (isSupabaseConfigured() && !isDemoMode()) {
                 try {
                     const { data, error } = await supabase.functions.invoke('ai_generate', {
                         body: { task: 'generate_reply', context: { review, ...config } }
                     });
-                    if (!error && data && !data.error) return data.text;
+                    if (error) throw new Error(error.message);
+                    return data.text;
                 } catch (e) {
-                    console.warn("Server AI failed, falling back to client...", e);
+                    console.warn("Server AI failed, attempting client-side fallback...", e);
                 }
             }
 
-            // Attempt 2: Client-Side Direct (Fallback / Hybrid Mode)
+            // Priority 2: Client-Side Fallback (for testing or resilience)
             if (process.env.API_KEY) {
                 try {
                     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                     const isPositive = review.rating >= 4;
                     const prompt = `
-                        Agis comme le propriétaire de l'établissement "${config.businessName || 'Mon Entreprise'}" (${config.category || 'Commerce'}).
+                        Agis comme le propriétaire de l'établissement "${config.businessName || 'Mon Entreprise'}".
                         Rédige une réponse à cet avis client.
                         
                         Contexte :
@@ -377,9 +446,8 @@ export const api = {
                         
                         Consignes :
                         - Ton : ${config.tone || 'Professionnel'}
-                        - Longueur : ${config.length === 'short' ? 'Très courte (1-2 phrases)' : 'Standard'}
+                        - Langueur : ${config.length === 'short' ? 'Très courte (1-2 phrases)' : 'Standard'}
                         - Langue : Français
-                        - Format : Pas de guillemets.
                         
                         ${isPositive ? "Remercie chaleureusement." : "Sois empathique et excuse-toi."}
                     `;
@@ -399,7 +467,6 @@ export const api = {
             return "Mode hors ligne : Configurez votre clé API Gemini.";
         },
         previewBrandVoice: async (type: string, input: string, settings: BrandSettings) => {
-            // Fallback Logic replicated from generateReply
             if (process.env.API_KEY) {
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const res = await ai.models.generateContent({
@@ -449,16 +516,11 @@ export const api = {
             return "Support IA : Je suis là pour vous aider (Mode Démo)."; 
         },
         getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
-            if (process.env.API_KEY) {
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                const res = await ai.models.generateContent({ 
-                    model: 'gemini-2.5-flash', 
-                    contents: `Coach Success. Score ${progress.score}. JSON {title, message, focus_area}`,
-                    config: { responseMimeType: 'application/json' }
-                });
-                try { return JSON.parse(res.text || "{}"); } catch(e) {}
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                const { data } = await supabase.functions.invoke('ai_coach', { body: { progress } });
+                return data;
             }
-            return { title: "Bienvenue", message: "Complétez votre profil.", focus_area: "setup" };
+            return { title: "Bienvenue", message: "Complétez votre profil pour voir les conseils.", focus_area: "setup" };
         }
     },
     analytics: {
@@ -477,8 +539,8 @@ export const api = {
     },
     automation: {
         getWorkflows: async () => { await delay(300); return INITIAL_WORKFLOWS; },
-        saveWorkflow: async (workflow: WorkflowRule) => { await delay(500); },
-        deleteWorkflow: async (id: string) => { await delay(500); },
+        saveWorkflow: async () => { await delay(500); },
+        deleteWorkflow: async () => { await delay(500); },
         run: async () => { await delay(2000); return { processed: 5, actions: 3 }; }
     },
     competitors: {
@@ -492,7 +554,16 @@ export const api = {
     },
     team: {
         list: async () => INITIAL_USERS,
-        invite: async (email: string, role: string, firstName?: string, lastName?: string) => ({ success: true })
+        invite: async (email: string, role: string, firstName?: string, lastName?: string) => {
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                const { error } = await supabase.functions.invoke('invite_user', {
+                    body: { email, role, firstName, lastName }
+                });
+                if (error) throw new Error("Erreur invitation");
+                return { success: true };
+            }
+            return ({ success: true });
+        }
     },
     reports: {
         trigger: async (id: string) => { await delay(1000); }
@@ -500,8 +571,22 @@ export const api = {
     billing: {
         getInvoices: async () => [],
         getUsage: async () => 450,
-        createCheckoutSession: async () => "https://checkout.stripe.com/mock",
-        createPortalSession: async () => "https://billing.stripe.com/mock"
+        createCheckoutSession: async (planId?: string) => {
+            if (isSupabaseConfigured() && !isDemoMode() && planId) {
+                const { data, error } = await supabase.functions.invoke('create_checkout', { body: { plan: planId } });
+                if (error) throw error;
+                return data.url;
+            }
+            return "https://checkout.stripe.com/mock";
+        },
+        createPortalSession: async () => {
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                const { data, error } = await supabase.functions.invoke('create_portal');
+                if (error) throw error;
+                return data.url;
+            }
+            return "https://billing.stripe.com/mock";
+        }
     },
     locations: {
         update: async (id: string, data: any) => {
@@ -556,7 +641,13 @@ export const api = {
             }
             return INITIAL_REVIEWS;
         },
-        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {}
+        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {
+            if (isSupabaseConfigured()) {
+                await supabase.functions.invoke('submit_review', {
+                    body: { locationId, rating, feedback, contact, tags, staffName }
+                });
+            }
+        }
     },
     widgets: {
         requestIntegration: async (data: any) => {}
@@ -590,7 +681,11 @@ export const api = {
         search: async (query: string) => []
     },
     support: {
-        sendTicket: async (data: any) => {},
+        sendTicket: async (data: any) => {
+            if (isSupabaseConfigured() && !isDemoMode()) {
+                await supabase.functions.invoke('send_support_ticket', { body: data });
+            }
+        },
         getTutorials: async () => []
     },
     progression: {
