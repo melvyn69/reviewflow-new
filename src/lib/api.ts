@@ -215,13 +215,13 @@ export const api = {
         run: async () => { await delay(2000); return { processed: 5, actions: 3 }; }
     },
     competitors: {
-        list: async () => { await delay(400); return INITIAL_COMPETITORS; },
+        list: async (opts?: any) => { await delay(400); return INITIAL_COMPETITORS; },
         getReports: async () => [],
-        saveReport: async () => {},
+        saveReport: async (data?: any) => {},
         autoDiscover: async (radius: number, keyword: string, lat: number, lng: number) => { await delay(2000); return INITIAL_COMPETITORS; },
-        getDeepAnalysis: async () => ({ market_analysis: "Analyse...", trends: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, competitors_detailed: [] }),
-        create: async () => {},
-        delete: async () => {}
+        getDeepAnalysis: async (sector?: string, location?: string, competitors?: any[]) => ({ market_analysis: "Analyse...", trends: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, competitors_detailed: [] }),
+        create: async (data?: any) => {},
+        delete: async (id?: string) => {}
     },
     team: {
         list: async () => INITIAL_USERS,

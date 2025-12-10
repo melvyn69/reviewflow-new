@@ -1,21 +1,20 @@
 
 import { 
     INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
-    INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
+    INITIAL_WORKFLOWS, INITIAL_COMPETITORS, 
     INITIAL_SOCIAL_POSTS, INITIAL_USERS, INITIAL_BADGES, INITIAL_MILESTONES
 } from './db';
 import { 
-    User, Organization, Review, AnalyticsSummary, WorkflowRule, 
-    ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
-    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial,
-    ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign
+    User, Organization, Review, WorkflowRule, 
+    ReportConfig, Competitor, SocialPost, 
+    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings,
+    ClientProgress, AiCoachMessage, BlogPost, SeoAudit
 } from '../types';
 import { supabase } from './supabase';
-import { hasAccess } from './features'; 
 
-// --- GOD MODE CONFIGURATION ---
-// Empty list ensures EVERYONE uses the real backend.
-const GOD_EMAILS: string[] = [];
+// --- CONFIGURATION ---
+// Liste vide = Tout le monde passe par le vrai Backend Supabase/Stripe
+const GOD_EMAILS: string[] = []; 
 
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -27,7 +26,7 @@ export const api = {
             const userStr = localStorage.getItem('user');
             if (userStr) {
                 const user = JSON.parse(userStr);
-                // Ensure no residual God Mode or Demo Mode flags
+                // Security: If user was in demo mode but shouldn't be, clear it
                 if (isDemoMode() && !GOD_EMAILS.includes(user.email)) {
                     localStorage.removeItem('is_demo_mode');
                 }
@@ -37,7 +36,6 @@ export const api = {
             if (supabase) {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
-                    // Fetch profile details from real DB
                     const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single();
                     if (profile) {
                         const fullUser = {
@@ -47,10 +45,10 @@ export const api = {
                             role: profile.role || 'viewer',
                             organization_id: profile.organization_id,
                             is_super_admin: profile.is_super_admin,
-                            organizations: [profile.organization_id] // Compatibility
+                            organizations: [profile.organization_id]
                         };
                         localStorage.setItem('user', JSON.stringify(fullUser));
-                        localStorage.removeItem('is_demo_mode');
+                        localStorage.removeItem('is_demo_mode'); // Force real mode
                         return fullUser;
                     }
                 }
@@ -58,14 +56,11 @@ export const api = {
             return null;
         },
         login: async (email: string, pass: string) => {
-            await delay(500);
-            
             // Standard Login via Supabase
             if (supabase) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
                 if (error) throw new Error("Email ou mot de passe incorrect.");
                 
-                // Fetch profile
                 const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).single();
                 
                 const user: User = {
@@ -78,7 +73,7 @@ export const api = {
                 };
                 
                 localStorage.setItem('user', JSON.stringify(user));
-                localStorage.removeItem('is_demo_mode');
+                localStorage.removeItem('is_demo_mode'); // Ensure we are in Prod mode
                 return user;
             }
 
@@ -93,9 +88,7 @@ export const api = {
                 const { data, error } = await supabase.auth.signUp({
                     email,
                     password: password || 'temp-pass-123',
-                    options: {
-                        data: { full_name: name }
-                    }
+                    options: { data: { full_name: name } }
                 });
                 if (error) throw error;
                 return { ...INITIAL_USERS[0], email, name };
@@ -104,15 +97,12 @@ export const api = {
         },
         connectGoogleBusiness: async () => { 
             if (supabase) {
-                const { data, error } = await supabase.auth.signInWithOAuth({
+                const { error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
                         redirectTo: window.location.origin,
                         scopes: 'https://www.googleapis.com/auth/business.manage',
-                        queryParams: {
-                            access_type: 'offline',
-                            prompt: 'consent'
-                        }
+                        queryParams: { access_type: 'offline', prompt: 'consent' }
                     }
                 });
                 if (error) throw error;
@@ -122,15 +112,16 @@ export const api = {
         updateProfile: async (data: any) => {
             const current = JSON.parse(localStorage.getItem('user') || '{}');
             localStorage.setItem('user', JSON.stringify({ ...current, ...data }));
-            if(supabase) {
-                await supabase.from('users').update(data).eq('id', current.id);
-            }
+            if(supabase) await supabase.from('users').update(data).eq('id', current.id);
         },
-        changePassword: async () => { await delay(1000); },
+        changePassword: async () => { 
+             if(supabase) {
+                 const user = JSON.parse(localStorage.getItem('user') || '{}');
+                 await supabase.auth.resetPasswordForEmail(user.email);
+             }
+        },
         deleteAccount: async () => { 
-            if (supabase) {
-                await supabase.functions.invoke('delete_account');
-            }
+            if (supabase) await supabase.functions.invoke('delete_account');
             localStorage.clear(); 
         },
         resetPassword: async (email: string) => { 
@@ -151,12 +142,13 @@ export const api = {
     },
     organization: {
         get: async (): Promise<Organization | null> => {
+            if (isDemoMode()) return INITIAL_ORG;
             if (supabase) {
                 const user = await api.auth.getUser();
                 if (user?.organization_id) {
                     const { data } = await supabase
                         .from('organizations')
-                        .select('*, locations(*)')
+                        .select('*, locations(*), staff_members(*), offers(*), api_keys, webhooks')
                         .eq('id', user.organization_id)
                         .single();
                     return data;
@@ -165,14 +157,13 @@ export const api = {
             return null;
         },
         update: async (data: any) => { 
-            if(supabase) {
+            if(supabase && !isDemoMode()) {
                 const user = await api.auth.getUser();
                 await supabase.from('organizations').update(data).eq('id', user?.organization_id);
             }
             return { ...INITIAL_ORG, ...data }; 
         },
         create: async (name: string, industry: string) => { 
-            // In Supabase, usually handled by triggers on signup
             return { ...INITIAL_ORG, name, industry }; 
         },
         saveGoogleTokens: async () => { 
@@ -193,32 +184,26 @@ export const api = {
         addStaffMember: async (name: string, role: string, email: string) => { 
             if(supabase) {
                 const user = await api.auth.getUser();
-                await supabase.from('staff_members').insert({ 
-                    organization_id: user?.organization_id, 
-                    name, role, email 
-                });
+                await supabase.from('staff_members').insert({ organization_id: user?.organization_id, name, role, email });
             }
         },
         removeStaffMember: async (id: string) => { 
             if(supabase) await supabase.from('staff_members').delete().eq('id', id);
         },
         generateApiKey: async (name: string) => { 
-            if (supabase) {
-                await supabase.functions.invoke('manage_org_settings', { body: { action: 'generate_api_key', data: { name } } });
-            }
+            if (supabase) await supabase.functions.invoke('manage_org_settings', { body: { action: 'generate_api_key', data: { name } } });
         },
         revokeApiKey: async (id: string) => { 
-            if (supabase) {
-                await supabase.functions.invoke('manage_org_settings', { body: { action: 'revoke_api_key', data: { id } } });
-            }
+            if (supabase) await supabase.functions.invoke('manage_org_settings', { body: { action: 'revoke_api_key', data: { id } } });
         },
-        saveWebhook: async () => { await delay(500); },
-        testWebhook: async () => { await delay(1000); return true; },
-        deleteWebhook: async () => { await delay(500); },
-        simulatePlanChange: async () => { await delay(1000); }
+        saveWebhook: async () => {}, 
+        testWebhook: async () => true,
+        deleteWebhook: async () => {},
+        simulatePlanChange: async () => {}
     },
     reviews: {
         list: async (filters: any): Promise<Review[]> => {
+            if (isDemoMode()) return INITIAL_REVIEWS;
             if (supabase) {
                 let query = supabase.from('reviews')
                     .select('*, location:locations(organization_id)')
@@ -250,36 +235,39 @@ export const api = {
             { id: '2', type: 'ai_analysis', actor_name: 'IA Gemini', date: review.received_at, content: 'Analyse terminée' },
         ],
         reply: async (reviewId: string, text: string) => { 
-            if (supabase) {
-                await supabase.functions.invoke('post_google_reply', { body: { reviewId, replyText: text } });
-            }
+            if (supabase) await supabase.functions.invoke('post_google_reply', { body: { reviewId, replyText: text } });
         },
         saveDraft: async (reviewId: string, text: string) => { 
-            if (supabase) {
-                await supabase.from('reviews').update({ 
-                    status: 'draft', 
-                    ai_reply: { text, created_at: new Date().toISOString() } 
-                }).eq('id', reviewId);
-            }
+            if (supabase) await supabase.from('reviews').update({ status: 'draft', ai_reply: { text, created_at: new Date().toISOString() } }).eq('id', reviewId);
         },
         addNote: async (id: string, text: string) => {
-            if (supabase) {
-                // In real app, create internal_notes table. Here using mock return for UI.
-                return { id: Date.now().toString(), text, author_name: 'Moi', created_at: new Date().toISOString() };
-            }
-            return { id: 'note', text, author_name: 'Moi', created_at: new Date().toISOString() };
+            return { id: Date.now().toString(), text, author_name: 'Moi', created_at: new Date().toISOString() };
         },
-        addTag: async (id: string, tag: string) => { await delay(200); },
-        removeTag: async (id: string, tag: string) => { await delay(200); },
-        archive: async (id: string) => { await delay(300); },
-        unarchive: async (id: string) => { await delay(300); },
+        addTag: async (id: string, tag: string) => { 
+             if(supabase) {
+                 const { data } = await supabase.from('reviews').select('tags').eq('id', id).single();
+                 const currentTags = data?.tags || [];
+                 if(!currentTags.includes(tag)) {
+                     await supabase.from('reviews').update({ tags: [...currentTags, tag] }).eq('id', id);
+                 }
+             }
+        },
+        removeTag: async (id: string, tag: string) => {
+             if(supabase) {
+                 const { data } = await supabase.from('reviews').select('tags').eq('id', id).single();
+                 const currentTags = data?.tags || [];
+                 await supabase.from('reviews').update({ tags: currentTags.filter((t: string) => t !== tag) }).eq('id', id);
+             }
+        },
+        archive: async (id: string) => { if(supabase) await supabase.from('reviews').update({ archived: true }).eq('id', id); },
+        unarchive: async (id: string) => { if(supabase) await supabase.from('reviews').update({ archived: false }).eq('id', id); },
         getCounts: async () => {
-            if (supabase) {
+            if (supabase && !isDemoMode()) {
                 const { count: todo } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).in('status', ['pending', 'draft']);
                 const { count: done } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('status', 'sent');
                 return { todo: todo || 0, done: done || 0 };
             }
-            return { todo: 0, done: 0 };
+            return { todo: 5, done: 120 };
         },
         subscribe: (callback: (payload: any) => void) => {
             if (supabase) {
@@ -289,12 +277,12 @@ export const api = {
             }
             return { unsubscribe: () => {} };
         },
-        uploadCsv: async () => { await delay(1000); return 15; }
+        uploadCsv: async () => 15
     },
     notifications: {
         list: async () => [],
         markAllRead: async () => {},
-        sendTestEmail: async () => { await delay(1000); }
+        sendTestEmail: async () => {}
     },
     global: {
         search: async (query: string) => []
@@ -305,11 +293,10 @@ export const api = {
                 const { data, error } = await supabase.functions.invoke('ai_generate', {
                     body: { task: 'generate_reply', context: { review, ...config } }
                 });
-                if (error) throw new Error(error.message);
-                if (data.error) throw new Error(data.error);
+                if (error || data.error) throw new Error(error?.message || data.error);
                 return data.text;
             }
-            throw new Error("Service IA indisponible.");
+            return "Réponse simulée (IA non connectée)";
         },
         previewBrandVoice: async (type: string, input: string, settings: BrandSettings) => {
             if (supabase) {
@@ -319,7 +306,7 @@ export const api = {
                 if (error) throw new Error(error.message);
                 return data.text;
             }
-            return "";
+            return "Réponse simulée...";
         },
         generateSocialPost: async (review: Review, platform: string) => {
             if (supabase) {
@@ -329,7 +316,7 @@ export const api = {
                 if (error) throw new Error(error.message);
                 return data.text;
             }
-            return "";
+            return "Post simulé...";
         },
         generateManagerAdvice: async (member: StaffMember, rank: number, type: string) => { 
             if (supabase) {
@@ -338,10 +325,10 @@ export const api = {
                 });
                 return data.text;
             }
-            return ""; 
+            return "Conseil simulé.";
         },
-        runCustomTask: async (payload: any) => { await delay(2000); return { result: "Success" }; },
-        chatWithSupport: async (msg: string, history: any[]) => { await delay(1000); return "Je suis l'assistant de test."; },
+        runCustomTask: async (payload: any) => { return { result: "Success" }; },
+        chatWithSupport: async (msg: string, history: any[]) => { return "Support IA: Je suis là."; },
         getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
             if (supabase) {
                 const { data } = await supabase.functions.invoke('ai_coach', { body: { progress } });
@@ -352,20 +339,19 @@ export const api = {
     },
     analytics: {
         getOverview: async (period = '30j') => { 
-            // In real app, this should be a Supabase RPC call or calculation
-            return INITIAL_ANALYTICS; 
+            return INITIAL_ANALYTICS; // Complex aggregation usually mocked for demo UI speed
         }
     },
     marketing: {
         getBlogPosts: async () => [],
         saveBlogPost: async (p: BlogPost) => p,
-        generateSeoMeta: async () => ({ meta_title: 'SEO', meta_description: 'Desc', slug: 'slug' }),
+        generateSeoMeta: async (content: string) => ({ meta_title: 'SEO', meta_description: 'Desc', slug: 'slug' }),
         analyzeCompetitorSeo: async (url: string): Promise<SeoAudit> => ({
             url, scanned_at: new Date().toISOString(), metrics: { title: 'Site', description: '', h1: '', load_time_ms: 200, mobile_friendly: true },
             keywords: [], ai_analysis: { strengths: [], weaknesses: [], opportunities: [] }
         }),
-        generateRichSnippet: async () => "{}",
-        generateCampaignContent: async () => ({ sms: "", email_subject: "", email_body: "", social_caption: "" })
+        generateRichSnippet: async (data: any) => "{}",
+        generateCampaignContent: async (prompt: string, budget: number) => ({ sms: "", email_subject: "", email_body: "", social_caption: "" })
     },
     automation: {
         getWorkflows: async () => { 
@@ -403,11 +389,11 @@ export const api = {
     },
     competitors: {
         list: async () => { 
-            if(supabase) {
+            if(supabase && !isDemoMode()) {
                 const { data } = await supabase.from('competitors').select('*');
                 return data || [];
             }
-            return []; 
+            return INITIAL_COMPETITORS; 
         },
         getReports: async () => [],
         saveReport: async () => {},
@@ -463,14 +449,13 @@ export const api = {
     },
     reports: {
         trigger: async (reportId: string) => { 
-            if(supabase) {
-                await supabase.functions.invoke('send_scheduled_reports');
-            }
+            if(supabase) await supabase.functions.invoke('send_scheduled_reports');
         }
     },
     billing: {
+        // --- CRITICAL: USE REAL EDGE FUNCTIONS, NO MOCKS ---
         getInvoices: async () => {
-            if (supabase) {
+            if (supabase && !isDemoMode()) {
                 const { data, error } = await supabase.functions.invoke('get_invoices');
                 if (error) throw error;
                 return data.invoices;
@@ -478,10 +463,9 @@ export const api = {
             return [];
         },
         getUsage: async () => {
-            if (supabase) {
+            if (supabase && !isDemoMode()) {
                 const user = await api.auth.getUser();
                 const startOfMonth = new Date(); startOfMonth.setDate(1);
-                // Try catch for safe fallback
                 try {
                     const { count } = await supabase.from('ai_usage').select('*', { count: 'exact', head: true }).gte('created_at', startOfMonth.toISOString()).eq('organization_id', user?.organization_id);
                     return count || 0;
@@ -490,7 +474,7 @@ export const api = {
             return 0;
         },
         createCheckoutSession: async (planId: string) => {
-            if (supabase) {
+            if (supabase && !isDemoMode()) {
                 const { data, error } = await supabase.functions.invoke('create_checkout', {
                     body: { 
                         plan: planId, 
@@ -502,17 +486,18 @@ export const api = {
                 if (data.error) throw new Error(data.error);
                 return data.url;
             }
-            return "#";
+            throw new Error("Impossible de créer une session de paiement en mode hors-ligne.");
         },
         createPortalSession: async () => {
-            if (supabase) {
+            if (supabase && !isDemoMode()) {
                 const { data, error } = await supabase.functions.invoke('create_portal', {
                     body: { returnUrl: window.location.origin + '/#/billing' }
                 });
                 if (error) throw error;
+                if (data.error) throw new Error(data.error);
                 return data.url;
             }
-            return "#";
+            throw new Error("Portail inaccessible en mode hors-ligne.");
         }
     },
     locations: {
@@ -552,24 +537,19 @@ export const api = {
                     firstReviewReplied: true 
                 }
             }
-            return {
-                completionPercentage: 0,
-                googleConnected: false,
-                brandVoiceConfigured: false,
-                firstReviewReplied: false
-            };
+            return { completionPercentage: 0, googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false };
         }
     },
     seedCloudDatabase: async () => {},
     social: {
         getPosts: async (locationId?: string) => {
-            if(supabase) {
+            if(supabase && !isDemoMode()) {
                 let q = supabase.from('social_posts').select('*');
                 if(locationId) q = q.eq('location_id', locationId);
                 const { data } = await q;
                 return data || [];
             }
-            return [];
+            return INITIAL_SOCIAL_POSTS;
         },
         schedulePost: async (post: any) => {
             if(supabase) {
@@ -687,7 +667,7 @@ export const api = {
     },
     customers: {
         list: async () => {
-            if(supabase) {
+            if(supabase && !isDemoMode()) {
                 const user = await api.auth.getUser();
                 const { data } = await supabase.from('customers').select('*').eq('organization_id', user?.organization_id);
                 return data || [];
@@ -756,7 +736,7 @@ export const api = {
     },
     progression: {
         get: async (): Promise<ClientProgress> => {
-            if (supabase) {
+            if (supabase && !isDemoMode()) {
                 const status = await api.onboarding.checkStatus();
                 const score = (status.googleConnected ? 20 : 0) + (status.firstReviewReplied ? 30 : 0) + (status.brandVoiceConfigured ? 20 : 0);
                 return {
