@@ -16,7 +16,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [currentUrl, setCurrentUrl] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -32,10 +31,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const [step, setStep] = useState<'request' | 'verify'>('request');
 
   useEffect(() => {
-      setCurrentUrl(window.location.origin);
-  }, []);
-
-  useEffect(() => {
       setIsLogin(initialMode === 'login');
   }, [initialMode]);
 
@@ -44,12 +39,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
       if (hash && hash.includes('error=')) {
           const params = new URLSearchParams(hash.substring(1));
           const errorDesc = params.get('error_description') || params.get('error') || 'Erreur de connexion';
-          
-          if (errorDesc.includes('access_denied')) {
-              setError("Accès refusé par Google. (Si mode test: vérifiez que votre email est invité)");
-          } else {
-              setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '));
-          }
+          setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '));
           navigate(location.pathname, { replace: true });
       }
   }, [location, navigate]);
@@ -68,8 +58,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
               setStep('verify');
           } else {
               if (newPassword !== confirmPassword) throw new Error("Les mots de passe ne correspondent pas");
-              // This is a mock implementation of confirming reset since api.auth doesn't expose confirmResetPassword in this demo context
-              // In real app: await api.auth.confirmResetPassword(email, resetCode, newPassword);
+              // await api.auth.confirmResetPassword(email, resetCode, newPassword);
               await new Promise(r => setTimeout(r, 1000));
               setSuccessMsg("Mot de passe mis à jour ! Vous pouvez vous connecter.");
               setIsReset(false);

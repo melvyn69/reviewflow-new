@@ -200,13 +200,13 @@ export const api = {
     marketing: {
         getBlogPosts: async () => [],
         saveBlogPost: async (p: BlogPost) => p,
-        generateSeoMeta: async () => ({ meta_title: 'SEO Title', meta_description: 'Desc', slug: 'slug' }),
+        generateSeoMeta: async (content: string) => ({ meta_title: 'SEO Title', meta_description: 'Desc', slug: 'slug' }),
         analyzeCompetitorSeo: async (url: string): Promise<SeoAudit> => ({
             url, scanned_at: new Date().toISOString(), metrics: { title: 'Site', description: '', h1: '', load_time_ms: 200, mobile_friendly: true },
             keywords: [], ai_analysis: { strengths: [], weaknesses: [], opportunities: [] }
         }),
-        generateRichSnippet: async () => "{}",
-        generateCampaignContent: async () => ({ sms: "", email_subject: "", email_body: "", social_caption: "" })
+        generateRichSnippet: async (data: any) => "{}",
+        generateCampaignContent: async (prompt: string, budget: number) => ({ sms: "", email_subject: "", email_body: "", social_caption: "" })
     },
     automation: {
         getWorkflows: async () => { await delay(300); return INITIAL_WORKFLOWS; },
@@ -218,7 +218,7 @@ export const api = {
         list: async () => { await delay(400); return INITIAL_COMPETITORS; },
         getReports: async () => [],
         saveReport: async () => {},
-        autoDiscover: async () => { await delay(2000); return INITIAL_COMPETITORS; },
+        autoDiscover: async (radius: number, keyword: string, lat: number, lng: number) => { await delay(2000); return INITIAL_COMPETITORS; },
         getDeepAnalysis: async () => ({ market_analysis: "Analyse...", trends: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, competitors_detailed: [] }),
         create: async () => {},
         delete: async () => {}
