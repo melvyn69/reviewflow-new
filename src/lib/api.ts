@@ -1,4 +1,3 @@
-
 import { 
     INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
     INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
@@ -130,14 +129,14 @@ export const api = {
         update: async (data: any) => { await delay(600); return { ...INITIAL_ORG, ...data }; },
         create: async (name: string, industry: string) => { await delay(1000); return { ...INITIAL_ORG, name, industry }; },
         saveGoogleTokens: async () => { return true; },
-        addStaffMember: async () => { await delay(500); },
-        removeStaffMember: async () => { await delay(500); },
-        generateApiKey: async () => { await delay(500); },
-        revokeApiKey: async () => { await delay(500); },
-        saveWebhook: async () => { await delay(500); },
-        testWebhook: async () => { await delay(1000); return true; },
-        deleteWebhook: async () => { await delay(500); },
-        simulatePlanChange: async () => { await delay(1000); }
+        addStaffMember: async (name: string, role: string, email: string) => { await delay(500); },
+        removeStaffMember: async (id: string) => { await delay(500); },
+        generateApiKey: async (name: string) => { await delay(500); },
+        revokeApiKey: async (id: string) => { await delay(500); },
+        saveWebhook: async (config: any) => { await delay(500); },
+        testWebhook: async (id: string) => { await delay(1000); return true; },
+        deleteWebhook: async (id: string) => { await delay(500); },
+        simulatePlanChange: async (plan: string) => { await delay(1000); }
     },
     reviews: {
         list: async (filters: any): Promise<Review[]> => {
@@ -151,40 +150,40 @@ export const api = {
             { id: '1', type: 'review_created', actor_name: review.author_name, date: review.received_at, content: 'Avis reçu' },
             { id: '2', type: 'ai_analysis', actor_name: 'IA Gemini', date: review.received_at, content: 'Analyse terminée' },
         ],
-        reply: async () => { await delay(500); },
-        saveDraft: async () => { await delay(500); },
+        reply: async (id: string, text: string) => { await delay(500); },
+        saveDraft: async (id: string, text: string) => { await delay(500); },
         addNote: async (id: string, text: string) => ({ id: Date.now().toString(), text, author_name: 'Moi', created_at: new Date().toISOString() }),
-        addTag: async () => { await delay(200); },
-        removeTag: async () => { await delay(200); },
-        archive: async () => { await delay(300); },
-        unarchive: async () => { await delay(300); },
+        addTag: async (id: string, tag: string) => { await delay(200); },
+        removeTag: async (id: string, tag: string) => { await delay(200); },
+        archive: async (id: string) => { await delay(300); },
+        unarchive: async (id: string) => { await delay(300); },
         getCounts: async () => ({ todo: 5, done: 120 }),
-        subscribe: () => ({ unsubscribe: () => {} }),
-        uploadCsv: async () => { await delay(1000); return 15; }
+        subscribe: (callback: (payload: any) => void) => ({ unsubscribe: () => {} }),
+        uploadCsv: async (file: File) => { await delay(1000); return 15; }
     },
     notifications: {
         list: async () => [],
         markAllRead: async () => {},
-        sendTestEmail: async () => { await delay(1000); }
+        sendTestEmail: async (email: string) => { await delay(1000); }
     },
     global: {
         search: async (query: string) => []
     },
     ai: {
-        generateReply: async () => {
+        generateReply: async (review: Review, config: any) => {
             await delay(1000);
             return "Merci pour votre message ! Nous sommes ravis que vous ayez apprécié votre expérience. À très bientôt !";
         },
-        previewBrandVoice: async (t: string, i: string, settings: BrandSettings) => {
+        previewBrandVoice: async (type: string, input: string, settings: BrandSettings) => {
             await delay(1000);
             return `[${settings.tone}] Merci beaucoup ! (Ceci est une simulation locale)`;
         },
-        generateSocialPost: async () => {
+        generateSocialPost: async (review: Review, platform: string) => {
             await delay(1000);
             return "🌟 Un immense merci à nos clients formidables ! #Gratitude";
         },
-        generateManagerAdvice: async () => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
-        runCustomTask: async () => { await delay(2000); return { result: "Success" }; },
+        generateManagerAdvice: async (member: StaffMember, rank: number, type: string) => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
+        runCustomTask: async (task: any) => { await delay(2000); return { result: "Success" }; },
         chatWithSupport: async (msg: string, history?: ChatMessage[]) => { await delay(1000); return "Je suis l'assistant de test. Tout fonctionne !"; },
         getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
             await delay(1000);
@@ -226,7 +225,7 @@ export const api = {
     },
     team: {
         list: async () => INITIAL_USERS,
-        invite: async () => ({ success: true })
+        invite: async (email: string, role: string, firstName: string, lastName: string) => ({ success: true })
     },
     reports: {
         trigger: async (reportId: string) => { await delay(1000); }
@@ -234,13 +233,13 @@ export const api = {
     billing: {
         getInvoices: async () => [],
         getUsage: async () => 450,
-        createCheckoutSession: async () => "https://checkout.stripe.com/mock",
+        createCheckoutSession: async (planId: string) => "https://checkout.stripe.com/mock",
         createPortalSession: async () => "https://billing.stripe.com/mock"
     },
     locations: {
-        update: async () => {},
-        create: async () => {},
-        delete: async () => {},
+        update: async (id: string, data: any) => {},
+        create: async (data: any) => {},
+        delete: async (id: string) => {},
         importFromGoogle: async () => { await delay(2000); return 2; }
     },
     activity: {
@@ -258,17 +257,17 @@ export const api = {
     social: {
         getPosts: async (locationId?: string) => INITIAL_SOCIAL_POSTS,
         schedulePost: async (post: any) => {},
-        uploadMedia: async () => "https://via.placeholder.com/500",
-        connectAccount: async () => {},
+        uploadMedia: async (file: File) => "https://via.placeholder.com/500",
+        connectAccount: async (platform: string) => {},
         saveTemplate: async (template: any) => {}
     },
     public: {
         getLocationInfo: async (id: string) => INITIAL_ORG.locations.find(l => l.id === id) || null,
-        getWidgetReviews: async () => INITIAL_REVIEWS,
-        submitFeedback: async () => {}
+        getWidgetReviews: async (id: string) => INITIAL_REVIEWS,
+        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {}
     },
     widgets: {
-        requestIntegration: async () => {}
+        requestIntegration: async (data: any) => {}
     },
     campaigns: {
         send: async (channel: string, to: string, subject: string, content: string, segment: string, link?: string) => {},
