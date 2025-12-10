@@ -210,8 +210,8 @@ export const api = {
     },
     automation: {
         getWorkflows: async () => { await delay(300); return INITIAL_WORKFLOWS; },
-        saveWorkflow: async () => { await delay(500); },
-        deleteWorkflow: async () => { await delay(500); },
+        saveWorkflow: async (workflow: any) => { await delay(500); },
+        deleteWorkflow: async (id: string) => { await delay(500); },
         run: async () => { await delay(2000); return { processed: 5, actions: 3 }; }
     },
     competitors: {

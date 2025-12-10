@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
@@ -28,7 +27,7 @@ import { SocialPage } from './pages/Social';
 import { SocialModelCreatePage } from './pages/SocialModelCreate';
 import { PublicProfilePage } from './pages/PublicProfile';
 import { DevelopersPage } from './pages/Developers';
-import { MarketingPage } from './pages/Marketing'; // NEW IMPORT
+import { MarketingPage } from './pages/Marketing';
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
 import { User } from './types';
@@ -70,20 +69,25 @@ function AppRoutes() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // 1. Lance la vérification
     checkUser();
 
-    // Listener for OAuth redirects (Google Login)
+    // 2. Timeout de sécurité (3 sec max) pour ne jamais bloquer l'app sur le loader
+    const safetyTimeout = setTimeout(() => {
+        if (loading) {
+            console.warn("Auth check timed out - Forcing load state release");
+            setLoading(false);
+        }
+    }, 3000);
+
+    // 3. Listener Supabase
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        
-        // 🚀 CRITICAL: Capture Tokens immediately on sign-in
         if (session.provider_token) {
             await api.organization.saveGoogleTokens();
         }
-
         await checkUser();
         
-        // If we are on login/register/landing, go to dashboard
         if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
             navigate('/dashboard');
         }
@@ -94,6 +98,7 @@ function AppRoutes() {
     }) || { data: { subscription: { unsubscribe: () => {} } } };
 
     return () => {
+      clearTimeout(safetyTimeout);
       authListener.data.subscription.unsubscribe();
     };
   }, []);
@@ -103,6 +108,7 @@ function AppRoutes() {
       const userData = await api.auth.getUser();
       setUser(userData);
     } catch (e) {
+      console.error("User check failed", e);
       setUser(null);
     } finally {
       setLoading(false);
@@ -113,6 +119,7 @@ function AppRoutes() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <p className="absolute mt-16 text-slate-400 text-sm animate-pulse">Chargement sécurisé...</p>
       </div>
     );
   }
@@ -120,6 +127,7 @@ function AppRoutes() {
   return (
     <>
       <ScrollToTop />
+      
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
@@ -150,7 +158,6 @@ function AppRoutes() {
                         <Route path="social" element={<SocialPage />} /> 
                         <Route path="social/models/create" element={<SocialModelCreatePage />} />
                         
-                        {/* Cleanup: Ghost Routes for old "Social Booster" to redirect to Social Studio */}
                         <Route path="social-booster" element={<Navigate to="/social" replace />} />
                         <Route path="booster" element={<Navigate to="/social" replace />} />
 
@@ -165,7 +172,7 @@ function AppRoutes() {
                         <Route path="help" element={<HelpPage />} />
                         <Route path="playground" element={<PlaygroundPage />} />
                         
-                        {/* Sensitive Routes - Admin Only */}
+                        {/* Sensitive Routes */}
                         <Route 
                             path="settings" 
                             element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><SettingsPage /></ProtectedRoute>} 
@@ -178,14 +185,11 @@ function AppRoutes() {
                             path="team" 
                             element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute>} 
                         />
-                        
-                        {/* Super Admin Route */}
                         <Route 
                             path="admin" 
                             element={<ProtectedRoute user={user} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute>} 
                         />
                         
-                        {/* Fallback for protected routes */}
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                 </AppLayout>

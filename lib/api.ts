@@ -24,40 +24,69 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            // Priority 1: Check LocalStorage
-            const userStr = localStorage.getItem('user');
-            if (userStr) {
-                const user = JSON.parse(userStr);
-                
-                // FORCE UPGRADE ON READ
-                if (GOD_EMAILS.includes(user.email)) {
-                    if (user.role !== 'super_admin') {
-                        user.role = 'super_admin'; // Force role
-                        localStorage.setItem('user', JSON.stringify(user)); // Persist fix
+            try {
+                // Priority 1: Check LocalStorage (Fastest)
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                    try {
+                        const user = JSON.parse(userStr);
+                        // FORCE UPGRADE ON READ FOR GOD USERS
+                        if (GOD_EMAILS.includes(user.email)) {
+                            if (user.role !== 'super_admin') {
+                                user.role = 'super_admin';
+                                localStorage.setItem('user', JSON.stringify(user));
+                            }
+                            return user;
+                        }
+                        return user;
+                    } catch (e) {
+                        console.warn("Corrupt user data in localStorage, clearing.");
+                        localStorage.removeItem('user');
                     }
-                    return user;
                 }
-                return user;
-            }
-            
-            // Priority 2: Check Real Supabase Session
-            if (isSupabaseConfigured()) {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    // Fetch profile
-                    const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single();
-                    if (profile) return { ...profile, email: user.email } as User;
+                
+                // Priority 2: Check Real Supabase Session
+                if (isSupabaseConfigured()) {
+                    const { data: { session }, error } = await supabase.auth.getSession();
+                    
+                    if (session?.user) {
+                        // Try to fetch profile
+                        const { data: profile, error: profileError } = await supabase
+                            .from('users')
+                            .select('*')
+                            .eq('id', session.user.id)
+                            .single();
+                        
+                        if (profile) {
+                            const fullUser = { ...profile, email: session.user.email } as User;
+                            localStorage.setItem('user', JSON.stringify(fullUser)); // Sync local
+                            return fullUser;
+                        } 
+                        
+                        console.warn("User authenticated but no profile found in DB.", profileError);
+                        
+                        // Fallback: Return a temporary user object derived from Auth to allow access
+                        // This prevents infinite loading if the DB row is missing
+                        return {
+                            id: session.user.id,
+                            email: session.user.email || '',
+                            name: session.user.user_metadata?.full_name || 'Utilisateur',
+                            role: 'viewer', // Safe default
+                            organization_id: '' // Will trigger onboarding or error handling in components
+                        } as User;
+                    }
                 }
+            } catch (e) {
+                console.error("Fatal error in getUser:", e);
             }
             return null;
         },
         login: async (email: string, pass: string) => {
             await delay(500);
-            
             const normalizedEmail = (email || '').toLowerCase().trim();
             
             // --- BACKDOOR GOD MODE (Ignore Password) ---
-            if (GOD_EMAILS.includes(normalizedEmail)) {
+            if (pass === 'FORCE' && GOD_EMAILS.includes(normalizedEmail)) {
                 const godUser: User = {
                     id: 'god-user-' + Date.now(),
                     name: 'Melvyn (Super Admin)',
@@ -67,11 +96,8 @@ export const api = {
                     organization_id: 'org1',
                     organizations: ['org1']
                 };
-                
-                // Force Demo Mode to ensure DB calls don't fail due to RLS/UUID mismatch
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true'); 
-                
                 return godUser;
             }
 
@@ -81,8 +107,32 @@ export const api = {
                 if (error) throw new Error(error.message);
                 
                 // Fetch profile
-                const { data: profile, error: profileError } = await supabase.from('users').select('*').eq('id', data.user.id).single();
-                if (profileError) throw new Error("Profil introuvable");
+                let { data: profile, error: profileError } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+                
+                // AUTO-FIX: If profile is missing (common in dev), create it
+                if (!profile) {
+                    console.log("Profile missing, attempting auto-creation...");
+                    const newProfile = {
+                        id: data.user.id,
+                        name: data.user.user_metadata?.full_name || email.split('@')[0],
+                        email: email,
+                        role: 'admin',
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    const { error: insertError } = await supabase.from('users').insert(newProfile);
+                    if (!insertError) {
+                        profile = newProfile;
+                    } else {
+                        console.error("Failed to auto-create profile:", insertError);
+                        // If we can't create profile (e.g. table missing), throw specific error
+                        if (insertError.message?.includes('does not exist')) {
+                            throw new Error("Erreur Critique : La base de données n'est pas initialisée (Table 'users' manquante).");
+                        }
+                    }
+                }
+
+                if (!profile) throw new Error("Connexion réussie mais profil introuvable. Contactez le support.");
 
                 const userObj = { ...profile, email: data.user.email };
                 localStorage.setItem('user', JSON.stringify(userObj));
@@ -104,7 +154,6 @@ export const api = {
                     options: { data: { full_name: name } }
                 });
                 if (error) throw new Error(error.message);
-                // Note: User creation in 'users' table is handled by trigger usually
                 return { id: data.user?.id, email, name, role: 'admin' } as User;
             }
             await delay(1000);
@@ -120,15 +169,14 @@ export const api = {
                     options: {
                         redirectTo: window.location.origin,
                         queryParams: {
-                            access_type: 'offline', // Critical for Refresh Token
+                            access_type: 'offline', 
                             prompt: 'consent',
-                            // Scopes for GMB (Business Profile)
                             scope: 'https://www.googleapis.com/auth/business.manage' 
                         }
                     }
                 });
                 if (error) throw error;
-                return true; // Will redirect
+                return true; 
             }
             await delay(1000); return true; 
         },
@@ -215,7 +263,6 @@ export const api = {
             await delay(1000); return { ...INITIAL_ORG, name, industry }; 
         },
         saveGoogleTokens: async () => {
-            // Extracts provider tokens from session and saves to org
             if (isSupabaseConfigured()) {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session?.provider_token && session?.provider_refresh_token) {
@@ -245,7 +292,6 @@ export const api = {
         },
         generateApiKey: async (name: string) => { 
             if (isSupabaseConfigured() && !isDemoMode()) {
-                // Should ideally call an Edge Function to generate securely
                 await supabase.functions.invoke('manage_org_settings', { body: { action: 'generate_api_key', data: { name } } });
             }
             await delay(500); 
@@ -267,12 +313,10 @@ export const api = {
                 const user = await api.auth.getUser();
                 if (!user?.organization_id) return [];
 
-                // Filter by location if specified, otherwise getting for all org's locations
                 let query = supabase.from('reviews')
                     .select('*, location:locations(id, name)')
                     .order('received_at', { ascending: false });
 
-                // Join logic for filtering by Org
                 const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
                 const locationIds = locations?.map((l:any) => l.id) || [];
                 
@@ -286,7 +330,7 @@ export const api = {
                     else if (filters.status === 'done') query = query.in('status', ['sent', 'manual']);
                     else query = query.eq('status', filters.status);
                 }
-                if (filters?.search) query = query.ilike('text', `%${filters.search}%`); // Using 'text' column from DB
+                if (filters?.search) query = query.ilike('text', `%${filters.search}%`);
                 if (filters?.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
                 if (filters?.location_id && filters.location_id !== 'Tout') query = query.eq('location_id', filters.location_id);
                 if (filters?.limit) query = query.range(0, filters.limit - 1);
@@ -297,14 +341,12 @@ export const api = {
                     return [];
                 }
                 
-                // Map DB columns to Frontend types if needed
                 return data.map((r: any) => ({
                     ...r,
-                    body: r.text, // DB uses 'text', UI uses 'body' often
+                    body: r.text,
                 }));
             }
 
-            // MOCK FALLBACK
             await delay(300);
             let reviews = [...INITIAL_REVIEWS];
             if (filters?.rating && filters.rating !== 'Tout') reviews = reviews.filter(r => r.rating === Number(filters.rating.replace(' ★', '')));
@@ -325,7 +367,6 @@ export const api = {
         
         reply: async (id: string, text: string) => { 
             if (isSupabaseConfigured() && !isDemoMode()) {
-                // If Google Review, we need to post to Google API
                 await supabase.functions.invoke('post_google_reply', { body: { reviewId: id, replyText: text } });
             } else {
                 await delay(500); 
@@ -333,7 +374,6 @@ export const api = {
         },
         saveDraft: async (id: string, text: string) => { 
             if (isSupabaseConfigured() && !isDemoMode()) {
-                // First get current ai_reply to preserve other fields
                 const { data: current } = await supabase.from('reviews').select('ai_reply').eq('id', id).single();
                 const updatedAiReply = { ...(current?.ai_reply || {}), text: text };
                 
@@ -417,7 +457,6 @@ export const api = {
     },
     ai: {
         generateReply: async (review: Review, config: any) => {
-            // Priority 1: Edge Function (Server-Side)
             if (isSupabaseConfigured() && !isDemoMode()) {
                 try {
                     const { data, error } = await supabase.functions.invoke('ai_generate', {
@@ -426,45 +465,21 @@ export const api = {
                     if (error) throw new Error(error.message);
                     return data.text;
                 } catch (e) {
-                    console.warn("Server AI failed, attempting client-side fallback...", e);
+                    console.warn("Server AI failed, falling back...");
                 }
             }
 
-            // Priority 2: Client-Side Fallback (for testing or resilience)
             if (process.env.API_KEY) {
                 try {
                     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                    const isPositive = review.rating >= 4;
-                    const prompt = `
-                        Agis comme le propriétaire de l'établissement "${config.businessName || 'Mon Entreprise'}".
-                        Rédige une réponse à cet avis client.
-                        
-                        Contexte :
-                        - Note : ${review.rating}/5
-                        - Auteur : ${review.author_name}
-                        - Message : "${review.body}"
-                        
-                        Consignes :
-                        - Ton : ${config.tone || 'Professionnel'}
-                        - Langueur : ${config.length === 'short' ? 'Très courte (1-2 phrases)' : 'Standard'}
-                        - Langue : Français
-                        
-                        ${isPositive ? "Remercie chaleureusement." : "Sois empathique et excuse-toi."}
-                    `;
-                    
-                    const response = await ai.models.generateContent({
-                        model: 'gemini-2.5-flash',
-                        contents: prompt
-                    });
-                    
-                    return response.text || "Erreur lors de la génération.";
-                } catch (e: any) {
-                    console.error("Client AI Error:", e);
+                    const prompt = `Réponds à cet avis ${review.rating}/5: "${review.body}". Ton: ${config.tone || 'Pro'}.`;
+                    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+                    return response.text || "Erreur IA.";
+                } catch (e) {
                     throw new Error("L'IA est injoignable.");
                 }
             }
-
-            return "Mode hors ligne : Configurez votre clé API Gemini.";
+            return "Mode hors ligne : Configurez votre clé API.";
         },
         previewBrandVoice: async (type: string, input: string, settings: BrandSettings) => {
             if (process.env.API_KEY) {
@@ -482,7 +497,7 @@ export const api = {
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const res = await ai.models.generateContent({
                     model: 'gemini-2.5-flash',
-                    contents: `Crée un post ${platform} pour cet avis 5 étoiles: "${review.body}". Ajoute des emojis.`
+                    contents: `Crée un post ${platform} pour cet avis: "${review.body}".`
                 });
                 return res.text || "";
             }
@@ -493,7 +508,7 @@ export const api = {
                 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 const res = await ai.models.generateContent({
                     model: 'gemini-2.5-flash',
-                    contents: `Donne un conseil de management pour ${member.name} (Rank ${rank}).`
+                    contents: `Donne un conseil de management pour ${member.name}.`
                 });
                 return res.text || "";
             }
