@@ -228,7 +228,7 @@ export const DashboardPage = () => {
       setProgress(progressData);
       
       if (progressData) {
-          api.ai.getCoachAdvice(progressData).then(setCoachMessage);
+          api.ai.getCoachAdvice(progressData).then((msg) => setCoachMessage(msg));
       }
       
       const urgent = (reviewsData || [])

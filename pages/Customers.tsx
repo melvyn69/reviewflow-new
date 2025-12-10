@@ -361,7 +361,7 @@ export const CustomersPage = () => {
           const insight = await api.customers.enrichProfile(selectedCustomer.id);
           const updated = { ...selectedCustomer, ai_insight: insight };
           
-          setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
+          setCustomers((prev) => prev.map(c => c.id === updated.id ? updated : c));
           setSelectedCustomer(updated);
           toast.success("Profil analysé par l'IA !");
       } catch (e) {

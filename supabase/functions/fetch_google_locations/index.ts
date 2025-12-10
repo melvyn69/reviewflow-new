@@ -1,5 +1,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+declare const Deno: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,15 +15,73 @@ serve(async (req) => {
   }
 
   try {
-    const { accessToken } = await req.json()
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const googleClientId = Deno.env.get('GOOGLE_CLIENT_ID')
+    const googleClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')
+
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error("Server Config Error: Missing Supabase keys")
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+    // 1. Get User info from Auth Header (to find Org)
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) throw new Error('Missing Authorization header')
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+
+    if (authError || !user) throw new Error('Unauthorized')
+
+    // 2. Determine Access Token
+    let accessToken = null;
+    
+    // Check if passed in body
+    const body = await req.json().catch(() => ({}));
+    if (body.accessToken) {
+        accessToken = body.accessToken;
+    } else {
+        // Fallback: Refresh from DB
+        if (!googleClientId || !googleClientSecret) {
+            throw new Error("Server Config Error: Missing Google Client ID/Secret for refresh");
+        }
+
+        const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+        if (!profile?.organization_id) throw new Error("User has no organization");
+
+        const { data: org } = await supabase.from('organizations').select('google_refresh_token').eq('id', profile.organization_id).single();
+        
+        if (!org?.google_refresh_token) {
+            throw new Error("Google account not connected (No Refresh Token). Please reconnect in Settings.");
+        }
+
+        console.log("Refreshing Google Token server-side...");
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id: googleClientId,
+                client_secret: googleClientSecret,
+                refresh_token: org.google_refresh_token,
+                grant_type: 'refresh_token'
+            })
+        });
+
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok) {
+            throw new Error(`Google Token Refresh Failed: ${tokenData.error_description || tokenData.error}`);
+        }
+        accessToken = tokenData.access_token;
+    }
 
     if (!accessToken) {
-      throw new Error("Missing Google Access Token")
+      throw new Error("Could not obtain Google Access Token")
     }
 
     console.log("Fetching Google Accounts...")
 
-    // 1. Récupérer les comptes (Accounts)
+    // 3. Récupérer les comptes (Accounts)
     // API: https://developers.google.com/my-business/reference/businessinformation/rest/v1/accounts
     const accountsRes = await fetch('https://mybusinessbusinessinformation.googleapis.com/v1/accounts', {
       headers: { Authorization: `Bearer ${accessToken}` }
@@ -39,7 +100,7 @@ serve(async (req) => {
         return new Response(JSON.stringify([]), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // 2. Récupérer les établissements (Locations) pour TOUS les comptes avec PAGINATION
+    // 4. Récupérer les établissements (Locations) pour TOUS les comptes avec PAGINATION
     let allLocations: any[] = []
 
     for (const account of accounts) {
