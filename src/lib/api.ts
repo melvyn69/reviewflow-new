@@ -8,7 +8,8 @@ import {
     User, Organization, Review, AnalyticsSummary, WorkflowRule, 
     ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
     CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial,
-    ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign
+    ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign,
+    ChatMessage
 } from '../types';
 import { supabase } from './supabase';
 import { hasAccess } from './features'; 
@@ -167,7 +168,7 @@ export const api = {
         sendTestEmail: async () => { await delay(1000); }
     },
     global: {
-        search: async () => []
+        search: async (query: string) => []
     },
     ai: {
         generateReply: async () => {
@@ -184,7 +185,7 @@ export const api = {
         },
         generateManagerAdvice: async () => { await delay(1000); return "Conseil IA : Encouragez les photos."; },
         runCustomTask: async () => { await delay(2000); return { result: "Success" }; },
-        chatWithSupport: async () => { await delay(1000); return "Je suis l'assistant de test. Tout fonctionne !"; },
+        chatWithSupport: async (msg: string, history?: ChatMessage[]) => { await delay(1000); return "Je suis l'assistant de test. Tout fonctionne !"; },
         getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => {
             await delay(1000);
             return {
@@ -195,7 +196,7 @@ export const api = {
         }
     },
     analytics: {
-        getOverview: async () => { await delay(500); return INITIAL_ANALYTICS; }
+        getOverview: async (period?: string) => { await delay(500); return INITIAL_ANALYTICS; }
     },
     marketing: {
         getBlogPosts: async () => [],
@@ -219,16 +220,16 @@ export const api = {
         getReports: async () => [],
         saveReport: async (data?: any) => {},
         autoDiscover: async (radius: number, keyword: string, lat: number, lng: number) => { await delay(2000); return INITIAL_COMPETITORS; },
-        getDeepAnalysis: async (sector?: string, location?: string, competitors?: any[]) => ({ market_analysis: "Analyse...", trends: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, competitors_detailed: [] }),
-        create: async (data?: any) => {},
-        delete: async (id?: string) => {}
+        getDeepAnalysis: async (sector: string, location: string, competitors: any[]) => ({ market_analysis: "Analyse...", trends: [], swot: { strengths: [], weaknesses: [], opportunities: [], threats: [] }, competitors_detailed: [] }),
+        create: async (data: any) => {},
+        delete: async (id: string) => {}
     },
     team: {
         list: async () => INITIAL_USERS,
         invite: async () => ({ success: true })
     },
     reports: {
-        trigger: async () => { await delay(1000); }
+        trigger: async (reportId: string) => { await delay(1000); }
     },
     billing: {
         getInvoices: async () => [],
@@ -255,11 +256,11 @@ export const api = {
     },
     seedCloudDatabase: async () => {},
     social: {
-        getPosts: async () => INITIAL_SOCIAL_POSTS,
-        schedulePost: async () => {},
+        getPosts: async (locationId?: string) => INITIAL_SOCIAL_POSTS,
+        schedulePost: async (post: any) => {},
         uploadMedia: async () => "https://via.placeholder.com/500",
         connectAccount: async () => {},
-        saveTemplate: async () => {}
+        saveTemplate: async (template: any) => {}
     },
     public: {
         getLocationInfo: async (id: string) => INITIAL_ORG.locations.find(l => l.id === id) || null,
@@ -270,19 +271,19 @@ export const api = {
         requestIntegration: async () => {}
     },
     campaigns: {
-        send: async () => {},
+        send: async (channel: string, to: string, subject: string, content: string, segment: string, link?: string) => {},
         getHistory: async () => []
     },
     offers: {
-        validate: async () => ({ valid: false, reason: 'Code inconnu' }),
-        redeem: async () => {},
-        create: async () => {}
+        validate: async (code: string) => ({ valid: false, reason: 'Code inconnu' }),
+        redeem: async (code: string) => {},
+        create: async (offer: any) => {}
     },
     customers: {
         list: async () => [],
-        update: async () => {},
-        import: async () => {},
-        enrichProfile: async () => ({ profile: "...", suggestion: "..." })
+        update: async (id: string, data: any) => {},
+        import: async (data: any[]) => {},
+        enrichProfile: async (id: string) => ({ profile: "...", suggestion: "..." })
     },
     system: {
         checkHealth: async () => ({ db: true, latency: 45 })
@@ -295,10 +296,10 @@ export const api = {
         syncReviewsForLocation: async () => { await delay(2000); return 5; }
     },
     company: {
-        search: async () => []
+        search: async (query: string) => []
     },
     support: {
-        sendTicket: async () => {},
+        sendTicket: async (ticket: any) => {},
         getTutorials: async () => []
     },
     progression: {
