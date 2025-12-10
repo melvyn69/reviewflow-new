@@ -71,51 +71,67 @@ function AppRoutes() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkUser = async () => {
-        try {
-            const userData = await api.auth.getUser();
-            setUser(userData);
-        } catch (e) {
-            console.error("User check failed", e);
-            setUser(null);
-        } finally {
-            setLoading(false);
+    let isMounted = true;
+
+    // 1. Initial User Fetch
+    const checkSession = async () => {
+      try {
+        const userData = await api.auth.getUser();
+        if (isMounted) {
+          setUser(userData);
+          setLoading(false);
         }
+      } catch (e) {
+        console.error("Auth check failed:", e);
+        if (isMounted) {
+          setUser(null);
+          setLoading(false);
+        }
+      }
     };
 
-    // 1. Initial check
-    checkUser();
+    checkSession();
 
-    // 2. Safety timeout
+    // 2. Safety Timeout to prevent infinite loading
     const safetyTimeout = setTimeout(() => {
-        if (loading) {
-            console.warn("Auth check timed out - Forcing load state release");
-            setLoading(false);
-        }
+      if (isMounted && loading) {
+        console.warn("Auth check timed out - Forcing load state release");
+        setLoading(false);
+      }
     }, 3000);
 
-    // 3. Supabase Auth Listener
-    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        // Critical: Save tokens immediately when detected
-        if (session.provider_token) {
-            await api.organization.saveGoogleTokens();
-        }
-        await checkUser();
-        
-        if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
-            navigate('/dashboard');
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        navigate('/');
-      }
-    }) || { data: { subscription: { unsubscribe: () => {} } } };
+    // 3. Setup Listener
+    const { data: { subscription } } = supabase 
+      ? supabase.auth.onAuthStateChange(async (event, session) => {
+          console.log(`Auth event: ${event}`);
+          
+          if (event === 'SIGNED_IN' && session) {
+            // Critical: Save tokens immediately when detected
+            if (session.provider_token) {
+                await api.organization.saveGoogleTokens().catch(console.error);
+            }
+            
+            // Re-fetch user details (profile/roles)
+            const updatedUser = await api.auth.getUser();
+            if (isMounted) setUser(updatedUser);
 
+            // Redirect logic
+            if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
+                navigate('/dashboard');
+            }
+          } 
+          else if (event === 'SIGNED_OUT') {
+            if (isMounted) setUser(null);
+            navigate('/');
+          }
+        })
+      : { data: { subscription: { unsubscribe: () => {} } } };
+
+    // Cleanup function
     return () => {
+      isMounted = false;
       clearTimeout(safetyTimeout);
-      // FIX: access subscription property directly on the returned data object from onAuthStateChange
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 

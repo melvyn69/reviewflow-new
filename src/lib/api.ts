@@ -24,86 +24,93 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            // 1. GOD MODE / DEMO CHECK (Priority 1: LocalStorage)
-            // We check local storage first to allow the backdoor to work without Supabase or network
-            const userStr = localStorage.getItem('user');
-            if (userStr) {
-                try {
-                    const localUser = JSON.parse(userStr);
-                    const email = (localUser.email || '').toLowerCase();
+            try {
+                // 1. GOD MODE / DEMO CHECK (Priority 1: LocalStorage)
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                    try {
+                        const localUser = JSON.parse(userStr);
+                        const email = (localUser.email || '').toLowerCase().trim();
 
-                    // If it is a God Email, we trust LocalStorage and ensure Super Admin role
-                    if (GOD_EMAILS.includes(email)) {
-                        if (localUser.role !== 'super_admin') {
-                            localUser.role = 'super_admin';
-                            localStorage.setItem('user', JSON.stringify(localUser));
+                        // IF GOD EMAIL: Bypass Supabase completely to avoid 400/401 errors or network latency
+                        if (GOD_EMAILS.includes(email)) {
+                            const godUser: User = {
+                                ...localUser,
+                                role: 'super_admin',
+                                is_super_admin: true,
+                                organizations: ['org1'],
+                                organization_id: 'org1'
+                            };
+                            
+                            // Ensure demo context is active for God users
+                            if (localStorage.getItem('is_demo_mode') !== 'true') {
+                                localStorage.setItem('is_demo_mode', 'true');
+                            }
+                            
+                            // Update cache if needed
+                            if (localUser.role !== 'super_admin') {
+                                localStorage.setItem('user', JSON.stringify(godUser));
+                            }
+                            return godUser;
                         }
-                        // Ensure we are in demo mode context for these users to bypass RLS if needed locally
-                        localStorage.setItem('is_demo_mode', 'true');
-                        return localUser;
-                    }
-
-                    // If we are strictly in demo mode (e.g. no supabase config), return local user
-                    if (isDemoMode() && !supabase) {
-                        return localUser;
-                    }
-                } catch (e) {
-                    console.warn("Corrupt local user data", e);
-                    localStorage.removeItem('user');
-                }
-            }
-
-            // 2. SUPABASE AUTH CHECK (Priority 2: Real DB)
-            if (supabase) {
-                const { data: { user: authUser }, error } = await supabase.auth.getUser();
-                
-                if (!error && authUser) {
-                    // Fetch detailed profile from public.users table to get organization_id
-                    // This is crucial for linking the session to data
-                    const { data: profile, error: profileError } = await supabase
-                        .from('users')
-                        .select('organization_id, role, name, avatar_url, is_super_admin')
-                        .eq('id', authUser.id)
-                        .single();
-
-                    if (profileError) {
-                        console.warn("Profile fetch error (using fallback):", profileError.message);
-                    }
-
-                    // Construct full User object
-                    const appUser: User = {
-                        id: authUser.id,
-                        email: authUser.email || '',
-                        name: profile?.name || authUser.user_metadata?.full_name || 'Utilisateur',
-                        role: profile?.role || 'viewer',
-                        organization_id: profile?.organization_id,
-                        avatar: profile?.avatar_url || undefined,
-                        is_super_admin: profile?.is_super_admin || false
-                    };
-
-                    // Update localStorage for consistency and cache
-                    localStorage.setItem('user', JSON.stringify(appUser));
-                    
-                    // If we successfully got a Supabase user, ensure we are NOT in demo mode
-                    localStorage.removeItem('is_demo_mode');
-                    
-                    return appUser;
-                } else {
-                    // If Supabase explicitly says no session, clear local storage (unless it was a forced demo mode)
-                    if (!isDemoMode()) {
+                    } catch (e) {
+                        console.warn("Corrupt local user data, clearing...");
                         localStorage.removeItem('user');
                     }
                 }
-            }
 
-            return null;
+                // 2. SUPABASE AUTH CHECK (Priority 2: Real DB)
+                if (!supabase) return null;
+
+                const { data: { user: authUser }, error } = await supabase.auth.getUser();
+                
+                if (error || !authUser) {
+                    // Session invalid or expired -> Clear local state to prevent loop
+                    if (!isDemoMode()) {
+                        localStorage.removeItem('user');
+                    }
+                    return null;
+                }
+
+                // 3. FETCH PROFILE (If session exists)
+                const { data: profile, error: profileError } = await supabase
+                    .from('users')
+                    .select('organization_id, role, name, avatar_url, is_super_admin')
+                    .eq('id', authUser.id)
+                    .single();
+
+                if (profileError) {
+                    console.warn("Profile fetch error (using fallback):", profileError.message);
+                }
+
+                // Construct full User object
+                const appUser: User = {
+                    id: authUser.id,
+                    email: authUser.email || '',
+                    name: profile?.name || authUser.user_metadata?.full_name || 'Utilisateur',
+                    role: profile?.role || 'viewer',
+                    organization_id: profile?.organization_id,
+                    avatar: profile?.avatar_url || undefined,
+                    is_super_admin: profile?.is_super_admin || false
+                };
+
+                // Sync localStorage
+                localStorage.setItem('user', JSON.stringify(appUser));
+                localStorage.removeItem('is_demo_mode'); // Real auth = not demo mode
+                
+                return appUser;
+
+            } catch (e) {
+                console.error("Critical error in getUser:", e);
+                return null;
+            }
         },
         login: async (email: string, pass: string) => {
-            await delay(500);
+            await delay(500); // Simulate network feel
             
             const normalizedEmail = (email || '').toLowerCase().trim();
             
-            // --- BACKDOOR GOD MODE (Ignore Password) ---
+            // --- 1. GOD MODE BACKDOOR ---
             if (GOD_EMAILS.includes(normalizedEmail)) {
                 const godUser: User = {
                     id: 'god-user-' + Date.now(),
@@ -116,36 +123,40 @@ export const api = {
                     is_super_admin: true
                 };
                 
-                // Force Demo Mode to ensure DB calls don't fail due to RLS/UUID mismatch
+                // Force Demo Mode logic
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true'); 
                 
                 return godUser;
             }
 
-            // Standard Login via Supabase
+            // --- 2. STANDARD SUPABASE LOGIN ---
             if (supabase) {
-                // 1. Sign In
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-                if (error) throw new Error("Email ou mot de passe incorrect.");
                 
-                // 2. Fetch full user details using the logic we centralized in getUser
-                // This ensures we get the organization_id correctly immediately after login
+                if (error) {
+                    console.error("Login failed:", error.message);
+                    throw new Error(error.message === "Invalid login credentials" ? "Email ou mot de passe incorrect." : error.message);
+                }
+                
+                // Fetch full profile immediately to ensure consistency
                 const appUser = await api.auth.getUser();
                 
                 if (!appUser) {
-                    // Should not happen if signInWithPassword succeeded, but safety net
-                    throw new Error("Erreur lors de la récupération du profil utilisateur.");
+                    throw new Error("Connexion réussie mais profil introuvable.");
                 }
 
                 return appUser;
             }
 
-            throw new Error("Service d'authentification indisponible.");
+            throw new Error("Service d'authentification indisponible (Supabase non configuré).");
         },
         logout: async () => {
-            localStorage.clear();
-            if (supabase) await supabase.auth.signOut();
+            localStorage.removeItem('user');
+            localStorage.removeItem('is_demo_mode');
+            if (supabase) {
+                await supabase.auth.signOut().catch(console.error);
+            }
         },
         register: async (name: string, email: string, password?: string) => {
             if (supabase && password) {
