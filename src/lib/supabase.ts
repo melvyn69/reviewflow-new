@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Récupération des variables
@@ -21,6 +22,7 @@ export const supabase =
             persistSession: true, // Garde la session active après refresh
             autoRefreshToken: true,
             detectSessionInUrl: true,
+            flowType: 'pkce', // INDISPENSABLE pour la stabilité OAuth (Google) et les erreurs de clock skew
         },
         // Désactivation des websockets par défaut si la connexion est instable
         realtime: {

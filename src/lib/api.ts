@@ -295,25 +295,40 @@ export const api = {
             return { ...INITIAL_ORG, name, industry }; 
         },
         saveGoogleTokens: async () => {
-            if (supabase) {
-                try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (session?.user && session.provider_token) {
-                        const { data: profile } = await supabase.from('users').select('organization_id').eq('id', session.user.id).single();
-                        
-                        if (profile?.organization_id) {
-                            const updates: any = { google_access_token: session.provider_token };
-                            if (session.provider_refresh_token) {
-                                updates.google_refresh_token = session.provider_refresh_token;
-                            }
-                            await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
-                            
-                            // Non-blocking call to import
-                            api.locations.importFromGoogle().catch(console.error);
-                            return true;
-                        }
+            if (!supabase) return false;
+            
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                // Only proceed if we have a valid provider token (just came back from OAuth)
+                if (session?.user && session.provider_token) {
+                    
+                    // CRITICAL FIX: Use maybeSingle() to prevent 406 Error if user row isn't ready/doesn't exist
+                    const { data: profile, error } = await supabase
+                        .from('users')
+                        .select('organization_id')
+                        .eq('id', session.user.id)
+                        .maybeSingle();
+                    
+                    if (error || !profile) {
+                        console.warn("Save tokens skipped: User profile not found yet.");
+                        return false;
                     }
-                } catch (e) {}
+                    
+                    if (profile.organization_id) {
+                        const updates: any = { google_access_token: session.provider_token };
+                        if (session.provider_refresh_token) {
+                            updates.google_refresh_token = session.provider_refresh_token;
+                        }
+                        await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
+                        
+                        // Non-blocking call to import
+                        api.locations.importFromGoogle().catch(console.error);
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.error("Token save failed silently:", e);
             }
             return false; 
         },
