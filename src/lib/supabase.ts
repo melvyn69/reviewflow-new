@@ -1,39 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Safely get env vars whether in Vite (import.meta.env) or potentially other contexts
-const getEnv = (key: string) => {
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env[key];
-  }
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env[key];
-  }
-  return '';
-};
+// Récupération des variables
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');
-const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY');
+// --- DEBUG LOGS (Regardez votre console navigateur F12) ---
+console.log("--- SUPABASE CONFIG DEBUG ---");
+console.log("URL définie :", !!SUPABASE_URL, SUPABASE_URL ? `(${SUPABASE_URL.substring(0, 15)}...)` : 'NON');
+console.log("KEY définie :", !!SUPABASE_ANON_KEY, SUPABASE_ANON_KEY ? '(Présente)' : 'NON');
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('Supabase is not configured – check Vercel env vars');
+  console.error("ERREUR CRITIQUE : Les variables VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY sont manquantes. Vérifiez votre fichier .env");
 }
+// ---------------------------------------------------------
 
 export const supabase =
   SUPABASE_URL && SUPABASE_ANON_KEY
     ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
         auth: {
-            persistSession: true,
+            persistSession: true, // Garde la session active après refresh
             autoRefreshToken: true,
             detectSessionInUrl: true,
-            flowType: 'pkce'
         },
+        // Désactivation des websockets par défaut si la connexion est instable
         realtime: {
             params: {
-                eventsPerSecond: 2,
+                eventsPerSecond: 1,
             },
-        },
-        global: {
-            headers: { 'x-application-name': 'reviewflow' },
         },
       })
     : null;

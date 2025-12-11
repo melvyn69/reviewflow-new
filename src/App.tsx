@@ -72,49 +72,37 @@ function AppRoutes() {
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Initial User Fetch
-    const checkSession = async () => {
-      try {
-        // api.auth.getUser() is now optimized to return cache immediately
-        const userData = await api.auth.getUser();
-        if (isMounted) {
-          setUser(userData);
-          setLoading(false);
+    const initAuth = async () => {
+        try {
+            // 1. Tenter de récupérer l'utilisateur (cache ou réseau)
+            const userData = await api.auth.getUser();
+            if (isMounted) setUser(userData);
+        } catch (e) {
+            console.error("Erreur critique lors de l'init Auth:", e);
+            if (isMounted) setUser(null);
+        } finally {
+            if (isMounted) setLoading(false);
         }
-      } catch (e) {
-        console.error("Auth check failed:", e);
-        if (isMounted) {
-          setUser(null);
-          setLoading(false);
-        }
-      }
     };
 
-    checkSession();
+    initAuth();
 
-    // 2. Setup Listener for Auth Changes (Sign In, Sign Out)
-    const { data: { subscription } } = supabase 
+    // 2. Listener Supabase (seulement si configuré)
+    const { data: authListener } = supabase
       ? supabase.auth.onAuthStateChange(async (event, session) => {
+          console.log("Auth Event:", event);
+          
           if (event === 'SIGNED_IN' && session) {
-            // Force save tokens if present (Google OAuth)
-            if (session.provider_token) {
-                await api.organization.saveGoogleTokens().catch(console.error);
-            }
+            // Force la mise à jour de l'utilisateur
+            const freshUser = await api.auth.getUser();
+            if (isMounted) setUser(freshUser);
             
-            // Re-fetch user details (profile/roles) and UPDATE CACHE
-            // This is critical for post-login state consistency
-            await api.auth.getUser().then(updatedUser => {
-                if (isMounted) setUser(updatedUser);
-            });
-
-            // Redirect logic if stuck on auth pages
+            // Redirection si sur une page d'auth
             if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
                 navigate('/dashboard');
             }
-          } 
-          else if (event === 'SIGNED_OUT') {
+          } else if (event === 'SIGNED_OUT') {
             if (isMounted) setUser(null);
-            localStorage.removeItem('user'); 
             navigate('/');
           }
         })
@@ -122,15 +110,24 @@ function AppRoutes() {
 
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
+      authListener.data.subscription.unsubscribe();
     };
   }, []);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-        <p className="absolute mt-16 text-slate-400 text-sm animate-pulse">Chargement...</p>
+        <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <p className="text-slate-400 text-sm">Chargement de l'application...</p>
+            {/* Bouton de secours si le chargement bloque */}
+            <button 
+                onClick={() => setLoading(false)} 
+                className="mt-4 text-xs text-indigo-600 underline"
+            >
+                Forcer l'accès (Debug)
+            </button>
+        </div>
       </div>
     );
   }
