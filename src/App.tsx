@@ -98,7 +98,7 @@ function AppRoutes() {
     verifyUser();
 
     // Listener Supabase pour les changements d'état (Connexion / Déconnexion / Refresh)
-    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = (supabase?.auth as any).onAuthStateChange(async (event: string, session: any) => {
         
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             // Sauvegarde des tokens Google si présents (après OAuth)
@@ -122,7 +122,7 @@ function AppRoutes() {
 
     return () => {
       isMounted = false;
-      authListener.data.subscription.unsubscribe();
+      if(authListener?.subscription) authListener.subscription.unsubscribe();
     };
   }, []);
 

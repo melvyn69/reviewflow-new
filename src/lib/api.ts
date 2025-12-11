@@ -49,7 +49,7 @@ export const api = {
                 }
 
                 // 2. Get Session directly
-                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                const { data: { session }, error: sessionError } = await (supabase.auth as any).getSession();
                 
                 if (sessionError || !session?.user) {
                     return null;
@@ -64,7 +64,7 @@ export const api = {
                         .from('users')
                         .select('*')
                         .eq('id', authUser.id)
-                        .maybeSingle(); // CRITICAL FIX: Use maybeSingle instead of single
+                        .maybeSingle(); 
                     
                     if (!error && data) {
                         profile = data;
@@ -133,7 +133,7 @@ export const api = {
                 return demoUser;
             }
 
-            const { data, error } = await supabase.auth.signInWithPassword({ 
+            const { data, error } = await (supabase.auth as any).signInWithPassword({ 
                 email: normalizedEmail, 
                 password: pass 
             });
@@ -147,7 +147,7 @@ export const api = {
 
         register: async (name: string, email: string, password?: string) => {
             if (supabase && password) {
-                const { data, error } = await supabase.auth.signUp({
+                const { data, error } = await (supabase.auth as any).signUp({
                     email,
                     password,
                     options: {
@@ -179,13 +179,13 @@ export const api = {
             localStorage.removeItem('is_demo_mode');
             localStorage.removeItem('sb-' + (import.meta.env.VITE_SUPABASE_URL?.split('.')[0]?.split('//')[1] || '') + '-auth-token');
             if (supabase) {
-                await supabase.auth.signOut().catch(console.error);
+                await (supabase.auth as any).signOut().catch(console.error);
             }
         },
 
         connectGoogleBusiness: async () => { 
             if (!supabase) return Promise.resolve();
-            const { error } = await supabase.auth.signInWithOAuth({
+            const { error } = await (supabase.auth as any).signInWithOAuth({
                 provider: 'google',
                 options: {
                     redirectTo: window.location.origin,
@@ -200,7 +200,7 @@ export const api = {
         },
         updateProfile: async (data: any) => {
             if (supabase) {
-                const { data: { user } } = await supabase.auth.getUser();
+                const { data: { user } } = await (supabase.auth as any).getUser();
                 if (user) {
                     await supabase.from('users').update(data).eq('id', user.id);
                     // Update cache
@@ -211,17 +211,17 @@ export const api = {
         },
         changePassword: async (password?: string) => { 
             const email = (await api.auth.getUser())?.email;
-            if (email && supabase) await supabase.auth.resetPasswordForEmail(email);
+            if (email && supabase) await (supabase.auth as any).resetPasswordForEmail(email);
         },
         deleteAccount: async () => { 
             if (supabase) {
                 await supabase.functions.invoke('delete_account');
-                await supabase.auth.signOut();
+                await (supabase.auth as any).signOut();
                 localStorage.clear();
             }
         },
         resetPassword: async (email: string) => { 
-            if (supabase) await supabase.auth.resetPasswordForEmail(email);
+            if (supabase) await (supabase.auth as any).resetPasswordForEmail(email);
         },
         loginWithGoogle: async () => { 
             return api.auth.connectGoogleBusiness();
@@ -298,7 +298,7 @@ export const api = {
             if (!supabase) return false;
             
             try {
-                const { data: { session } } = await supabase.auth.getSession();
+                const { data: { session } } = await (supabase.auth as any).getSession();
                 
                 // Only proceed if we have a valid provider token (just came back from OAuth)
                 if (session?.user && session.provider_token) {
