@@ -49,10 +49,15 @@ const ScrollToTop = () => {
 interface ProtectedRouteProps {
   children?: React.ReactNode;
   user: User | null;
+  loading: boolean;
   allowedRoles?: string[];
 }
 
-const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) => {
+const ProtectedRoute = ({ children, user, loading, allowedRoles }: ProtectedRouteProps) => {
+  if (loading) {
+      return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-indigo-600 rounded-full border-t-transparent"></div></div>;
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -73,77 +78,54 @@ function AppRoutes() {
   useEffect(() => {
     let isMounted = true;
 
-    const initAuth = async () => {
+    // Fonction de vérification robuste
+    const verifyUser = async () => {
         try {
-            // 1. Tenter de récupérer l'utilisateur (cache ou réseau)
-            const userData = await api.auth.getUser();
-            if (isMounted) setUser(userData);
+            const currentUser = await api.auth.getUser();
+            if (isMounted) {
+                setUser(currentUser);
+                setLoading(false);
+            }
         } catch (e) {
-            console.error("Erreur critique lors de l'init Auth:", e);
-            if (isMounted) setUser(null);
-        } finally {
-            if (isMounted) setLoading(false);
+            console.error("Auth verify error:", e);
+            if (isMounted) {
+                setUser(null);
+                setLoading(false);
+            }
         }
     };
 
-    initAuth();
+    verifyUser();
 
-    // 2. Listener Supabase (seulement si configuré)
-    const { data: authListener } = supabase
-      ? supabase.auth.onAuthStateChange(async (event, session) => {
-          console.log("Auth Event:", event);
-          
-          if (event === 'SIGNED_IN' && session) {
-            
-            // DETECT RETURN FROM GOOGLE OAUTH
-            // The provider_token is only present immediately after the redirect.
-            if (session.provider_token) {
-                console.log("OAuth Provider Token detected. Saving...");
-                const success = await api.organization.saveGoogleTokens();
-                if (success) {
-                    console.log("Tokens saved. Locations synced.");
-                    // Force a hard reload of the user/org data or just proceed
-                }
+    // Listener Supabase pour les changements d'état (Connexion / Déconnexion / Refresh)
+    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
+        console.log("🔔 Auth Event:", event);
+        
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+            // Sauvegarde des tokens Google si présents (après OAuth)
+            if (event === 'SIGNED_IN' && session?.provider_token) {
+                await api.organization.saveGoogleTokens();
             }
-
-            // Force la mise à jour de l'utilisateur
-            const freshUser = await api.auth.getUser();
-            if (isMounted) setUser(freshUser);
             
-            // Redirection si sur une page d'auth
-            if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
+            // Re-fetch user details safely
+            await verifyUser();
+            
+            // Redirection intelligente si on est sur une page publique d'auth
+            const hash = window.location.hash;
+            if (hash === '#/' || hash.includes('login') || hash.includes('register')) {
                 navigate('/dashboard');
             }
-          } else if (event === 'SIGNED_OUT') {
+        } else if (event === 'SIGNED_OUT') {
             if (isMounted) setUser(null);
             navigate('/');
-          }
-        })
-      : { data: { subscription: { unsubscribe: () => {} } } };
+        }
+    }) || { data: { subscription: { unsubscribe: () => {} } } };
 
     return () => {
       isMounted = false;
       authListener.data.subscription.unsubscribe();
     };
   }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-            <p className="text-slate-400 text-sm">Chargement de l'application...</p>
-            {/* Bouton de secours si le chargement bloque */}
-            <button 
-                onClick={() => setLoading(false)} 
-                className="mt-4 text-xs text-indigo-600 underline"
-            >
-                Forcer l'accès (Debug)
-            </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -166,11 +148,15 @@ function AppRoutes() {
         <Route path="/v/:locationId" element={<PublicProfilePage />} />
         
         {/* Protected Route: Onboarding (No Layout) */}
-        <Route path="/onboarding" element={user ? <OnboardingPage /> : <Navigate to="/login" replace />} />
+        <Route path="/onboarding" element={
+            <ProtectedRoute user={user} loading={loading}>
+                <OnboardingPage />
+            </ProtectedRoute>
+        } />
 
         {/* Protected Routes (App Layout) */}
         <Route path="/*" element={
-            <ProtectedRoute user={user}>
+            <ProtectedRoute user={user} loading={loading}>
                 <AppLayout>
                     <Routes>
                         <Route path="dashboard" element={<DashboardPage />} />
@@ -207,19 +193,19 @@ function AppRoutes() {
                         {/* Sensitive Routes */}
                         <Route 
                             path="settings" 
-                            element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><SettingsPage /></ProtectedRoute>} 
+                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['admin', 'super_admin']}><SettingsPage /></ProtectedRoute>} 
                         />
                         <Route 
                             path="billing" 
-                            element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><BillingPage /></ProtectedRoute>} 
+                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['admin', 'super_admin']}><BillingPage /></ProtectedRoute>} 
                         />
                         <Route 
                             path="team" 
-                            element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute>} 
+                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute>} 
                         />
                         <Route 
                             path="admin" 
-                            element={<ProtectedRoute user={user} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute>} 
+                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute>} 
                         />
                         
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
