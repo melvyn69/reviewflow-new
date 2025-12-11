@@ -37,12 +37,9 @@ import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { isFeatureActive } from './lib/features';
 
-// ScrollToTop component
 const ScrollToTop = () => {
   const { pathname } = useLocation();
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   return null;
 };
 
@@ -69,115 +66,77 @@ const ProtectedRoute = ({ children, user, loading, allowedRoles }: ProtectedRout
   return <>{children}</>;
 };
 
-// Wrapper to handle auth check on initial load
 function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
-    // Fonction de vérification robuste
-    const verifyUser = async () => {
+    const init = async () => {
         try {
-            const currentUser = await api.auth.getUser();
-            if (isMounted) {
-                setUser(currentUser);
+            const u = await api.auth.getUser();
+            if (mounted) {
+                setUser(u);
                 setLoading(false);
             }
         } catch (e) {
-            console.error("Auth verify error:", e);
-            if (isMounted) {
-                setUser(null);
-                setLoading(false);
-            }
+            console.error("Init failed", e);
+            if (mounted) setLoading(false);
         }
     };
 
-    verifyUser();
+    init();
 
-    // Listener Supabase pour les changements d'état (Connexion / Déconnexion / Refresh)
-    const { data: authListener } = (supabase?.auth as any).onAuthStateChange(async (event: string, session: any) => {
-        
+    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            // Sauvegarde des tokens Google si présents (après OAuth)
-            if (event === 'SIGNED_IN' && session?.provider_token) {
-                await api.organization.saveGoogleTokens();
-            }
+            const u = await api.auth.getUser();
+            if (mounted) setUser(u);
             
-            // Re-fetch user details safely
-            await verifyUser();
-            
-            // Redirection intelligente si on est sur une page publique d'auth
-            const hash = window.location.hash;
-            if (hash === '#/' || hash.includes('login') || hash.includes('register')) {
+            // Si on vient de se connecter, on redirige vers le dashboard si on est sur une page publique
+            if (event === 'SIGNED_IN' && window.location.hash.includes('login')) {
                 navigate('/dashboard');
             }
-        } else if (event === 'SIGNED_OUT') {
-            if (isMounted) setUser(null);
+        } 
+        else if (event === 'SIGNED_OUT') {
+            if (mounted) setUser(null);
             navigate('/');
         }
     }) || { data: { subscription: { unsubscribe: () => {} } } };
 
     return () => {
-      isMounted = false;
-      if(authListener?.subscription) authListener.subscription.unsubscribe();
+      mounted = false;
+      authListener.data.subscription.unsubscribe();
     };
   }, []);
 
   return (
     <>
       <ScrollToTop />
-      
       <Routes>
-        {/* Public Routes */}
         <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
         <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="login" onLoginSuccess={() => {}} />} />
-        <Route path="/book-demo" element={<BookDemoPage />} />
-        
-        {/* Hidden Registration */}
         <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" onLoginSuccess={() => {}} />} />
-        
+        <Route path="/book-demo" element={<BookDemoPage />} />
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/feedback/:locationId" element={<ReviewFunnel />} />
         <Route path="/widget/:locationId" element={<WidgetPage />} />
         <Route path="/v/:locationId" element={<PublicProfilePage />} />
-        
-        {/* Protected Route: Onboarding (No Layout) */}
-        <Route path="/onboarding" element={
-            <ProtectedRoute user={user} loading={loading}>
-                <OnboardingPage />
-            </ProtectedRoute>
-        } />
+        <Route path="/onboarding" element={<ProtectedRoute user={user} loading={loading}><OnboardingPage /></ProtectedRoute>} />
 
-        {/* Protected Routes (App Layout) */}
         <Route path="/*" element={
             <ProtectedRoute user={user} loading={loading}>
                 <AppLayout>
                     <Routes>
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
-                        
-                        {/* FEATURE FLAG PROTECTION: MARKETING */}
-                        <Route 
-                            path="marketing" 
-                            element={
-                                isFeatureActive('MARKETING_MODULE', user) 
-                                ? <MarketingPage /> 
-                                : <Navigate to="/dashboard" replace />
-                            } 
-                        />
-                        
+                        <Route path="marketing" element={isFeatureActive('MARKETING_MODULE', user) ? <MarketingPage /> : <Navigate to="/dashboard" replace />} />
                         <Route path="progress" element={<ProgressPage />} />
                         <Route path="social" element={<SocialPage />} /> 
                         <Route path="social/models/create" element={<SocialModelCreatePage />} />
-                        
-                        <Route path="social-booster" element={<Navigate to="/social" replace />} />
-                        <Route path="booster" element={<Navigate to="/social" replace />} />
-
                         <Route path="analytics" element={<AnalyticsPage />} />
                         <Route path="competitors" element={<CompetitorsPage />} />
                         <Route path="automation" element={<AutomationPage />} />
@@ -188,25 +147,10 @@ function AppRoutes() {
                         <Route path="developers" element={<DevelopersPage />} />
                         <Route path="help" element={<HelpPage />} />
                         <Route path="playground" element={<PlaygroundPage />} />
-                        
-                        {/* Sensitive Routes */}
-                        <Route 
-                            path="settings" 
-                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['admin', 'super_admin']}><SettingsPage /></ProtectedRoute>} 
-                        />
-                        <Route 
-                            path="billing" 
-                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['admin', 'super_admin']}><BillingPage /></ProtectedRoute>} 
-                        />
-                        <Route 
-                            path="team" 
-                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute>} 
-                        />
-                        <Route 
-                            path="admin" 
-                            element={<ProtectedRoute user={user} loading={false} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute>} 
-                        />
-                        
+                        <Route path="settings" element={<SettingsPage />} />
+                        <Route path="billing" element={<BillingPage />} />
+                        <Route path="team" element={<TeamPage />} />
+                        <Route path="admin" element={<ProtectedRoute user={user} loading={false} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute>} />
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                 </AppLayout>
