@@ -99,9 +99,8 @@ function AppRoutes() {
 
     // Listener Supabase pour les changements d'état (Connexion / Déconnexion / Refresh)
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
-        console.log("🔔 Auth Event:", event);
         
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             // Sauvegarde des tokens Google si présents (après OAuth)
             if (event === 'SIGNED_IN' && session?.provider_token) {
                 await api.organization.saveGoogleTokens();

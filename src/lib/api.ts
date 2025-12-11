@@ -57,20 +57,23 @@ export const api = {
 
                 const authUser = session.user;
                 
-                // 3. Try to fetch full profile, but DO NOT FAIL if it errors (network/slow DB)
+                // 3. Try to fetch full profile safely using maybeSingle (Prevents 406 Error)
                 let profile = null;
                 try {
-                    const { data } = await supabase
+                    const { data, error } = await supabase
                         .from('users')
                         .select('*')
                         .eq('id', authUser.id)
-                        .maybeSingle(); // Use maybeSingle to avoid 406 errors
-                    profile = data;
+                        .maybeSingle(); // CRITICAL FIX: Use maybeSingle instead of single
+                    
+                    if (!error && data) {
+                        profile = data;
+                    }
                 } catch (dbError) {
-                    console.warn("Profile fetch failed, using session data only", dbError);
+                    console.warn("Profile fetch failed, defaulting to session data", dbError);
                 }
 
-                // 4. Construct User object safely
+                // 4. Construct User object safely even if DB fetch failed
                 const appUser: User = {
                     id: authUser.id,
                     email: authUser.email || '',
@@ -246,7 +249,7 @@ export const api = {
                         .from('organizations')
                         .select('*, locations(*), staff_members(*), offers(*), workflows(*)')
                         .eq('id', user.organization_id)
-                        .single();
+                        .maybeSingle(); // Safe check
                     
                     if (org) {
                         return {
@@ -578,7 +581,7 @@ export const api = {
     },
     public: {
         getLocationInfo: async (id: string) => {
-            if (supabase) { try { const { data } = await supabase.from('locations').select('*').eq('id', id).single(); return data; } catch {} }
+            if (supabase) { try { const { data } = await supabase.from('locations').select('*').eq('id', id).maybeSingle(); return data; } catch {} }
             return INITIAL_ORG.locations.find(l => l.id === id) || null;
         },
         getWidgetReviews: async (id: string) => INITIAL_REVIEWS,
