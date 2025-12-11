@@ -14,7 +14,6 @@ import { supabase } from './supabase';
 import { hasAccess } from './features'; 
 
 // --- GOD MODE CONFIGURATION ---
-// These emails will ALWAYS be Super Admin with Elite Plan, no matter what.
 const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
 
 const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
@@ -23,44 +22,44 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
+            // 1. FAST PATH: Vérification immédiate du cache (évite le timeout de chargement)
             try {
-                // 1. PRIORITÉ : Vérifier le cache LocalStorage (Performance + God Mode + Offline support)
                 const userStr = localStorage.getItem('user');
                 if (userStr) {
-                    try {
-                        const localUser = JSON.parse(userStr);
-                        // Si c'est un God User, on le retourne directement (bypass Supabase)
-                        if (GOD_EMAILS.includes(localUser.email)) {
-                            return localUser;
-                        }
-                        // Retourner le cache pour éviter les attentes réseau
+                    const localUser = JSON.parse(userStr);
+                    // Si God Mode, on renvoie toujours le cache pour éviter les conflits RLS
+                    if (GOD_EMAILS.includes(localUser.email)) {
                         return localUser;
-                    } catch (e) {
-                        localStorage.removeItem('user');
                     }
+                    // Pour les utilisateurs normaux, on renvoie le cache pour l'UI
+                    // Une vérification Supabase pourra se faire en arrière-plan si nécessaire
+                    return localUser;
                 }
+            } catch (e) {
+                console.error("Cache read error", e);
+                localStorage.removeItem('user');
+            }
 
-                // 2. SUPABASE : Si pas de cache, on demande à Supabase
-                if (!supabase) return null;
+            // 2. NETWORK PATH: Si pas de cache, on demande à Supabase
+            if (!supabase) return null;
 
-                // On vérifie la session mais on catch les erreurs réseau (ex: offline)
+            try {
+                // getSession est plus rapide que getUser car il vérifie le token local d'abord
                 const { data: { session }, error } = await supabase.auth.getSession();
                 
                 if (error || !session?.user) {
-                    localStorage.removeItem('user');
                     return null;
                 }
 
                 const authUser = session.user;
 
-                // 3. RECUPERATION PROFIL (Table 'users')
+                // Récupération du profil public
                 const { data: profile } = await supabase
                     .from('users')
                     .select('*')
                     .eq('id', authUser.id)
                     .single();
 
-                // 4. CONSTRUCTION OBJET USER
                 const appUser: User = {
                     id: authUser.id,
                     email: authUser.email || '',
@@ -71,21 +70,20 @@ export const api = {
                     is_super_admin: profile?.is_super_admin || false
                 };
 
-                // 5. MISE EN CACHE
+                // Mise à jour du cache
                 localStorage.setItem('user', JSON.stringify(appUser));
                 localStorage.removeItem('is_demo_mode');
                 
                 return appUser;
 
             } catch (e) {
-                console.warn("Auth check failed (likely network issue):", e);
-                // En cas d'erreur réseau, si on avait un user en cache on l'aurait déjà retourné.
-                // Si on arrive ici, c'est qu'on a pas de cache ET pas de réseau => null.
+                console.warn("Auth check failed (network):", e);
                 return null;
             }
         },
 
         login: async (email: string, pass: string) => {
+            // Simulation latence pour UX
             await delay(500); 
             
             const normalizedEmail = (email || '').toLowerCase().trim();
@@ -105,11 +103,10 @@ export const api = {
                 
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true'); 
-                
                 return godUser;
             }
 
-            // --- B. STANDARD SUPABASE LOGIN ---
+            // --- B. STANDARD LOGIN ---
             if (!supabase) throw new Error("Supabase non configuré.");
 
             const { data, error } = await supabase.auth.signInWithPassword({ 
@@ -117,17 +114,27 @@ export const api = {
                 password: pass 
             });
             
-            if (error) {
-                console.error("Login failed:", error.message);
-                throw new Error(error.message === "Invalid login credentials" ? "Email ou mot de passe incorrect." : error.message);
-            }
-            
-            const appUser = await api.auth.getUser();
-            
-            if (!appUser) {
-                throw new Error("Connexion réussie mais profil introuvable.");
-            }
+            if (error) throw new Error(error.message === "Invalid login credentials" ? "Identifiants incorrects." : error.message);
+            if (!data.user) throw new Error("Erreur inconnue lors de la connexion.");
 
+            // Construction immédiate de l'utilisateur pour éviter d'attendre getUser()
+            // On récupère le profil si possible, sinon on utilise les métadonnées
+            let profileData = null;
+            try {
+                const { data: p } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+                profileData = p;
+            } catch (e) { /* Ignore profile fetch error on login to allow entry */ }
+
+            const appUser: User = {
+                id: data.user.id,
+                email: data.user.email || '',
+                name: profileData?.name || data.user.user_metadata?.full_name || 'Utilisateur',
+                role: profileData?.role || 'admin', // Default role if profile missing
+                organization_id: profileData?.organization_id,
+                is_super_admin: profileData?.is_super_admin
+            };
+
+            localStorage.setItem('user', JSON.stringify(appUser));
             return appUser;
         },
 
@@ -144,18 +151,30 @@ export const api = {
 
                 if (error) throw new Error(error.message);
                 
-                if (data.session) {
-                    await delay(1000); 
-                    const user = await api.auth.getUser();
-                    if (user) return user;
+                // Si l'inscription réussit, on crée une session utilisateur locale immédiatement
+                if (data.user) {
+                    const newUser: User = {
+                        id: data.user.id,
+                        email: data.user.email || email,
+                        name: name,
+                        role: 'admin', // Par défaut Admin de sa propre org
+                        organization_id: undefined // Sera créé lors de l'onboarding
+                    };
+                    
+                    // Si session active (pas de confirmation email requise), on logge direct
+                    if (data.session) {
+                        localStorage.setItem('user', JSON.stringify(newUser));
+                        return newUser;
+                    } 
+                    
+                    // Si confirmation requise, on peut quand même renvoyer l'user pour l'UI
+                    return newUser;
                 }
-
-                return { id: 'pending', email, name, role: 'viewer' } as User;
             } 
             
-            // --- B. MODE DEMO (Fallback) ---
+            // --- B. MODE DEMO (Fallback si Supabase HS) ---
             await delay(1000);
-            const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
+            const user = { ...INITIAL_USERS[0], name, email, id: 'new-user-' + Date.now() };
             localStorage.setItem('user', JSON.stringify(user));
             localStorage.setItem('is_demo_mode', 'true');
             return user;
@@ -188,6 +207,7 @@ export const api = {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
                     await supabase.from('users').update(data).eq('id', user.id);
+                    // Update cache
                     const current = JSON.parse(localStorage.getItem('user') || '{}');
                     localStorage.setItem('user', JSON.stringify({ ...current, ...data }));
                 }
@@ -251,9 +271,9 @@ export const api = {
                         };
                     }
                 } catch (e) {
-                    console.warn("Failed to fetch org (network?):", e);
-                    // Return minimal org if offline to prevent crash
-                    return { ...INITIAL_ORG, name: "Mode Hors Ligne" };
+                    // Fail silently and return demo org structure if DB fails to load
+                    // This prevents app crash on dashboard load
+                    return { ...INITIAL_ORG, name: "Mon Organisation (Mode Hors Ligne)" };
                 }
             }
             return null;
@@ -268,6 +288,29 @@ export const api = {
             return { ...INITIAL_ORG, ...data };
         },
         create: async (name: string, industry: string) => { 
+            if (supabase) {
+                const user = await api.auth.getUser();
+                // Check if user already has an org to avoid duplicates in this logic
+                if (user && !user.organization_id) {
+                    // Create Org
+                    const { data: org, error } = await supabase.from('organizations').insert({
+                        name,
+                        industry,
+                        subscription_plan: 'free'
+                    }).select().single();
+                    
+                    if (org) {
+                        // Link user to org
+                        await supabase.from('users').update({ organization_id: org.id }).eq('id', user.id);
+                        
+                        // Update local cache
+                        const updatedUser = { ...user, organization_id: org.id };
+                        localStorage.setItem('user', JSON.stringify(updatedUser));
+                        
+                        return org;
+                    }
+                }
+            }
             return { ...INITIAL_ORG, name, industry }; 
         },
         saveGoogleTokens: async () => {
@@ -440,14 +483,12 @@ export const api = {
                     const channel = supabase.channel('reviews-updates')
                         .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, callback)
                         .subscribe((status) => {
-                            // Silecne error logs if offline or connection fails
                             if (status !== 'SUBSCRIBED') {
-                                // console.warn('Realtime subscription status:', status);
+                                // Silently handle error
                             }
                         });
                     return { unsubscribe: () => supabase.removeChannel(channel) };
                 } catch (e) {
-                    console.warn("Realtime subscription error:", e);
                     return { unsubscribe: () => {} };
                 }
             }

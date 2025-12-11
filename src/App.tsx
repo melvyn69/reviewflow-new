@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
@@ -76,6 +75,7 @@ function AppRoutes() {
     // 1. Initial User Fetch
     const checkSession = async () => {
       try {
+        // api.auth.getUser() is now optimized to return cache immediately
         const userData = await api.auth.getUser();
         if (isMounted) {
           setUser(userData);
@@ -92,47 +92,36 @@ function AppRoutes() {
 
     checkSession();
 
-    // 2. Safety Timeout to prevent infinite loading
-    const safetyTimeout = setTimeout(() => {
-      if (isMounted && loading) {
-        console.warn("Auth check timed out - Forcing load state release");
-        setLoading(false);
-      }
-    }, 3000);
-
-    // 3. Setup Listener
+    // 2. Setup Listener for Auth Changes (Sign In, Sign Out)
     const { data: { subscription } } = supabase 
       ? supabase.auth.onAuthStateChange(async (event, session) => {
-          console.log(`Auth event: ${event}`);
-          
           if (event === 'SIGNED_IN' && session) {
-            // Critical: Save tokens immediately when detected
+            // Force save tokens if present (Google OAuth)
             if (session.provider_token) {
                 await api.organization.saveGoogleTokens().catch(console.error);
             }
             
-            // Re-fetch user details (profile/roles)
-            // IMPORTANT: Calling api.auth.getUser() updates the local storage cache
-            const updatedUser = await api.auth.getUser();
-            if (isMounted) setUser(updatedUser);
+            // Re-fetch user details (profile/roles) and UPDATE CACHE
+            // This is critical for post-login state consistency
+            await api.auth.getUser().then(updatedUser => {
+                if (isMounted) setUser(updatedUser);
+            });
 
-            // Redirect logic if on auth pages
+            // Redirect logic if stuck on auth pages
             if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
                 navigate('/dashboard');
             }
           } 
           else if (event === 'SIGNED_OUT') {
             if (isMounted) setUser(null);
-            localStorage.removeItem('user'); // Ensure clean state
+            localStorage.removeItem('user'); 
             navigate('/');
           }
         })
       : { data: { subscription: { unsubscribe: () => {} } } };
 
-    // Cleanup function
     return () => {
       isMounted = false;
-      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -141,7 +130,7 @@ function AppRoutes() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-        <p className="absolute mt-16 text-slate-400 text-sm animate-pulse">Chargement sécurisé...</p>
+        <p className="absolute mt-16 text-slate-400 text-sm animate-pulse">Chargement...</p>
       </div>
     );
   }

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
@@ -24,13 +23,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const handleForceLogin = async () => {
       setIsLoading(true);
       try {
-          // IMPORTANT: Clear previous session state
           localStorage.clear();
-          
-          await api.auth.login('melvynbenichou@gmail.com', 'FORCE');
-          
+          await api.auth.login('melvynbenichou@gmail.com', 'FORCE'); // Will trigger God Mode
           onLoginSuccess();
-          // Force hard reload to reset React state completely
           window.location.href = '/#/dashboard';
           window.location.reload();
       } catch (e: any) {
@@ -43,15 +38,26 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    
     try {
+      let user;
       if (isLogin) {
-        await api.auth.login(email, password);
+        user = await api.auth.login(email, password);
       } else {
-        await api.auth.register(name || "Utilisateur", email, password);
+        user = await api.auth.register(name || "Utilisateur", email, password);
       }
-      onLoginSuccess();
-      navigate('/dashboard'); // Explicit redirect on success
+      
+      if (user) {
+          onLoginSuccess();
+          // Redirection intelligente : Onboarding pour les nouveaux, Dashboard pour les anciens
+          if (!isLogin) {
+              navigate('/onboarding');
+          } else {
+              navigate('/dashboard');
+          }
+      }
     } catch (err: any) {
+      console.error(err);
       setError(err.message || "Une erreur est survenue");
     } finally {
       setIsLoading(false);
