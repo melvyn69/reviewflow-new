@@ -1,15 +1,13 @@
 
 import { 
     INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
-    INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
-    INITIAL_SOCIAL_POSTS, INITIAL_USERS, INITIAL_BADGES, INITIAL_MILESTONES
+    INITIAL_COMPETITORS, INITIAL_SOCIAL_POSTS, INITIAL_USERS, 
+    INITIAL_BADGES, INITIAL_MILESTONES
 } from './db';
 import { 
-    User, Organization, Review, AnalyticsSummary, WorkflowRule, 
-    ReportConfig, Competitor, SocialPost, Customer, SocialTemplate,
-    CampaignLog, SetupStatus, StaffMember, ReviewTimelineEvent, BrandSettings, Tutorial,
-    ClientProgress, Badge, Milestone, AiCoachMessage, BlogPost, SeoAudit, MultiChannelCampaign,
-    ChatMessage, AppNotification
+    User, Organization, Review, Competitor, SetupStatus, StaffMember, 
+    ReviewTimelineEvent, BrandSettings, ClientProgress, AiCoachMessage, 
+    BlogPost, SeoAudit, ChatMessage, AppNotification, Offer
 } from '../types';
 import { supabase } from './supabase';
 import { GoogleGenAI } from "@google/genai";
@@ -17,32 +15,21 @@ import { GoogleGenAI } from "@google/genai";
 // --- CONFIGURATION ---
 const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
 
-const isDemoMode = () => {
-    if (supabase) return false;
-    return localStorage.getItem('is_demo_mode') === 'true';
-};
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 const apiKey = process.env.API_KEY || '';
 const aiClient = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-// --- CORE API ---
+// Helpers
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const api = {
     auth: {
-        /**
-         * Récupère l'utilisateur courant de manière robuste (Self-Healing).
-         * Si le profil DB n'existe pas, il est créé à la volée.
-         */
         getUser: async (): Promise<User | null> => {
             try {
-                // 1. Mode Démo / Pas de Supabase
                 if (!supabase) {
                     const userStr = localStorage.getItem('user');
                     return userStr ? JSON.parse(userStr) : null;
                 }
 
-                // 2. Vérifier la session Auth
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
                 
                 if (sessionError || !session?.user) {
@@ -51,31 +38,32 @@ export const api = {
 
                 const authUser = session.user;
                 
-                // 3. Tenter de récupérer le profil public
-                const { data: profile, error: profileError } = await supabase
+                const { data: profiles, error: profileError } = await supabase
                     .from('users')
                     .select('*')
                     .eq('id', authUser.id)
-                    .maybeSingle();
+                    .limit(1);
 
-                // 4. SELF-HEALING: Si Auth OK mais pas de profil, on le crée
+                let profile = profiles?.[0];
+
                 if (!profile) {
-                    console.warn("⚠️ Profil introuvable pour l'utilisateur Auth. Création automatique...");
+                    console.warn("⚠️ Profil introuvable. Création automatique...");
                     
                     const newProfile = {
                         id: authUser.id,
                         email: authUser.email,
                         name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'Utilisateur',
                         avatar_url: authUser.user_metadata?.avatar_url,
-                        role: 'admin', // Par défaut admin de son org
+                        role: 'admin',
                         created_at: new Date().toISOString()
                     };
 
                     const { error: insertError } = await supabase.from('users').insert(newProfile);
                     
-                    if (insertError) {
-                        console.error("❌ Échec de l'auto-réparation du profil:", insertError);
-                        // Fallback ultime : on retourne un objet utilisateur valide pour ne pas bloquer l'UI
+                    if (!insertError) {
+                        profile = newProfile;
+                    } else {
+                        console.error("❌ Echec auto-repair:", insertError);
                         return {
                             id: authUser.id,
                             email: authUser.email || '',
@@ -84,12 +72,8 @@ export const api = {
                             organization_id: undefined
                         };
                     }
-                    
-                    // Récursif : on rappelle getUser maintenant que le profil existe
-                    return api.auth.getUser();
                 }
 
-                // 5. Tout est OK, on construit l'objet User
                 const appUser: User = {
                     id: authUser.id,
                     email: authUser.email || '',
@@ -100,19 +84,15 @@ export const api = {
                     is_super_admin: profile.is_super_admin || false
                 };
 
-                // Cache pour la perf UI
-                localStorage.setItem('user', JSON.stringify(appUser));
-                
                 return appUser;
 
             } catch (e) {
-                console.error("🔥 Erreur critique Auth:", e);
+                console.error("🔥 Erreur critique getUser:", e);
                 return null;
             }
         },
 
         login: async (email: string, pass: string) => {
-            // Mode God
             if (GOD_EMAILS.includes(email.toLowerCase())) {
                 const godUser: User = {
                     id: 'god-user-' + Date.now(),
@@ -149,8 +129,6 @@ export const api = {
             });
 
             if (error) throw error;
-            
-            // Attendre un peu que le trigger DB se déclenche (si existant), sinon getUser fera le travail
             await delay(1000);
             return api.auth.getUser();
         },
@@ -160,10 +138,6 @@ export const api = {
             if (supabase) await supabase.auth.signOut();
         },
 
-        /**
-         * Lance le flux OAuth Google avec les bons scopes pour GMB.
-         * Force le "consent" pour obtenir un Refresh Token.
-         */
         connectGoogleBusiness: async () => { 
             if (!supabase) return;
             
@@ -172,8 +146,8 @@ export const api = {
                 options: {
                     redirectTo: window.location.origin,
                     queryParams: {
-                        access_type: 'offline', // CRUCIAL pour le refresh token
-                        prompt: 'consent',      // CRUCIAL pour forcer la ré-approbation
+                        access_type: 'offline',
+                        prompt: 'consent',
                     },
                     scopes: 'https://www.googleapis.com/auth/business.manage'
                 }
@@ -222,26 +196,27 @@ export const api = {
         get: async (): Promise<Organization | null> => {
             const user = await api.auth.getUser();
             
-            // Fallback Demo / God Mode
             if (!supabase || !user?.organization_id) {
                 if (user?.is_super_admin) return { ...INITIAL_ORG, id: 'org1', name: 'Reviewflow HQ' };
                 return null;
             }
 
             try {
-                const { data: org, error } = await supabase
+                const { data: orgs, error } = await supabase
                     .from('organizations')
                     .select('*, locations(*), staff_members(*), offers(*), workflows(*)')
                     .eq('id', user.organization_id)
-                    .single();
+                    .limit(1);
                 
                 if (error) throw error;
+                if (!orgs || orgs.length === 0) return null;
+
+                const org = orgs[0];
                 
                 return {
                     ...org,
                     integrations: {
                         ...org.integrations,
-                        // On vérifie la présence du refresh token pour confirmer la connexion
                         google: !!org.google_refresh_token
                     }
                 };
@@ -265,9 +240,7 @@ export const api = {
 
             if (error) throw error;
 
-            // Link user to org
             await supabase.from('users').update({ organization_id: org.id }).eq('id', user.id);
-            
             return org;
         },
 
@@ -283,28 +256,37 @@ export const api = {
             try {
                 const { data: { session } } = await supabase.auth.getSession();
                 
-                // On ne sauvegarde que si on revient d'un flux OAuth avec un provider token
                 if (session?.user && session.provider_token) {
-                    // On récupère le profil à jour
-                    const user = await api.auth.getUser();
+                    const { data: profiles } = await supabase
+                        .from('users')
+                        .select('organization_id')
+                        .eq('id', session.user.id)
+                        .limit(1);
                     
-                    if (user?.organization_id) {
+                    const profile = profiles?.[0];
+                    
+                    if (profile?.organization_id) {
                         const updates: any = { google_access_token: session.provider_token };
                         
-                        // Le refresh token n'est renvoyé que si prompt='consent'
                         if (session.provider_refresh_token) {
                             updates.google_refresh_token = session.provider_refresh_token;
                         }
                         
-                        await supabase.from('organizations').update(updates).eq('id', user.organization_id);
-                        
-                        // Lancer l'import auto
-                        api.locations.importFromGoogle();
-                        return true;
+                        const { error } = await supabase
+                            .from('organizations')
+                            .update(updates)
+                            .eq('id', profile.organization_id);
+
+                        if (!error) {
+                            api.locations.importFromGoogle().catch(console.error);
+                            return true;
+                        } else {
+                            console.error("Erreur SQL sauvegarde tokens:", error);
+                        }
                     }
                 }
             } catch (e) {
-                console.error("Token save failed", e);
+                console.error("Erreur critique sauvegarde tokens:", e);
             }
             return false;
         },
@@ -330,27 +312,6 @@ export const api = {
         simulatePlanChange: async (plan: string) => {}
     },
 
-    // --- NOTIFICATIONS ---
-    notifications: {
-        list: async (): Promise<AppNotification[]> => {
-            if (!supabase) return [];
-            const user = await api.auth.getUser();
-            // Implement notification fetching logic here
-            return [];
-        },
-        markAllRead: async () => {},
-        sendTestEmail: async (email: string) => {}
-    },
-
-    // --- GLOBAL ---
-    global: {
-        search: async (query: string): Promise<any[]> => {
-            // Placeholder for global search logic
-            return [];
-        }
-    },
-
-    // --- REVIEWS & LOCATIONS ---
     locations: {
         create: async (data: any) => {
             const user = await api.auth.getUser();
@@ -366,10 +327,9 @@ export const api = {
         },
         importFromGoogle: async () => {
             if (!supabase) return 0;
-            // Appel à la fonction Edge pour gérer l'import côté serveur
             const { error } = await supabase.functions.invoke('cron_sync_reviews');
             if (error) throw error;
-            return 1; // Indicateur de succès
+            return 1; 
         }
     },
 
@@ -381,7 +341,6 @@ export const api = {
             if (!user?.organization_id) return [];
 
             try {
-                // Récupérer les IDs des locations
                 const { data: locations } = await supabase
                     .from('locations')
                     .select('id')
@@ -397,6 +356,9 @@ export const api = {
                     .order('received_at', { ascending: false });
 
                 if (filters.limit) query = query.limit(filters.limit);
+                if (filters.startDate) query = query.gte('received_at', filters.startDate);
+                if (filters.endDate) query = query.lte('received_at', filters.endDate);
+                if (filters.rating && typeof filters.rating === 'number') query = query.eq('rating', filters.rating);
                 if (filters.status && filters.status !== 'all') {
                     if (filters.status === 'todo') query = query.in('status', ['pending', 'draft']);
                     else if (filters.status === 'done') query = query.eq('status', 'sent');
@@ -405,10 +367,9 @@ export const api = {
                 const { data, error } = await query;
                 if (error) throw error;
 
-                // Mapping pour compatibilité frontend
                 return (data || []).map((r: any) => ({
                     ...r,
-                    body: r.text || r.body // Le champ DB est 'text', le frontend attend 'body' parfois
+                    body: r.text || r.body
                 }));
             } catch (e) {
                 console.error("List Reviews Error:", e);
@@ -416,7 +377,6 @@ export const api = {
             }
         },
         getCounts: async () => {
-            // Implementation simplifiée
             return { todo: 0, done: 0 };
         },
         getTimeline: (review: Review): ReviewTimelineEvent[] => {
@@ -443,7 +403,6 @@ export const api = {
         uploadCsv: async (f: any) => 0
     },
 
-    // --- OTHER MODULES ---
     ai: {
         generateReply: async (review: Review, config: any) => {
             if (supabase) {
@@ -457,45 +416,117 @@ export const api = {
         generateManagerAdvice: async (member: StaffMember, rank: number, type: string) => "Conseil",
         runCustomTask: async (task: any) => ({}),
         chatWithSupport: async (msg: string, history?: ChatMessage[]) => "Bonjour",
-        getCoachAdvice: async (progress: ClientProgress): Promise<AiCoachMessage> => ({ title: "Bienvenue", message: "Complétez votre profil.", focus_area: "setup" })
+        getCoachAdvice: async (progress: ClientProgress) => ({ title: "Bienvenue", message: "Complétez votre profil.", focus_area: "setup" } as AiCoachMessage)
     },
+
     analytics: { getOverview: async (period?: string) => INITIAL_ANALYTICS },
+    
     competitors: {
-        list: async () => [], create: async (data: any) => {}, delete: async (id: string) => {},
-        getReports: async () => [], saveReport: async (data?: any) => {}, 
+        list: async () => [], 
+        create: async (data: any) => {}, 
+        delete: async (id: string) => {},
+        getReports: async () => [], 
+        saveReport: async (data: any) => {}, 
         autoDiscover: async (radius: number, keyword: string, lat: number, lng: number) => [], 
         getDeepAnalysis: async (industry: string, location: string, competitors: any[]) => null
     },
+
     social: {
         getPosts: async (locationId?: string) => [], 
         schedulePost: async (post: any) => {}, 
-        uploadMedia: async (file: File) => "https://via.placeholder.com/500", 
+        uploadMedia: async (file: File) => "", 
         connectAccount: async (platform: string) => {}, 
-        saveTemplate: async (template: any) => {}
+        saveTemplate: async (data: any) => {}
     },
+
     marketing: {
-        getBlogPosts: async () => [], saveBlogPost: async (post: any) => {}, generateSeoMeta: async (content: string) => ({}), analyzeCompetitorSeo: async (url: string): Promise<SeoAudit> => ({ url, scanned_at: new Date().toISOString(), metrics: { title: 'Audit', description: '', h1: '', load_time_ms: 200, mobile_friendly: true }, keywords: [], ai_analysis: { strengths: [], weaknesses: [], opportunities: [] } }), generateRichSnippet: async (data: any) => "", generateCampaignContent: async (prompt: string, budget: number) => ({ sms: "", email_subject: "", email_body: "", social_caption: "" })
+        getBlogPosts: async () => [], 
+        saveBlogPost: async (post: BlogPost) => {}, 
+        generateSeoMeta: async (content: string) => ({}) as any, 
+        analyzeCompetitorSeo: async (url: string) => ({}) as any, 
+        generateRichSnippet: async (data: any) => "", 
+        generateCampaignContent: async (prompt: string, budget: number) => ({}) as any
     },
+
     automation: {
-        getWorkflows: async () => [], saveWorkflow: async (workflow: any) => {}, deleteWorkflow: async (id: string) => {}, run: async () => ({ processed: 0, actions: 0 })
+        getWorkflows: async () => [], 
+        saveWorkflow: async (workflow: any) => {}, 
+        deleteWorkflow: async (id: string) => {}, 
+        run: async () => ({ processed: 0, actions: 0 })
     },
+
     team: {
-        list: async () => [], invite: async (email: string, role: string, firstName: string, lastName: string) => ({ success: true })
+        list: async () => [], 
+        invite: async (email: string, role: string, firstName: string, lastName: string) => ({ success: true })
     },
-    reports: { trigger: async (id: string) => {} },
-    billing: { getInvoices: async () => [], getUsage: async () => 0, createCheckoutSession: async (planId: string) => "", createPortalSession: async () => "" },
+
+    reports: { trigger: async (reportId: string) => {} },
+
+    billing: { 
+        getInvoices: async () => [], 
+        getUsage: async () => 0, 
+        createCheckoutSession: async (planId: string) => "", 
+        createPortalSession: async () => "" 
+    },
+
     activity: { getRecent: async () => [] },
+    
     onboarding: { checkStatus: async () => ({ completionPercentage: 0 } as any) },
+    
     seedCloudDatabase: async () => {},
-    public: { getLocationInfo: async (id: string) => null, getWidgetReviews: async (id: string) => [], submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {} },
+    
+    public: { 
+        getLocationInfo: async (id: string) => null, 
+        getWidgetReviews: async (id: string) => [], 
+        submitFeedback: async (locationId: string, rating: number, feedback: string, contact: any, tags: string[], staffName?: string) => {} 
+    },
+    
     widgets: { requestIntegration: async (data: any) => {} },
-    campaigns: { send: async (channel: 'sms'|'email', recipient: string, subject: string, message: string, segment: string, link?: string) => {}, getHistory: async () => [] },
-    offers: { validate: async (code: string) => ({ valid: false }), redeem: async (code: string) => {}, create: async (offer: any) => {} },
-    customers: { list: async () => [], update: async (id: string, data: any) => {}, import: async (data: any[]) => {}, enrichProfile: async (id: string) => ({ profile: "Profil IA", suggestion: "Suggestion IA" }) },
+    
+    campaigns: { 
+        send: async (channel: string, to: string, subject: string, message: string, segment: string, link?: string) => {}, 
+        getHistory: async () => [] 
+    },
+    
+    offers: { 
+        validate: async (code: string) => ({ valid: false }), 
+        redeem: async (code: string) => {}, 
+        create: async (data: any) => {} 
+    },
+    
+    customers: { 
+        list: async (filters: any = {}) => [], 
+        update: async (id: string, data: any) => {}, 
+        import: async (data: any[]) => {}, 
+        enrichProfile: async (id: string) => ({}) as any 
+    },
+    
     system: { checkHealth: async () => ({ db: true, latency: 0 }) },
+    
     admin: { getStats: async () => ({}) as any },
+    
     google: { fetchAllGoogleLocations: async () => [], syncReviewsForLocation: async () => 0 },
+    
     company: { search: async (query: string) => [] },
-    support: { sendTicket: async (form: any) => {}, getTutorials: async () => [] },
-    progression: { get: async () => ({} as any), getBadges: async () => [], getMilestones: async () => [] }
+    
+    support: { 
+        sendTicket: async (data: any) => {}, 
+        getTutorials: async () => [] 
+    },
+    
+    progression: { 
+        get: async () => ({} as any), 
+        getBadges: async () => [], 
+        getMilestones: async () => [] 
+    },
+
+    notifications: { 
+        list: async (): Promise<AppNotification[]> => [], 
+        markAllRead: async () => {}, 
+        sendTestEmail: async (email: string) => {} 
+    },
+    
+    global: { 
+        search: async (query: string) => [] 
+    }
 };

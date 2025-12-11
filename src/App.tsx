@@ -74,7 +74,11 @@ function AppRoutes() {
   useEffect(() => {
     let mounted = true;
 
-    const init = async () => {
+    const initAuth = async () => {
+        // 1. Check if returning from OAuth (Google)
+        // Note: Supabase handles the session exchange automatically in the background,
+        // but we want to capture the event explicitly to save tokens.
+        
         try {
             const u = await api.auth.getUser();
             if (mounted) {
@@ -82,19 +86,27 @@ function AppRoutes() {
                 setLoading(false);
             }
         } catch (e) {
-            console.error("Init failed", e);
+            console.error("Auth init error", e);
             if (mounted) setLoading(false);
         }
     };
 
-    init();
+    initAuth();
 
+    // 2. Auth State Listener
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            
+            // CRUCIAL: Save tokens if present (OAuth callback)
+            if (session?.provider_token) {
+                console.log("OAuth detected, saving tokens...");
+                await api.organization.saveGoogleTokens();
+            }
+
             const u = await api.auth.getUser();
             if (mounted) setUser(u);
             
-            // Si on vient de se connecter, on redirige vers le dashboard si on est sur une page publique
+            // Redirect from login page
             if (event === 'SIGNED_IN' && window.location.hash.includes('login')) {
                 navigate('/dashboard');
             }
