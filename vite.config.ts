@@ -9,15 +9,20 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     define: {
       // Injection sécurisée pour le SDK Google Client-side
-      // On injecte les clés spécifiques plutôt que d'écraser tout l'objet process.env
       'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY),
-      // Fallback safe pour NODE_ENV si nécessaire, mais Vite le gère généralement
       'process.env.NODE_ENV': JSON.stringify(mode),
     },
+    server: {
+      // Ouvre automatiquement le navigateur et écoute sur toutes les interfaces
+      host: true, 
+      open: true,
+      hmr: {
+        // Désactive l'overlay d'erreur plein écran si ça bug sur votre machine
+        overlay: false
+      }
+    },
     build: {
-      target: 'esnext',
-      // Ignorer l'API serverless lors du build frontend pour accélérer le build
-      // html5-qrcode est géré via importmap (CDN) pour éviter les erreurs de build Rollup
+      target: 'es2015', // Cible plus large pour compatibilité max
       rollupOptions: {
         external: [/\/api\/.*/, /\/supabase\/.*/, 'html5-qrcode'],
       },
