@@ -1,4 +1,3 @@
-
 import { 
     INITIAL_ORG, INITIAL_REVIEWS, INITIAL_ANALYTICS, 
     INITIAL_WORKFLOWS, INITIAL_REPORTS, INITIAL_COMPETITORS, 
@@ -25,7 +24,7 @@ export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
             try {
-                // 1. PRIORITÉ : Vérifier le cache LocalStorage (Performance + God Mode)
+                // 1. PRIORITÉ : Vérifier le cache LocalStorage (Performance + God Mode + Offline support)
                 const userStr = localStorage.getItem('user');
                 if (userStr) {
                     try {
@@ -34,8 +33,7 @@ export const api = {
                         if (GOD_EMAILS.includes(localUser.email)) {
                             return localUser;
                         }
-                        // Pour un user normal, on retourne le cache pour l'instant (optimistic)
-                        // On pourrait vérifier la session en background, mais pour la stabilité de l'UI, le cache est roi.
+                        // Retourner le cache pour éviter les attentes réseau
                         return localUser;
                     } catch (e) {
                         localStorage.removeItem('user');
@@ -45,10 +43,10 @@ export const api = {
                 // 2. SUPABASE : Si pas de cache, on demande à Supabase
                 if (!supabase) return null;
 
+                // On vérifie la session mais on catch les erreurs réseau (ex: offline)
                 const { data: { session }, error } = await supabase.auth.getSession();
                 
                 if (error || !session?.user) {
-                    // Pas de session, on nettoie tout
                     localStorage.removeItem('user');
                     return null;
                 }
@@ -73,14 +71,16 @@ export const api = {
                     is_super_admin: profile?.is_super_admin || false
                 };
 
-                // 5. MISE EN CACHE (CRITIQUE pour la persistance)
+                // 5. MISE EN CACHE
                 localStorage.setItem('user', JSON.stringify(appUser));
-                localStorage.removeItem('is_demo_mode'); // On est en mode réel
+                localStorage.removeItem('is_demo_mode');
                 
                 return appUser;
 
             } catch (e) {
-                console.error("Critical error in getUser:", e);
+                console.warn("Auth check failed (likely network issue):", e);
+                // En cas d'erreur réseau, si on avait un user en cache on l'aurait déjà retourné.
+                // Si on arrive ici, c'est qu'on a pas de cache ET pas de réseau => null.
                 return null;
             }
         },
@@ -103,7 +103,6 @@ export const api = {
                     is_super_admin: true
                 };
                 
-                // Force le mode démo/cache pour éviter les erreurs RLS
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true'); 
                 
@@ -123,7 +122,6 @@ export const api = {
                 throw new Error(error.message === "Invalid login credentials" ? "Email ou mot de passe incorrect." : error.message);
             }
             
-            // Une fois connecté, on force le chargement du profil complet pour le mettre en cache
             const appUser = await api.auth.getUser();
             
             if (!appUser) {
@@ -146,15 +144,12 @@ export const api = {
 
                 if (error) throw new Error(error.message);
                 
-                // Si l'auto-confirm est activé, l'utilisateur est connecté.
                 if (data.session) {
-                    // On attend que le trigger DB ait créé le user profile si nécessaire
                     await delay(1000); 
                     const user = await api.auth.getUser();
                     if (user) return user;
                 }
 
-                // Si email confirm required ou pas de session immédiate
                 return { id: 'pending', email, name, role: 'viewer' } as User;
             } 
             
@@ -174,7 +169,6 @@ export const api = {
             }
         },
 
-        // ... Reste des méthodes auth inchangées ...
         connectGoogleBusiness: async () => { 
             if (!supabase) throw new Error("Supabase non configuré.");
             const { error } = await supabase.auth.signInWithOAuth({
@@ -194,7 +188,6 @@ export const api = {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
                     await supabase.from('users').update(data).eq('id', user.id);
-                    // Update local cache
                     const current = JSON.parse(localStorage.getItem('user') || '{}');
                     localStorage.setItem('user', JSON.stringify({ ...current, ...data }));
                 }
@@ -218,10 +211,8 @@ export const api = {
             return api.auth.connectGoogleBusiness();
         }
     },
-    // ... Le reste des objets api (organization, reviews, etc.) reste inchangé ...
     organization: {
         get: async (): Promise<Organization | null> => {
-            // Check God Mode context first
             const userStr = localStorage.getItem('user');
             const user = userStr ? JSON.parse(userStr) : null;
             const isGod = GOD_EMAILS.includes(user?.email);
@@ -241,23 +232,28 @@ export const api = {
                 };
             }
 
-            // Real Data Fetch via Supabase
             if (supabase && user?.organization_id) {
-                const { data: org, error } = await supabase
-                    .from('organizations')
-                    .select('*, locations(*), staff_members(*), offers(*), workflows(*)')
-                    .eq('id', user.organization_id)
-                    .single();
-                
-                if (org) {
-                    const googleConnected = !!org.google_refresh_token;
-                    return {
-                        ...org,
-                        integrations: {
-                            ...org.integrations,
-                            google: googleConnected
-                        }
-                    };
+                try {
+                    const { data: org, error } = await supabase
+                        .from('organizations')
+                        .select('*, locations(*), staff_members(*), offers(*), workflows(*)')
+                        .eq('id', user.organization_id)
+                        .single();
+                    
+                    if (org) {
+                        const googleConnected = !!org.google_refresh_token;
+                        return {
+                            ...org,
+                            integrations: {
+                                ...org.integrations,
+                                google: googleConnected
+                            }
+                        };
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch org (network?):", e);
+                    // Return minimal org if offline to prevent crash
+                    return { ...INITIAL_ORG, name: "Mode Hors Ligne" };
                 }
             }
             return null;
@@ -276,17 +272,21 @@ export const api = {
         },
         saveGoogleTokens: async () => {
             if (supabase) {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user && session.provider_token) {
-                    const { data: profile } = await supabase.from('users').select('organization_id').eq('id', session.user.id).single();
-                    if (profile?.organization_id) {
-                        const updates: any = { google_access_token: session.provider_token };
-                        if (session.provider_refresh_token) {
-                            updates.google_refresh_token = session.provider_refresh_token;
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.user && session.provider_token) {
+                        const { data: profile } = await supabase.from('users').select('organization_id').eq('id', session.user.id).single();
+                        if (profile?.organization_id) {
+                            const updates: any = { google_access_token: session.provider_token };
+                            if (session.provider_refresh_token) {
+                                updates.google_refresh_token = session.provider_refresh_token;
+                            }
+                            await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
+                            return true;
                         }
-                        await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
-                        return true;
                     }
+                } catch (e) {
+                    console.warn("Token save failed", e);
                 }
             }
             return false; 
@@ -326,35 +326,42 @@ export const api = {
 
             if (!supabase) return [];
             
-            const user = await api.auth.getUser();
-            if (!user?.organization_id) return [];
+            try {
+                const user = await api.auth.getUser();
+                if (!user?.organization_id) return [];
 
-            const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
-            const locIds = locations?.map((l: any) => l.id) || [];
+                const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
+                const locIds = locations?.map((l: any) => l.id) || [];
 
-            if (locIds.length === 0) return [];
+                if (locIds.length === 0) return [];
 
-            let query = supabase.from('reviews').select('*').in('location_id', locIds).order('received_at', { ascending: false });
-            
-            if (filters.rating && filters.rating !== 'Tout') {
-                const r = Number(filters.rating.toString().replace(/\D/g, ''));
-                if (!isNaN(r)) query = query.eq('rating', r);
+                let query = supabase.from('reviews').select('*').in('location_id', locIds).order('received_at', { ascending: false });
+                
+                if (filters.rating && filters.rating !== 'Tout') {
+                    const r = Number(filters.rating.toString().replace(/\D/g, ''));
+                    if (!isNaN(r)) query = query.eq('rating', r);
+                }
+                if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
+                
+                if (filters.status && filters.status !== 'all') {
+                    if (filters.status === 'todo') query = query.in('status', ['pending', 'draft']);
+                    else if (filters.status === 'done') query = query.eq('status', 'sent');
+                    else query = query.eq('status', filters.status);
+                }
+                
+                if (filters.limit) query = query.limit(filters.limit);
+                if (filters.startDate) query = query.gte('received_at', filters.startDate);
+                if (filters.endDate) query = query.lte('received_at', filters.endDate);
+                if (filters.search) query = query.ilike('text', `%${filters.search}%`);
+                
+                const { data, error } = await query;
+                if (error) throw error;
+                
+                return (data || []).map((r: any) => ({ ...r, body: r.text || r.body }));
+            } catch (e) {
+                console.warn("Review list fetch failed", e);
+                return [];
             }
-            if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
-            
-            if (filters.status && filters.status !== 'all') {
-                if (filters.status === 'todo') query = query.in('status', ['pending', 'draft']);
-                else if (filters.status === 'done') query = query.eq('status', 'sent');
-                else query = query.eq('status', filters.status);
-            }
-            
-            if (filters.limit) query = query.limit(filters.limit);
-            if (filters.startDate) query = query.gte('received_at', filters.startDate);
-            if (filters.endDate) query = query.lte('received_at', filters.endDate);
-            if (filters.search) query = query.ilike('text', `%${filters.search}%`);
-            
-            const { data } = await query;
-            return (data || []).map((r: any) => ({ ...r, body: r.text || r.body }));
         },
         getTimeline: (review: Review): ReviewTimelineEvent[] => {
             const events: ReviewTimelineEvent[] = [
@@ -407,27 +414,42 @@ export const api = {
             if (isDemoMode()) return { todo: 5, done: 120 };
             
             if (supabase) {
-                const user = await api.auth.getUser();
-                if (!user?.organization_id) return { todo: 0, done: 0 };
-                
-                const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
-                const locIds = locations?.map((l: any) => l.id) || [];
-                
-                if (locIds.length === 0) return { todo: 0, done: 0 };
+                try {
+                    const user = await api.auth.getUser();
+                    if (!user?.organization_id) return { todo: 0, done: 0 };
+                    
+                    const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
+                    const locIds = locations?.map((l: any) => l.id) || [];
+                    
+                    if (locIds.length === 0) return { todo: 0, done: 0 };
 
-                const { count: todo } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).in('location_id', locIds).in('status', ['pending', 'draft']);
-                const { count: done } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).in('location_id', locIds).eq('status', 'sent');
-                
-                return { todo: todo || 0, done: done || 0 };
+                    const { count: todo } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).in('location_id', locIds).in('status', ['pending', 'draft']);
+                    const { count: done } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).in('location_id', locIds).eq('status', 'sent');
+                    
+                    return { todo: todo || 0, done: done || 0 };
+                } catch (e) {
+                    console.warn("Count fetch failed", e);
+                    return { todo: 0, done: 0 };
+                }
             }
             return { todo: 0, done: 0 };
         },
         subscribe: (callback: (payload: any) => void) => {
             if (supabase && !isDemoMode()) {
-                const sub = supabase.channel('reviews-updates')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, callback)
-                    .subscribe();
-                return { unsubscribe: () => supabase.removeChannel(sub) };
+                try {
+                    const channel = supabase.channel('reviews-updates')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, callback)
+                        .subscribe((status) => {
+                            // Silecne error logs if offline or connection fails
+                            if (status !== 'SUBSCRIBED') {
+                                // console.warn('Realtime subscription status:', status);
+                            }
+                        });
+                    return { unsubscribe: () => supabase.removeChannel(channel) };
+                } catch (e) {
+                    console.warn("Realtime subscription error:", e);
+                    return { unsubscribe: () => {} };
+                }
             }
             return { unsubscribe: () => {} };
         },
@@ -513,10 +535,7 @@ export const api = {
             return org?.workflows || [];
         },
         saveWorkflow: async (workflow: any) => {
-            const org = await api.organization.get();
-            if (supabase && !isDemoMode()) {
-                // Fetch, Update, Save logic with DB
-            }
+            // ...
         },
         deleteWorkflow: async (id: string) => {},
         run: async () => { 
@@ -731,8 +750,10 @@ export const api = {
     public: {
         getLocationInfo: async (id: string) => {
             if (supabase && !isDemoMode()) {
-                const { data } = await supabase.from('locations').select('*').eq('id', id).single();
-                return data;
+                try {
+                    const { data } = await supabase.from('locations').select('*').eq('id', id).single();
+                    return data;
+                } catch { return null; }
             }
             return INITIAL_ORG.locations.find(l => l.id === id) || null;
         },
