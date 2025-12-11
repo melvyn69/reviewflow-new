@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
@@ -93,6 +94,18 @@ function AppRoutes() {
           console.log("Auth Event:", event);
           
           if (event === 'SIGNED_IN' && session) {
+            
+            // DETECT RETURN FROM GOOGLE OAUTH
+            // The provider_token is only present immediately after the redirect.
+            if (session.provider_token) {
+                console.log("OAuth Provider Token detected. Saving...");
+                const success = await api.organization.saveGoogleTokens();
+                if (success) {
+                    console.log("Tokens saved. Locations synced.");
+                    // Force a hard reload of the user/org data or just proceed
+                }
+            }
+
             // Force la mise à jour de l'utilisateur
             const freshUser = await api.auth.getUser();
             if (isMounted) setUser(freshUser);

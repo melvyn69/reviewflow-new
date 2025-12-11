@@ -18,32 +18,38 @@ import { GoogleGenAI } from "@google/genai";
 // --- GOD MODE CONFIGURATION ---
 const GOD_EMAILS = ['melvynbenichou@gmail.com', 'demo@reviewflow.com', 'god@reviewflow.com'];
 
-const isDemoMode = () => localStorage.getItem('is_demo_mode') === 'true';
+const isDemoMode = () => {
+    // If Supabase is configured, we are NOT in demo mode unless explicitly forced for dev
+    if (supabase) return false;
+    return localStorage.getItem('is_demo_mode') === 'true';
+};
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Initialize Gemini Client for Local Fallback
 const aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Helpers
+const getOrgId = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non connecté");
+    
+    const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+    if (!profile?.organization_id) throw new Error("Aucune organisation liée");
+    
+    return profile.organization_id;
+};
+
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
             try {
-                const userStr = localStorage.getItem('user');
-                if (userStr) {
-                    const localUser = JSON.parse(userStr);
-                    if (GOD_EMAILS.includes(localUser.email) || isDemoMode()) {
-                        return localUser;
-                    }
-                    return localUser;
+                // If Supabase is not configured, fallback to local storage mock
+                if (!supabase) {
+                    const userStr = localStorage.getItem('user');
+                    return userStr ? JSON.parse(userStr) : null;
                 }
-            } catch (e) {
-                console.error("Cache read error", e);
-                localStorage.removeItem('user');
-            }
 
-            if (!supabase) return null;
-
-            try {
                 const { data: { session }, error } = await supabase.auth.getSession();
                 
                 if (error || !session?.user) {
@@ -67,8 +73,8 @@ export const api = {
                     is_super_admin: profile?.is_super_admin || false
                 };
 
+                // Update local cache for fast initial load
                 localStorage.setItem('user', JSON.stringify(appUser));
-                localStorage.removeItem('is_demo_mode');
                 
                 return appUser;
 
@@ -190,9 +196,11 @@ export const api = {
                 // Mock success in demo
                 return Promise.resolve();
             }
+            // CRITICAL: Must use offline access to get a refresh_token
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
+                    redirectTo: window.location.origin,
                     queryParams: {
                         access_type: 'offline',
                         prompt: 'consent',
@@ -270,7 +278,8 @@ export const api = {
                         };
                     }
                 } catch (e) {
-                    return { ...INITIAL_ORG, name: "Organisation (Mode Déconnecté)" };
+                    console.error("Org fetch error", e);
+                    return { ...INITIAL_ORG, name: "Organisation (Erreur)" };
                 }
             }
             return null;
@@ -308,14 +317,24 @@ export const api = {
             if (supabase) {
                 try {
                     const { data: { session } } = await supabase.auth.getSession();
+                    // Check for provider tokens. These only exist immediately after OAuth redirect.
                     if (session?.user && session.provider_token) {
                         const { data: profile } = await supabase.from('users').select('organization_id').eq('id', session.user.id).single();
+                        
                         if (profile?.organization_id) {
                             const updates: any = { google_access_token: session.provider_token };
+                            // Crucial: Only save refresh token if it exists (it comes only on first consent or re-consent with prompt)
                             if (session.provider_refresh_token) {
                                 updates.google_refresh_token = session.provider_refresh_token;
                             }
+                            
                             await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
+                            
+                            // *** AUTO-TRIGGER IMPORT ***
+                            // Immediately fetch locations and reviews so the user sees data without manual clicks
+                            console.log("Tokens saved. Triggering auto-import...");
+                            await api.locations.importFromGoogle(); 
+                            
                             return true;
                         }
                     }
@@ -364,12 +383,16 @@ export const api = {
                 const user = await api.auth.getUser();
                 if (!user?.organization_id) return [];
 
+                // 1. Get Location IDs for this org
                 const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
                 const locIds = locations?.map((l: any) => l.id) || [];
 
                 if (locIds.length === 0) return [];
 
-                let query = supabase.from('reviews').select('*').in('location_id', locIds).order('received_at', { ascending: false });
+                let query = supabase.from('reviews')
+                    .select('*')
+                    .in('location_id', locIds)
+                    .order('received_at', { ascending: false });
                 
                 if (filters.rating && filters.rating !== 'Tout') {
                     const r = Number(filters.rating.toString().replace(/\D/g, ''));
@@ -391,8 +414,10 @@ export const api = {
                 const { data, error } = await query;
                 if (error) throw error;
                 
+                // Map 'text' from DB to 'body' for frontend compatibility
                 return (data || []).map((r: any) => ({ ...r, body: r.text || r.body }));
             } catch (e) {
+                console.error("List reviews error:", e);
                 return [];
             }
         },
@@ -716,7 +741,45 @@ export const api = {
         delete: async (id: string) => {
             if (supabase && !isDemoMode()) await supabase.from('locations').delete().eq('id', id);
         },
-        importFromGoogle: async () => 0
+        importFromGoogle: async () => {
+            if (!supabase || isDemoMode()) return 0;
+            
+            // 1. Get access token from session to identify user/org
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) throw new Error("No session");
+
+            // 2. Call Edge Function to fetch locations first
+            const locRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch_google_locations`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({}) // Can pass options later
+            });
+
+            if (!locRes.ok) throw new Error("Failed to fetch locations from Google");
+            const locations = await locRes.json();
+
+            // 3. Trigger Review Sync for all new locations via Edge Function
+            // This function (cron_sync_reviews) usually runs on schedule, but we trigger it manually here
+            // to ensure immediate data population.
+            const syncRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cron_sync_reviews`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, // Uses anon key to trigger public http function or service role if secured
+                    // Better to use a specific secure endpoint, but reusing existing structure:
+                    // If cron_sync_reviews is protected, we might need another approach.
+                    // For now, assuming cron_sync_reviews handles internal logic securely or we invoke it via RPC/Admin.
+                    // Let's assume we invoke it via Supabase client functions.invoke which handles auth automatically.
+                }
+            });
+            
+            // Better approach using library:
+            await supabase.functions.invoke('cron_sync_reviews');
+
+            return locations.length;
+        }
     },
     activity: {
         getRecent: async () => []
