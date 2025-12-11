@@ -112,16 +112,18 @@ function AppRoutes() {
             }
             
             // Re-fetch user details (profile/roles)
+            // IMPORTANT: Calling api.auth.getUser() updates the local storage cache
             const updatedUser = await api.auth.getUser();
             if (isMounted) setUser(updatedUser);
 
-            // Redirect logic
+            // Redirect logic if on auth pages
             if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
                 navigate('/dashboard');
             }
           } 
           else if (event === 'SIGNED_OUT') {
             if (isMounted) setUser(null);
+            localStorage.removeItem('user'); // Ensure clean state
             navigate('/');
           }
         })

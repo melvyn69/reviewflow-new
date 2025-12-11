@@ -25,78 +25,57 @@ export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
             try {
-                // 1. GOD MODE / DEMO CHECK (Priority 1: LocalStorage)
+                // 1. PRIORITÉ : Vérifier le cache LocalStorage (Performance + God Mode)
                 const userStr = localStorage.getItem('user');
                 if (userStr) {
                     try {
                         const localUser = JSON.parse(userStr);
-                        const email = (localUser.email || '').toLowerCase().trim();
-
-                        // IF GOD EMAIL: Bypass Supabase completely to avoid 400/401 errors or network latency
-                        if (GOD_EMAILS.includes(email)) {
-                            const godUser: User = {
-                                ...localUser,
-                                role: 'super_admin',
-                                is_super_admin: true,
-                                organizations: ['org1'],
-                                organization_id: 'org1'
-                            };
-                            
-                            // Ensure demo context is active for God users
-                            if (localStorage.getItem('is_demo_mode') !== 'true') {
-                                localStorage.setItem('is_demo_mode', 'true');
-                            }
-                            
-                            // Update cache if needed
-                            if (localUser.role !== 'super_admin') {
-                                localStorage.setItem('user', JSON.stringify(godUser));
-                            }
-                            return godUser;
+                        // Si c'est un God User, on le retourne directement (bypass Supabase)
+                        if (GOD_EMAILS.includes(localUser.email)) {
+                            return localUser;
                         }
+                        // Pour un user normal, on retourne le cache pour l'instant (optimistic)
+                        // On pourrait vérifier la session en background, mais pour la stabilité de l'UI, le cache est roi.
+                        return localUser;
                     } catch (e) {
-                        console.warn("Corrupt local user data, clearing...");
                         localStorage.removeItem('user');
                     }
                 }
 
-                // 2. SUPABASE AUTH CHECK (Priority 2: Real DB)
+                // 2. SUPABASE : Si pas de cache, on demande à Supabase
                 if (!supabase) return null;
 
-                const { data: { user: authUser }, error } = await supabase.auth.getUser();
+                const { data: { session }, error } = await supabase.auth.getSession();
                 
-                if (error || !authUser) {
-                    // Session invalid or expired -> Clear local state to prevent loop
-                    if (!isDemoMode()) {
-                        localStorage.removeItem('user');
-                    }
+                if (error || !session?.user) {
+                    // Pas de session, on nettoie tout
+                    localStorage.removeItem('user');
                     return null;
                 }
 
-                // 3. FETCH PROFILE (If session exists)
-                const { data: profile, error: profileError } = await supabase
+                const authUser = session.user;
+
+                // 3. RECUPERATION PROFIL (Table 'users')
+                const { data: profile } = await supabase
                     .from('users')
-                    .select('organization_id, role, name, avatar_url, is_super_admin')
+                    .select('*')
                     .eq('id', authUser.id)
                     .single();
 
-                if (profileError) {
-                    console.warn("Profile fetch error (using fallback):", profileError.message);
-                }
-
-                // Construct full User object
+                // 4. CONSTRUCTION OBJET USER
                 const appUser: User = {
                     id: authUser.id,
                     email: authUser.email || '',
                     name: profile?.name || authUser.user_metadata?.full_name || 'Utilisateur',
                     role: profile?.role || 'viewer',
                     organization_id: profile?.organization_id,
-                    avatar: profile?.avatar_url || undefined,
+                    avatar: profile?.avatar_url,
                     is_super_admin: profile?.is_super_admin || false
                 };
 
-                // Sync localStorage
+                // 5. MISE EN CACHE (CRITIQUE pour la persistance)
                 localStorage.setItem('user', JSON.stringify(appUser));
-                localStorage.removeItem('is_demo_mode'); // Real auth = not demo mode
+                localStorage.removeItem('is_demo_mode'); // On est en mode réel
                 
                 return appUser;
 
@@ -105,16 +84,17 @@ export const api = {
                 return null;
             }
         },
+
         login: async (email: string, pass: string) => {
-            await delay(500); // Simulate network feel
+            await delay(500); 
             
             const normalizedEmail = (email || '').toLowerCase().trim();
             
-            // --- 1. GOD MODE BACKDOOR ---
+            // --- A. GOD MODE BACKDOOR ---
             if (GOD_EMAILS.includes(normalizedEmail)) {
                 const godUser: User = {
                     id: 'god-user-' + Date.now(),
-                    name: 'Melvyn (Super Admin)',
+                    name: 'Super Admin (God Mode)',
                     email: normalizedEmail,
                     role: 'super_admin',
                     avatar: 'https://ui-avatars.com/api/?name=Super+Admin&background=ef4444&color=fff',
@@ -123,44 +103,39 @@ export const api = {
                     is_super_admin: true
                 };
                 
-                // Force Demo Mode logic
+                // Force le mode démo/cache pour éviter les erreurs RLS
                 localStorage.setItem('user', JSON.stringify(godUser));
                 localStorage.setItem('is_demo_mode', 'true'); 
                 
                 return godUser;
             }
 
-            // --- 2. STANDARD SUPABASE LOGIN ---
-            if (supabase) {
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-                
-                if (error) {
-                    console.error("Login failed:", error.message);
-                    throw new Error(error.message === "Invalid login credentials" ? "Email ou mot de passe incorrect." : error.message);
-                }
-                
-                // Fetch full profile immediately to ensure consistency
-                const appUser = await api.auth.getUser();
-                
-                if (!appUser) {
-                    throw new Error("Connexion réussie mais profil introuvable.");
-                }
+            // --- B. STANDARD SUPABASE LOGIN ---
+            if (!supabase) throw new Error("Supabase non configuré.");
 
-                return appUser;
+            const { data, error } = await supabase.auth.signInWithPassword({ 
+                email: normalizedEmail, 
+                password: pass 
+            });
+            
+            if (error) {
+                console.error("Login failed:", error.message);
+                throw new Error(error.message === "Invalid login credentials" ? "Email ou mot de passe incorrect." : error.message);
+            }
+            
+            // Une fois connecté, on force le chargement du profil complet pour le mettre en cache
+            const appUser = await api.auth.getUser();
+            
+            if (!appUser) {
+                throw new Error("Connexion réussie mais profil introuvable.");
             }
 
-            throw new Error("Service d'authentification indisponible (Supabase non configuré).");
+            return appUser;
         },
-        logout: async () => {
-            localStorage.removeItem('user');
-            localStorage.removeItem('is_demo_mode');
-            if (supabase) {
-                await supabase.auth.signOut().catch(console.error);
-            }
-        },
+
         register: async (name: string, email: string, password?: string) => {
+            // --- A. INSCRIPTION REELLE ---
             if (supabase && password) {
-                // Standard Supabase SignUp
                 const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
@@ -168,19 +143,38 @@ export const api = {
                         data: { full_name: name }
                     }
                 });
+
                 if (error) throw new Error(error.message);
                 
-                // Return a temporary user object, getUser will flesh it out once confirmed/logged in
-                return { id: data.user?.id, email, name, role: 'admin' } as User;
-            } else {
-                // Fallback / Demo
-                await delay(1000);
-                const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
-                localStorage.setItem('user', JSON.stringify(user));
-                localStorage.setItem('is_demo_mode', 'true');
-                return user;
+                // Si l'auto-confirm est activé, l'utilisateur est connecté.
+                if (data.session) {
+                    // On attend que le trigger DB ait créé le user profile si nécessaire
+                    await delay(1000); 
+                    const user = await api.auth.getUser();
+                    if (user) return user;
+                }
+
+                // Si email confirm required ou pas de session immédiate
+                return { id: 'pending', email, name, role: 'viewer' } as User;
+            } 
+            
+            // --- B. MODE DEMO (Fallback) ---
+            await delay(1000);
+            const user = { ...INITIAL_USERS[0], name, email, id: 'new-user' };
+            localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('is_demo_mode', 'true');
+            return user;
+        },
+
+        logout: async () => {
+            localStorage.removeItem('user');
+            localStorage.removeItem('is_demo_mode');
+            if (supabase) {
+                await supabase.auth.signOut().catch(console.error);
             }
         },
+
+        // ... Reste des méthodes auth inchangées ...
         connectGoogleBusiness: async () => { 
             if (!supabase) throw new Error("Supabase non configuré.");
             const { error } = await supabase.auth.signInWithOAuth({
@@ -224,6 +218,7 @@ export const api = {
             return api.auth.connectGoogleBusiness();
         }
     },
+    // ... Le reste des objets api (organization, reviews, etc.) reste inchangé ...
     organization: {
         get: async (): Promise<Organization | null> => {
             // Check God Mode context first
@@ -247,7 +242,6 @@ export const api = {
             }
 
             // Real Data Fetch via Supabase
-            // user.organization_id should have been populated by api.auth.getUser()
             if (supabase && user?.organization_id) {
                 const { data: org, error } = await supabase
                     .from('organizations')
@@ -256,9 +250,7 @@ export const api = {
                     .single();
                 
                 if (org) {
-                    // Determine connection status based on token presence
                     const googleConnected = !!org.google_refresh_token;
-                    
                     return {
                         ...org,
                         integrations: {
@@ -280,36 +272,19 @@ export const api = {
             return { ...INITIAL_ORG, ...data };
         },
         create: async (name: string, industry: string) => { 
-            // In real flow, usually handled by onboarding or triggers.
             return { ...INITIAL_ORG, name, industry }; 
         },
         saveGoogleTokens: async () => {
             if (supabase) {
                 const { data: { session } } = await supabase.auth.getSession();
-                
-                // We verify we have a session first
-                if (session?.user) {
-                    // Find the user's organization to update
+                if (session?.user && session.provider_token) {
                     const { data: profile } = await supabase.from('users').select('organization_id').eq('id', session.user.id).single();
-                    
-                    if (profile?.organization_id && session.provider_token) {
-                        const updates: any = {
-                            google_access_token: session.provider_token
-                        };
-                        
-                        // Only update refresh token if provided (it comes only on first consent or explicit re-consent)
+                    if (profile?.organization_id) {
+                        const updates: any = { google_access_token: session.provider_token };
                         if (session.provider_refresh_token) {
                             updates.google_refresh_token = session.provider_refresh_token;
                         }
-
-                        const { error } = await supabase.from('organizations')
-                            .update(updates)
-                            .eq('id', profile.organization_id);
-                            
-                        if (error) {
-                            console.error("Error saving Google tokens:", error);
-                            return false;
-                        }
+                        await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
                         return true;
                     }
                 }
@@ -354,7 +329,6 @@ export const api = {
             const user = await api.auth.getUser();
             if (!user?.organization_id) return [];
 
-            // Get Location IDs for Org
             const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
             const locIds = locations?.map((l: any) => l.id) || [];
 
@@ -368,7 +342,6 @@ export const api = {
             }
             if (filters.source && filters.source !== 'Tout') query = query.eq('source', filters.source.toLowerCase());
             
-            // Status mapping
             if (filters.status && filters.status !== 'all') {
                 if (filters.status === 'todo') query = query.in('status', ['pending', 'draft']);
                 else if (filters.status === 'done') query = query.eq('status', 'sent');
@@ -381,12 +354,7 @@ export const api = {
             if (filters.search) query = query.ilike('text', `%${filters.search}%`);
             
             const { data } = await query;
-            
-            // Map DB fields to UI types
-            return (data || []).map((r: any) => ({
-                ...r,
-                body: r.text || r.body // Ensure compatibility
-            }));
+            return (data || []).map((r: any) => ({ ...r, body: r.text || r.body }));
         },
         getTimeline: (review: Review): ReviewTimelineEvent[] => {
             const events: ReviewTimelineEvent[] = [
@@ -526,9 +494,7 @@ export const api = {
         }
     },
     analytics: {
-        getOverview: async (period?: string) => { 
-            return INITIAL_ANALYTICS; 
-        }
+        getOverview: async (period?: string) => { return INITIAL_ANALYTICS; }
     },
     marketing: {
         getBlogPosts: async () => [],
@@ -548,9 +514,6 @@ export const api = {
         },
         saveWorkflow: async (workflow: any) => {
             const org = await api.organization.get();
-            if (org) {
-                // In demo, we modify the local org object if needed but usually UI handles state
-            }
             if (supabase && !isDemoMode()) {
                 // Fetch, Update, Save logic with DB
             }
