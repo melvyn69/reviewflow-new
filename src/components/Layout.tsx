@@ -33,6 +33,7 @@ import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
 import { useTranslation } from '../lib/i18n';
 import { hasAccess, FeatureId, isFeatureActive } from '../lib/features';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 // Sidebar Item Component
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isLocked = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isLocked?: boolean }) => {
@@ -237,6 +238,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           )}
         </nav>
 
+        {!isSupabaseConfigured() && (
+            <div className="bg-amber-50 border-t border-amber-100 p-2 text-center">
+                <div className="text-[10px] font-bold text-amber-700 flex items-center justify-center gap-1">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    MODE DÉMO
+                </div>
+            </div>
+        )}
+
         <div className="p-4 border-t border-slate-100">
           <button 
             onClick={() => api.auth.logout().then(() => window.location.reload())}
@@ -259,6 +272,9 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   
+  // PWA Prompt Logic (Duplicated from Sidebar for Topbar access if needed)
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
   const notifRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -281,6 +297,12 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     
+    // Capture PWA prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -315,11 +337,16 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
       setSearchResults([]);
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
   const handleInstallApp = async () => {
-      alert("Pour installer l'application :\nSur iOS : Partager > Sur l'écran d'accueil\nSur Android : Menu > Installer l'application");
+      if (deferredPrompt) {
+          deferredPrompt.prompt();
+          setDeferredPrompt(null);
+      } else {
+          alert("L'installation n'est pas supportée par votre navigateur actuel ou l'application est déjà installée.");
+      }
   };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30 transition-all">

@@ -1,34 +1,49 @@
+
 import { supabase } from './supabase';
 import { 
     User, Organization, Review, Competitor, SocialPost, 
     ReviewTimelineEvent, BrandSettings, ClientProgress, 
-    AiCoachMessage, BlogPost, SeoAudit, AppNotification
+    AiCoachMessage, BlogPost, SeoAudit, AppNotification, AnalyticsSummary
 } from '../types';
 import { GoogleGenAI } from "@google/genai";
-import { 
-    INITIAL_ANALYTICS, INITIAL_REVIEWS 
-} from './db'; // On garde les mocks uniquement pour les stats vides au début
 
-// Gemini Client
+// Client Gemini
 const apiKey = import.meta.env.VITE_API_KEY || '';
 const aiClient = apiKey ? new GoogleGenAI({ apiKey }) : null;
+
+// Structure vide pour éviter les crashs si pas de données
+const EMPTY_ANALYTICS: AnalyticsSummary = {
+    period: '30j',
+    total_reviews: 0,
+    average_rating: 0,
+    response_rate: 0,
+    nps_score: 0,
+    global_rating: 0,
+    sentiment_distribution: { positive: 0, neutral: 0, negative: 0 },
+    volume_by_date: [],
+    top_themes_positive: [],
+    top_themes_negative: [],
+    top_keywords: [],
+    strengths_summary: "Pas assez de données pour l'analyse.",
+    problems_summary: "Pas assez de données pour l'analyse."
+};
 
 export const api = {
     auth: {
         getUser: async (): Promise<User | null> => {
-            const { data: { session } } = await (supabase.auth as any).getSession();
+            if (!supabase) return null;
+            const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return null;
 
-            // On récupère le profil qui a été créé par le Trigger SQL
+            // Récupération du profil public.users
             const { data: profile, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', session.user.id)
                 .single();
 
+            // Fallback si le trigger n'a pas encore couru (rare mais possible)
             if (error || !profile) {
-                console.warn("Utilisateur authentifié mais pas de profil DB. Vérifiez les Triggers Supabase.");
-                // Fallback minimal pour ne pas crasher l'UI, mais c'est un état d'erreur
                 return {
                     id: session.user.id,
                     email: session.user.email || '',
@@ -45,17 +60,19 @@ export const api = {
                 role: profile.role,
                 organization_id: profile.organization_id,
                 avatar: profile.avatar_url,
-                is_super_admin: profile.is_super_admin
+                is_super_admin: false // Désactivé par sécurité par défaut
             };
         },
 
         login: async (email: string, pass: string) => {
-            const { error } = await (supabase.auth as any).signInWithPassword({ email, password: pass });
+            if (!supabase) throw new Error("Supabase non configuré");
+            const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
             if (error) throw error;
         },
 
         register: async (name: string, email: string, password: string) => {
-            const { error } = await (supabase.auth as any).signUp({
+            if (!supabase) throw new Error("Supabase non configuré");
+            const { error } = await supabase.auth.signUp({
                 email,
                 password,
                 options: { data: { full_name: name } }
@@ -64,18 +81,19 @@ export const api = {
         },
 
         logout: async () => {
-            await (supabase.auth as any).signOut();
+            if (supabase) await supabase.auth.signOut();
             localStorage.clear();
         },
 
         connectGoogleBusiness: async () => {
-            const { error } = await (supabase.auth as any).signInWithOAuth({
+            if (!supabase) return;
+            const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
                     redirectTo: window.location.origin,
                     queryParams: {
-                        access_type: 'offline', // OBLIGATOIRE pour obtenir le refresh_token
-                        prompt: 'consent',      // OBLIGATOIRE pour forcer la regénération du refresh_token
+                        access_type: 'offline', // OBLIGATOIRE pour le refresh_token
+                        prompt: 'consent',      // OBLIGATOIRE pour forcer le renvoi du refresh_token
                     },
                     scopes: 'https://www.googleapis.com/auth/business.manage'
                 }
@@ -85,7 +103,7 @@ export const api = {
 
         disconnectGoogle: async () => {
             const user = await api.auth.getUser();
-            if (user?.organization_id) {
+            if (user?.organization_id && supabase) {
                 await supabase.from('organizations').update({
                     google_access_token: null,
                     google_refresh_token: null
@@ -94,22 +112,22 @@ export const api = {
         },
 
         updateProfile: async (data: Partial<User>) => {
-            const { data: { user } } = await (supabase.auth as any).getUser();
+            if (!supabase) return;
+            const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 await supabase.from('users').update(data).eq('id', user.id);
             }
         },
         
-        // ... (password reset functions remain standard)
-        changePassword: async () => { /* Implémentation standard */ },
-        deleteAccount: async () => { await supabase.functions.invoke('delete_account'); },
-        resetPassword: async (email: string) => { await (supabase.auth as any).resetPasswordForEmail(email); }
+        changePassword: async () => {},
+        deleteAccount: async () => { if(supabase) await supabase.functions.invoke('delete_account'); },
+        resetPassword: async (email: string) => { if(supabase) await supabase.auth.resetPasswordForEmail(email); }
     },
 
     organization: {
         get: async (): Promise<Organization | null> => {
             const user = await api.auth.getUser();
-            if (!user?.organization_id) return null;
+            if (!supabase || !user?.organization_id) return null;
 
             const { data, error } = await supabase
                 .from('organizations')
@@ -130,22 +148,20 @@ export const api = {
 
         update: async (data: Partial<Organization>) => {
             const user = await api.auth.getUser();
-            if (user?.organization_id) {
+            if (user?.organization_id && supabase) {
                 await supabase.from('organizations').update(data).eq('id', user.organization_id);
             }
         },
 
-        // Cette fonction est appelée par App.tsx au retour de Google OAuth
         saveGoogleTokens: async () => {
-            const { data: { session } } = await (supabase.auth as any).getSession();
+            if (!supabase) return false;
+            const { data: { session } } = await supabase.auth.getSession();
             
-            // On vérifie si on a reçu des tokens du fournisseur (Google)
             if (session?.provider_token) {
                 const user = await api.auth.getUser();
                 if (user?.organization_id) {
                     const updates: any = { google_access_token: session.provider_token };
                     
-                    // Le refresh token n'est présent que si prompt='consent' a été utilisé
                     if (session.provider_refresh_token) {
                         updates.google_refresh_token = session.provider_refresh_token;
                     }
@@ -157,27 +173,25 @@ export const api = {
             return false;
         },
         
-        // ... methodes staff, api keys inchangées, appel direct supabase ...
         addStaffMember: async (name: string, role: string, email: string) => {
              const user = await api.auth.getUser();
-             if(user?.organization_id) await supabase.from('staff_members').insert({name, role, email, organization_id: user.organization_id});
+             if(user?.organization_id && supabase) await supabase.from('staff_members').insert({name, role, email, organization_id: user.organization_id});
         },
-        removeStaffMember: async (id: string) => { await supabase.from('staff_members').delete().eq('id', id); },
-        generateApiKey: async (name: string) => { await supabase.functions.invoke('manage_org_settings', { body: { action: 'generate_api_key', data: { name } } }); },
-        revokeApiKey: async (id: string) => { await supabase.functions.invoke('manage_org_settings', { body: { action: 'revoke_api_key', data: { id } } }); },
+        removeStaffMember: async (id: string) => { if(supabase) await supabase.from('staff_members').delete().eq('id', id); },
+        generateApiKey: async (name: string) => { if(supabase) await supabase.functions.invoke('manage_org_settings', { body: { action: 'generate_api_key', data: { name } } }); },
+        revokeApiKey: async (id: string) => { if(supabase) await supabase.functions.invoke('manage_org_settings', { body: { action: 'revoke_api_key', data: { id } } }); },
         saveWebhook: async (config: any) => {},
         testWebhook: async (id: string) => true,
         deleteWebhook: async (id: string) => {},
         simulatePlanChange: async (plan: string) => {},
-        create: async (name: string, industry: string) => { return null as any; } // Géré par Trigger maintenant
+        create: async (name: string, industry: string) => { return null as any; }
     },
 
     reviews: {
         list: async (filters: any = {}): Promise<Review[]> => {
             const user = await api.auth.getUser();
-            if (!user?.organization_id) return [];
+            if (!supabase || !user?.organization_id) return [];
 
-            // Récupérer les IDs des locations de l'org
             const { data: locations } = await supabase.from('locations').select('id').eq('organization_id', user.organization_id);
             const locIds = locations?.map((l: any) => l.id) || [];
 
@@ -195,17 +209,14 @@ export const api = {
             if (filters.limit) query = query.limit(filters.limit);
 
             const { data } = await query;
-            
-            // Mapping pour compatibilité frontend (text vs body)
             return (data || []).map((r: any) => ({ ...r, body: r.text || r.body }));
         },
         
         reply: async (id: string, text: string) => {
-            await supabase.functions.invoke('post_google_reply', { body: { reviewId: id, replyText: text } });
+            if(supabase) await supabase.functions.invoke('post_google_reply', { body: { reviewId: id, replyText: text } });
         },
         
-        // ... autres méthodes reviews (saveDraft, archive...) en direct supabase ...
-        saveDraft: async (id: string, text: string) => { await supabase.from('reviews').update({ status: 'draft', ai_reply: { text, needs_manual_validation: true } }).eq('id', id); },
+        saveDraft: async (id: string, text: string) => { if(supabase) await supabase.from('reviews').update({ status: 'draft', ai_reply: { text, needs_manual_validation: true } }).eq('id', id); },
         addNote: async (id: string, text: string) => ({ id: '1', text, author_name: 'Moi', created_at: new Date().toISOString() }),
         addTag: async (id: string, tag: string) => {},
         removeTag: async (id: string, tag: string) => {},
@@ -214,6 +225,7 @@ export const api = {
         getCounts: async () => ({ todo: 0, done: 0 }),
         getTimeline: (review: Review) => [],
         subscribe: (cb: any) => { 
+            if(!supabase) return { unsubscribe: () => {} };
             return supabase.channel('reviews').on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, cb).subscribe(); 
         },
         uploadCsv: async (f: any) => 0
@@ -222,30 +234,29 @@ export const api = {
     locations: {
         create: async (data: any) => {
             const user = await api.auth.getUser();
-            if (user?.organization_id) {
+            if (user?.organization_id && supabase) {
                 await supabase.from('locations').insert({ ...data, organization_id: user.organization_id });
             }
         },
-        update: async (id: string, data: any) => { await supabase.from('locations').update(data).eq('id', id); },
-        delete: async (id: string) => { await supabase.from('locations').delete().eq('id', id); },
+        update: async (id: string, data: any) => { if(supabase) await supabase.from('locations').update(data).eq('id', id); },
+        delete: async (id: string) => { if(supabase) await supabase.from('locations').delete().eq('id', id); },
         importFromGoogle: async () => {
+            if(!supabase) return 0;
             const { data, error } = await supabase.functions.invoke('cron_sync_reviews');
             if (error) throw error;
             return data?.count || 0;
         }
     },
 
-    // --- MODULES SECONDAIRES (Mockés intelligemment ou connectés si possible) ---
     ai: {
         generateReply: async (review: Review, config: any) => {
-            // Appel à l'Edge Function pour la génération sécurisée
+            if(!supabase) return "Mode démo : Réponse IA désactivée.";
             const { data, error } = await supabase.functions.invoke('ai_generate', { 
                 body: { task: 'generate_reply', context: { review, ...config } } 
             });
             if (error || !data) return "Erreur de génération IA.";
             return data.text;
         },
-        // ... autres fonctions AI (mocks pour l'instant) ...
         generateSocialPost: async () => "Post généré par IA...",
         previewBrandVoice: async () => "Aperçu du ton de marque...",
         generateManagerAdvice: async () => "Conseil managérial...",
@@ -254,12 +265,10 @@ export const api = {
         getCoachAdvice: async () => ({ title: "Bienvenue", message: "Complétez votre profil.", focus_area: "setup" } as AiCoachMessage)
     },
 
-    // Analytics: On renvoie des données vides ou mockées si la DB est vide, pour éviter le crash
     analytics: { 
-        getOverview: async () => INITIAL_ANALYTICS 
+        getOverview: async () => EMPTY_ANALYTICS 
     },
 
-    // Autres modules simplifiés pour la stabilité
     competitors: { list: async () => [], create: async () => {}, delete: async () => {}, getReports: async () => [], saveReport: async () => {}, autoDiscover: async () => [], getDeepAnalysis: async () => null },
     social: { getPosts: async () => [], schedulePost: async () => {}, uploadMedia: async () => "", connectAccount: async () => {}, saveTemplate: async () => {} },
     marketing: { getBlogPosts: async () => [], saveBlogPost: async () => {}, generateSeoMeta: async () => ({}), analyzeCompetitorSeo: async () => ({}) as any, generateRichSnippet: async () => "", generateCampaignContent: async () => ({}) as any },
