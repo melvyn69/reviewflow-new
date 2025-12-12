@@ -272,7 +272,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   
-  // PWA Prompt Logic (Duplicated from Sidebar for Topbar access if needed)
+  // PWA Prompt Logic
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const notifRef = useRef<HTMLDivElement>(null);
