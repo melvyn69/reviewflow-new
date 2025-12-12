@@ -54,14 +54,7 @@ const GoogleIcon = ({ className = "w-full h-full" }: { className?: string }) => 
     </svg>
 );
 
-// ... (Rest of components: LocationModal, AiIdentityForm, DeleteAccountModal remain the same)
-// I will include minimal placeholders for brevity as they don't change logic, only the main SettingsPage changes.
-
-const LocationModal = ({ location, onClose, onSave }: any) => { /* ... existing code ... */ return null; };
-const AiIdentityForm = ({ brand, onSave }: any) => { /* ... existing code ... */ return null; };
-const DeleteAccountModal = ({ isOpen, onClose, onConfirm }: any) => { /* ... existing code ... */ return null; };
-
-const IntegrationCard = ({ icon, title, description, connected, onConnect, onDisconnect, type = "source" }: any) => (
+const IntegrationCard = ({ icon, title, description, connected, onConnect, onDisconnect, type = "source", loading = false }: any) => (
     <div className={`p-5 rounded-xl border transition-all duration-300 ${connected ? 'border-green-200 bg-green-50/30' : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm'}`}>
         <div className="flex justify-between items-start mb-3">
             <div className="flex items-center gap-3">
@@ -83,20 +76,31 @@ const IntegrationCard = ({ icon, title, description, connected, onConnect, onDis
                     )}
                 </div>
             ) : (
-                <button onClick={onConnect} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors border border-indigo-100">
+                <Button 
+                    onClick={onConnect} 
+                    isLoading={loading}
+                    size="sm"
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 shadow-none hover:bg-indigo-100"
+                >
                     Connecter
-                </button>
+                </Button>
             )}
         </div>
         <p className="text-xs text-slate-600 leading-relaxed mb-3">{description}</p>
     </div>
 );
 
+// ... (Keeping LocationModal, AiIdentityForm, DeleteAccountModal placeholders to save space, assuming they are imported or defined as before)
+const LocationModal = ({ location, onClose, onSave }: any) => { return null; };
+const AiIdentityForm = ({ brand, onSave }: any) => { return null; };
+const DeleteAccountModal = ({ isOpen, onClose, onConfirm }: any) => { return null; };
+
 export const SettingsPage = () => {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
   const [activeTab, setActiveTab] = useState('integrations');
   const [loading, setLoading] = useState(true);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,8 +114,11 @@ export const SettingsPage = () => {
 
   // Force token check
   useEffect(() => {
+      // Check if we just came back from Google (App.tsx handles the actual save, but we reload data here)
       api.organization.saveGoogleTokens().then(success => {
-          if (success) loadData();
+          if (success) {
+              loadData();
+          }
       });
   }, []);
 
@@ -132,10 +139,13 @@ export const SettingsPage = () => {
   };
 
   const handleConnectGoogle = async () => {
+      setConnectingGoogle(true);
       try {
+          // This redirects away, so loading state persists until unload
           await api.auth.connectGoogleBusiness();
       } catch (e: any) {
           toast.error("Erreur connexion Google: " + e.message);
+          setConnectingGoogle(false);
       }
   };
 
@@ -196,6 +206,7 @@ export const SettingsPage = () => {
                                 onConnect={handleConnectGoogle}
                                 onDisconnect={handleDisconnectGoogle}
                                 type="Source Principale"
+                                loading={connectingGoogle}
                             />
                         </div>
                         {org?.integrations?.google && (

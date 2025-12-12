@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
@@ -32,7 +31,7 @@ import { ProgressPage } from './pages/Progress';
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
 import { User } from './types';
-import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from './components/ui';
+import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useToast } from './components/ui';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { isFeatureActive } from './lib/features';
@@ -70,56 +69,64 @@ function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
     let mounted = true;
 
-    const initAuth = async () => {
-        // 1. Check if returning from OAuth (Google)
-        // Note: Supabase handles the session exchange automatically in the background,
-        // but we want to capture the event explicitly to save tokens.
-        
-        try {
-            const u = await api.auth.getUser();
-            if (mounted) {
-                setUser(u);
-                setLoading(false);
-            }
-        } catch (e) {
-            console.error("Auth init error", e);
-            if (mounted) setLoading(false);
+    // 1. Initial Load & Auth Listener
+    const init = async () => {
+        // If we are handling a callback from Supabase (e.g. #access_token=...), wait a bit for the session to settle
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+            console.log("🔄 OAuth Callback detected, processing...");
+        }
+
+        const u = await api.auth.getUser();
+        if (mounted) {
+            setUser(u);
+            setLoading(false);
         }
     };
 
-    initAuth();
+    init();
 
-    // 2. Auth State Listener
-    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    // 2. Real-time Auth Listener
+    let authListener: { subscription: { unsubscribe: () => void } } | null = null;
+    
+    if (supabase && supabase.auth) {
+        const { data } = (supabase.auth as any).onAuthStateChange(async (event: any, session: any) => {
+            console.log(`🔔 Auth Event: ${event}`);
             
-            // CRUCIAL: Save tokens if present (OAuth callback)
-            if (session?.provider_token) {
-                console.log("OAuth detected, saving tokens...");
-                await api.organization.saveGoogleTokens();
-            }
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                if (session?.provider_token) {
+                    console.log("🔑 Provider Token found in session (OAuth). attempting save...");
+                    const success = await api.organization.saveGoogleTokens();
+                    if (success) {
+                        toast.success("Connexion Google réussie !");
+                    }
+                }
 
-            const u = await api.auth.getUser();
-            if (mounted) setUser(u);
-            
-            // Redirect from login page
-            if (event === 'SIGNED_IN' && window.location.hash.includes('login')) {
-                navigate('/dashboard');
+                // Refresh User Object
+                const u = await api.auth.getUser();
+                if (mounted) setUser(u);
+                setLoading(false);
+
+                // Redirect if on auth pages
+                if (window.location.hash === '#/' || window.location.hash.includes('login')) {
+                    navigate('/dashboard');
+                }
+            } 
+            else if (event === 'SIGNED_OUT') {
+                if (mounted) setUser(null);
+                navigate('/');
             }
-        } 
-        else if (event === 'SIGNED_OUT') {
-            if (mounted) setUser(null);
-            navigate('/');
-        }
-    }) || { data: { subscription: { unsubscribe: () => {} } } };
+        });
+        authListener = data;
+    }
 
     return () => {
       mounted = false;
-      authListener.data.subscription.unsubscribe();
+      if (authListener) authListener.subscription.unsubscribe();
     };
   }, []);
 

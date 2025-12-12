@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
@@ -83,7 +82,7 @@ function AppRoutes() {
     }, 3000);
 
     // 3. Listener Supabase
-    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = (supabase?.auth as any).onAuthStateChange(async (event: any, session: any) => {
       if (event === 'SIGNED_IN' && session) {
         // Critical: Save tokens immediately when detected
         if (session.provider_token) {

@@ -222,7 +222,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           {showInstall && (
             <div className="mt-6 mx-3">
               <button 
-                onClick={handleInstallClick}
+                onClick={() => handleInstallClick()}
                 className="w-full bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between shadow-lg hover:bg-slate-800 transition-transform active:scale-95"
               >
                 <div className="flex items-center gap-3 text-xs font-bold text-left">
@@ -317,19 +317,14 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // PWA Prompt Logic (Duplicate state from Sidebar if needed here, but usually triggered globally)
-  // For this component we assume deferredPrompt is handled globally or passed down if we wanted the button here.
-  // However, we added a button in the user menu.
   const handleInstallApp = async () => {
-      // In a real app, you'd use a context for PWA install prompt state.
-      // For now, we just show an alert or rely on browser default if available.
       alert("Pour installer l'application :\nSur iOS : Partager > Sur l'écran d'accueil\nSur Android : Menu > Installer l'application");
   };
 
   return (
     <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30 transition-all">
       <div className="flex items-center gap-4 flex-1 max-w-lg">
-        <button onClick={onMenuClick} className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
+        <button onClick={() => onMenuClick()} className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
           <Menu className="h-6 w-6" />
         </button>
         
@@ -383,7 +378,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
                     <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Notifications</span>
                         {unreadCount > 0 && (
-                            <button onClick={handleMarkAllRead} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
+                            <button onClick={() => handleMarkAllRead()} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors">
                                 Tout marquer comme lu
                             </button>
                         )}
