@@ -1,27 +1,34 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Récupération sécurisée des variables d'environnement
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const getEnv = (key: string) => {
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env[key];
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  return '';
+};
 
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+
+// On logue l'état pour le débogage en production
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("🚨 ERREUR CRITIQUE : Configuration Supabase manquante.");
-  console.error("Vérifiez votre fichier .env ou les variables d'environnement Vercel.");
+  console.warn('⚠️ Supabase non configuré : Clés manquantes. Vérifiez le fichier .env ou les variables Vercel.');
+} else {
+  console.log('✅ Supabase configuré et prêt.');
 }
 
-export const supabase =
-  supabaseUrl && supabaseAnonKey
+export const supabase = (supabaseUrl && supabaseAnonKey)
     ? createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
-          autoRefreshToken: true,
-          persistSession: true,
-          detectSessionInUrl: true,
-          flowType: 'pkce', // Indispensable pour la stabilité OAuth sur Chrome/Safari récents
-        },
-      })
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: true
+        }
+    })
     : null;
 
-export const isSupabaseConfigured = () => {
-    return !!supabaseUrl && !!supabaseAnonKey;
-};
+export const isSupabaseConfigured = () => !!supabase;

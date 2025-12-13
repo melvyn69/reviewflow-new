@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
@@ -31,7 +32,7 @@ import { ProgressPage } from './pages/Progress';
 import { api } from './lib/api';
 import { supabase } from './lib/supabase';
 import { User } from './types';
-import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useToast } from './components/ui';
+import { ToastProvider, HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from './components/ui';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { isFeatureActive } from './lib/features';
@@ -69,17 +70,29 @@ function AppRoutes() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  const checkUser = async () => {
+    try {
+      const userData = await api.auth.getUser();
+      setUser(userData);
+    } catch (e) {
+      console.error("User check failed", e);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // 1. Lance la vérification
+    // 1. Initial check
     checkUser();
 
-    // 2. Timeout de sécurité (3 sec max) pour ne jamais bloquer l'app sur le loader
+    // 2. Safety timeout
     const safetyTimeout = setTimeout(() => {
         if (loading) {
             console.warn("Auth check timed out - Forcing load state release");
             setLoading(false);
         }
-    }, 3000);
+    }, 2000);
 
     // 3. Listener Supabase
     let subscription: { unsubscribe: () => void } | null = null;
@@ -87,7 +100,6 @@ function AppRoutes() {
     if (supabase) {
         const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (event === 'SIGNED_IN' && session) {
-                // Critical: Save tokens immediately when detected
                 if (session.provider_token) {
                     await api.organization.saveGoogleTokens();
                 }
@@ -102,6 +114,10 @@ function AppRoutes() {
             }
         });
         subscription = data.subscription;
+    } else {
+        // If supabase is missing (should not happen with new .env), verify we stop loading
+        console.error("Supabase client is null inside App.tsx");
+        setLoading(false);
     }
 
     return () => {
@@ -110,23 +126,11 @@ function AppRoutes() {
     };
   }, []);
 
-  const checkUser = async () => {
-    try {
-      const userData = await api.auth.getUser();
-      setUser(userData);
-    } catch (e) {
-      console.error("User check failed", e);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-        <p className="absolute mt-16 text-slate-400 text-sm animate-pulse">Chargement sécurisé...</p>
+        <p className="absolute mt-16 text-slate-400 text-sm animate-pulse">Connexion sécurisée...</p>
       </div>
     );
   }
@@ -162,7 +166,6 @@ function AppRoutes() {
                         <Route path="dashboard" element={<DashboardPage />} />
                         <Route path="inbox" element={<InboxPage />} />
                         
-                        {/* FEATURE FLAG PROTECTION: MARKETING */}
                         <Route 
                             path="marketing" 
                             element={
@@ -190,7 +193,6 @@ function AppRoutes() {
                         <Route path="help" element={<HelpPage />} />
                         <Route path="playground" element={<PlaygroundPage />} />
                         
-                        {/* Sensitive Routes */}
                         <Route 
                             path="settings" 
                             element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><SettingsPage /></ProtectedRoute>} 
