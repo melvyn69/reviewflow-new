@@ -114,8 +114,37 @@ export const SettingsPage = () => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
     if (tabParam) setActiveTab(tabParam);
+    
+    // Initial Load
+    refreshGoogleStatus();
     loadData();
   }, [location.search]);
+
+  // REUSABLE STATUS CHECK
+  const refreshGoogleStatus = async () => {
+      if (!supabase) return;
+      
+      // 1. Ensure Org exists for current user
+      const { data: id, error: rpcError } = await supabase.rpc("ensure_user_org");
+      if (rpcError) {
+          console.error("ensure_user_org error", rpcError);
+          return;
+      }
+      setOrgId(id);
+
+      // 2. Check social_accounts table for Google
+      if (id) {
+          const { data: googleAcc, error: accErr } = await supabase
+              .from("social_accounts")
+              .select("id")
+              .eq("organization_id", id)
+              .eq("platform", "google")
+              .maybeSingle();
+
+          if (accErr && accErr.code !== 'PGRST116') console.error("load social_accounts error", accErr);
+          setIsGoogleConnected(!!googleAcc);
+      }
+  };
 
   // HANDLE OAUTH CALLBACK
   useEffect(() => {
@@ -126,13 +155,18 @@ export const SettingsPage = () => {
 
           if (code && state === 'google_connect') {
               setConnectingGoogle(true);
-              // Clean URL
-              window.history.replaceState({}, '', window.location.pathname + '#/settings?tab=integrations');
               
               try {
                   await api.auth.handleGoogleCallback(code);
                   toast.success("Compte Google Business connecté avec succès !");
-                  loadData(); // Reload to update status
+                  
+                  // Force refresh status BEFORE navigating
+                  await refreshGoogleStatus();
+                  
+                  // Clean URL using router instead of history API
+                  navigate('/settings?tab=integrations', { replace: true });
+                  
+                  loadData(); // Reload org data
               } catch (e: any) {
                   console.error(e);
                   toast.error("Erreur de connexion Google : " + e.message);
@@ -144,36 +178,6 @@ export const SettingsPage = () => {
       
       handleCallback();
   }, [location.search]);
-
-  // INITIAL LOAD & STATUS CHECK
-  useEffect(() => {
-      const init = async () => {
-          if (!supabase) return;
-          
-          // 1. Ensure Org exists for current user
-          const { data: id, error: rpcError } = await supabase.rpc("ensure_user_org");
-          if (rpcError) {
-              console.error("ensure_user_org error", rpcError);
-              return;
-          }
-          setOrgId(id);
-
-          // 2. Check social_accounts table for Google
-          if (id) {
-              const { data: googleAcc, error: accErr } = await supabase
-                  .from("social_accounts")
-                  .select("id")
-                  .eq("organization_id", id)
-                  .eq("platform", "google")
-                  .maybeSingle();
-
-              if (accErr && accErr.code !== 'PGRST116') console.error("load social_accounts error", accErr);
-              setIsGoogleConnected(!!googleAcc);
-          }
-      };
-      
-      init();
-  }, []);
 
   const loadData = async () => {
       setLoading(true);
@@ -204,7 +208,7 @@ export const SettingsPage = () => {
   const handleDisconnectGoogle = async () => {
       if (confirm("Voulez-vous vraiment déconnecter Google ? La synchronisation des avis s'arrêtera.")) {
           await api.auth.disconnectGoogle();
-          setIsGoogleConnected(false);
+          await refreshGoogleStatus(); // Update UI immediately
           toast.success("Compte Google déconnecté.");
           loadData();
       }
