@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 declare const Deno: any;
@@ -9,14 +8,14 @@ const corsHeaders = {
 }
 
 // Configuration Map
-const CONFIG = {
+const CONFIG: any = {
     facebook: {
         tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
         clientIdEnv: 'FACEBOOK_CLIENT_ID',
         clientSecretEnv: 'FACEBOOK_CLIENT_SECRET',
     },
     instagram: {
-        tokenUrl: 'https://api.instagram.com/oauth/access_token', // Basic display or Graph API depending on setup
+        tokenUrl: 'https://api.instagram.com/oauth/access_token', 
         clientIdEnv: 'INSTAGRAM_CLIENT_ID',
         clientSecretEnv: 'INSTAGRAM_CLIENT_SECRET',
     },
@@ -24,6 +23,11 @@ const CONFIG = {
         tokenUrl: 'https://www.linkedin.com/oauth/v2/accessToken',
         clientIdEnv: 'LINKEDIN_CLIENT_ID',
         clientSecretEnv: 'LINKEDIN_CLIENT_SECRET',
+    },
+    google: {
+        tokenUrl: 'https://oauth2.googleapis.com/token',
+        clientIdEnv: 'GOOGLE_CLIENT_ID',
+        clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
     }
 };
 
@@ -65,7 +69,7 @@ Deno.serve(async (req: Request) => {
             grant_type: 'authorization_code'
         };
 
-        // LinkedIn & Instagram need form-urlencoded usually, but let's try standard fetch first
+        // LinkedIn, Instagram & Google accept form-urlencoded
         let response = await fetch(CONFIG[platform].tokenUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -115,28 +119,27 @@ Deno.serve(async (req: Request) => {
             accountId = meData.id;
             accountName = meData.name;
             avatarUrl = meData.picture?.data?.url;
+        } else if (platform === 'google') {
+            // Can be fetched from https://www.googleapis.com/oauth2/v2/userinfo or business API
+            // Here we just use 'google' as we manage Business Locations
+            accountId = 'google_business';
+            accountName = 'Google Business Profile';
         }
 
-        // Save to DB
+        // Save to DB (social_accounts)
         const { error: dbError } = await supabase.from('social_accounts').upsert({
             organization_id: userProfile.organization_id,
             platform,
             access_token: accessToken,
-            refresh_token: refreshToken,
+            refresh_token: refreshToken, // Important for Google offline access
             token_expires_at: expiresAt,
             external_id: accountId,
             name: accountName,
             avatar_url: avatarUrl,
             updated_at: new Date().toISOString()
-        }, { onConflict: 'organization_id, platform, external_id' });
+        }, { onConflict: 'organization_id, platform' }); // Assume one account per platform per org for now
 
         if (dbError) throw dbError;
-
-        // Update Org Integrations flag
-        const integrationField = `${platform}_posting`;
-        await supabase.from('organizations').update({
-            integrations: { [integrationField]: true } // Note: Need to merge carefully in real app (using jsonb_set or fetch-update)
-        }).eq('id', userProfile.organization_id);
 
         return new Response(JSON.stringify({ success: true, name: accountName }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }

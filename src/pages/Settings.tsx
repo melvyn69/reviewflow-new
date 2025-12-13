@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, User, BrandSettings, NotificationSettings } from '../types';
@@ -43,6 +42,7 @@ import {
     Download
 } from 'lucide-react';
 import { useNavigate, useLocation } from '../components/ui';
+import { supabase } from '../lib/supabase';
 
 // --- ICONS FOR BRANDS ---
 const GoogleIcon = ({ className = "w-full h-full" }: { className?: string }) => (
@@ -90,7 +90,7 @@ const IntegrationCard = ({ icon, title, description, connected, onConnect, onDis
     </div>
 );
 
-// ... (Keeping LocationModal, AiIdentityForm, DeleteAccountModal placeholders to save space, assuming they are imported or defined as before)
+// ... (Keeping LocationModal, AiIdentityForm, DeleteAccountModal placeholders to save space)
 const LocationModal = ({ location, onClose, onSave }: any) => { return null; };
 const AiIdentityForm = ({ brand, onSave }: any) => { return null; };
 const DeleteAccountModal = ({ isOpen, onClose, onConfirm }: any) => { return null; };
@@ -101,6 +101,11 @@ export const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('integrations');
   const [loading, setLoading] = useState(true);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  
+  // NEW STATES
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,14 +117,62 @@ export const SettingsPage = () => {
     loadData();
   }, [location.search]);
 
-  // Force token check
+  // HANDLE OAUTH CALLBACK
   useEffect(() => {
-      // Check if we just came back from Google (App.tsx handles the actual save, but we reload data here)
-      api.organization.saveGoogleTokens().then(success => {
-          if (success) {
-              loadData();
+      const handleCallback = async () => {
+          const params = new URLSearchParams(location.search);
+          const code = params.get('code');
+          const state = params.get('state');
+
+          if (code && state === 'google_connect') {
+              setConnectingGoogle(true);
+              // Clean URL
+              window.history.replaceState({}, '', window.location.pathname + '#/settings?tab=integrations');
+              
+              try {
+                  await api.auth.handleGoogleCallback(code);
+                  toast.success("Compte Google Business connecté avec succès !");
+                  loadData(); // Reload to update status
+              } catch (e: any) {
+                  console.error(e);
+                  toast.error("Erreur de connexion Google : " + e.message);
+              } finally {
+                  setConnectingGoogle(false);
+              }
           }
-      });
+      };
+      
+      handleCallback();
+  }, [location.search]);
+
+  // INITIAL LOAD & STATUS CHECK
+  useEffect(() => {
+      const init = async () => {
+          if (!supabase) return;
+          
+          // 1. Ensure Org exists for current user
+          const { data: id, error: rpcError } = await supabase.rpc("ensure_user_org");
+          if (rpcError) {
+              console.error("ensure_user_org error", rpcError);
+              return;
+          }
+          setOrgId(id);
+
+          // 2. Check social_accounts table for Google
+          if (id) {
+              const { data: googleAcc, error: accErr } = await supabase
+                  .from("social_accounts")
+                  .select("id")
+                  .eq("organization_id", id)
+                  .eq("platform", "google")
+                  .maybeSingle();
+
+              if (accErr && accErr.code !== 'PGRST116') console.error("load social_accounts error", accErr);
+              setIsGoogleConnected(!!googleAcc);
+          }
+      };
+      
+      init();
   }, []);
 
   const loadData = async () => {
@@ -141,10 +194,9 @@ export const SettingsPage = () => {
   const handleConnectGoogle = async () => {
       setConnectingGoogle(true);
       try {
-          // This redirects away, so loading state persists until unload
           await api.auth.connectGoogleBusiness();
       } catch (e: any) {
-          toast.error("Erreur connexion Google: " + e.message);
+          toast.error("Erreur lancement Google: " + e.message);
           setConnectingGoogle(false);
       }
   };
@@ -152,6 +204,7 @@ export const SettingsPage = () => {
   const handleDisconnectGoogle = async () => {
       if (confirm("Voulez-vous vraiment déconnecter Google ? La synchronisation des avis s'arrêtera.")) {
           await api.auth.disconnectGoogle();
+          setIsGoogleConnected(false);
           toast.success("Compte Google déconnecté.");
           loadData();
       }
@@ -202,14 +255,14 @@ export const SettingsPage = () => {
                                 icon={<GoogleIcon />}
                                 title="Google Business Profile"
                                 description="Connectez votre compte pour centraliser tous vos avis au même endroit, booster votre SEO local et permettre à l'IA d'y répondre automatiquement."
-                                connected={org?.integrations?.google}
+                                connected={isGoogleConnected}
                                 onConnect={handleConnectGoogle}
                                 onDisconnect={handleDisconnectGoogle}
                                 type="Source Principale"
                                 loading={connectingGoogle}
                             />
                         </div>
-                        {org?.integrations?.google && (
+                        {isGoogleConnected && (
                             <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between">
                                 <div className="text-sm text-blue-800">
                                     <strong>Synchronisation active.</strong> Vos avis sont mis à jour automatiquement.

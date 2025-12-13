@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -26,7 +25,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-    // 1. Get User info from Auth Header (to find Org)
+    // 1. Get User info from Auth Header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) throw new Error('Missing Authorization header')
     const token = authHeader.replace('Bearer ', '')
@@ -34,36 +33,39 @@ serve(async (req) => {
 
     if (authError || !user) throw new Error('Unauthorized')
 
-    // 2. Determine Access Token
-    let accessToken = null;
+    // 2. Get Organization ID
+    const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
+    if (!profile?.organization_id) throw new Error("User has no organization");
+
+    // 3. Fetch Token from social_accounts
+    const { data: socialAcc } = await supabase
+        .from('social_accounts')
+        .select('access_token, refresh_token, token_expires_at')
+        .eq('organization_id', profile.organization_id)
+        .eq('platform', 'google')
+        .single();
     
-    // Check if passed in body
-    const body = await req.json().catch(() => ({}));
-    if (body.accessToken) {
-        accessToken = body.accessToken;
-    } else {
-        // Fallback: Refresh from DB
-        if (!googleClientId || !googleClientSecret) {
-            throw new Error("Server Config Error: Missing Google Client ID/Secret for refresh");
-        }
+    if (!socialAcc) {
+        throw new Error("Google account not connected (No entry in social_accounts). Please reconnect in Settings.");
+    }
 
-        const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).single();
-        if (!profile?.organization_id) throw new Error("User has no organization");
+    let accessToken = socialAcc.access_token;
 
-        const { data: org } = await supabase.from('organizations').select('google_refresh_token').eq('id', profile.organization_id).single();
-        
-        if (!org?.google_refresh_token) {
-            throw new Error("Google account not connected (No Refresh Token). Please reconnect in Settings.");
-        }
-
+    // Check expiration and refresh if needed
+    const now = new Date();
+    const expiresAt = socialAcc.token_expires_at ? new Date(socialAcc.token_expires_at) : new Date(0);
+    
+    if (expiresAt < now && socialAcc.refresh_token) {
         console.log("Refreshing Google Token server-side...");
+        if (!googleClientId || !googleClientSecret) throw new Error("Missing Google Client ID/Secret for refresh");
+
         const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
                 client_id: googleClientId,
                 client_secret: googleClientSecret,
-                refresh_token: org.google_refresh_token,
+                refresh_token: socialAcc.refresh_token,
                 grant_type: 'refresh_token'
             })
         });
@@ -72,7 +74,16 @@ serve(async (req) => {
         if (!tokenRes.ok) {
             throw new Error(`Google Token Refresh Failed: ${tokenData.error_description || tokenData.error}`);
         }
+        
         accessToken = tokenData.access_token;
+        const newExpiresIn = tokenData.expires_in || 3600;
+        const newExpiresAt = new Date(now.getTime() + newExpiresIn * 1000).toISOString();
+
+        // Update DB
+        await supabase.from('social_accounts').update({
+            access_token: accessToken,
+            token_expires_at: newExpiresAt
+        }).eq('organization_id', profile.organization_id).eq('platform', 'google');
     }
 
     if (!accessToken) {
@@ -81,8 +92,7 @@ serve(async (req) => {
 
     console.log("Fetching Google Accounts...")
 
-    // 3. Récupérer les comptes (Accounts)
-    // API: https://developers.google.com/my-business/reference/businessinformation/rest/v1/accounts
+    // 4. Fetch Accounts
     const accountsRes = await fetch('https://mybusinessbusinessinformation.googleapis.com/v1/accounts', {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
@@ -100,7 +110,7 @@ serve(async (req) => {
         return new Response(JSON.stringify([]), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // 4. Récupérer les établissements (Locations) pour TOUS les comptes avec PAGINATION
+    // 5. Fetch Locations
     let allLocations: any[] = []
 
     for (const account of accounts) {
@@ -110,12 +120,8 @@ serve(async (req) => {
         let pageCount = 0;
 
         do {
-            // readMask indispensable pour la v1. On ajoute storefrontAddress pour l'affichage UI.
             let locationsUrl = `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title,storeCode,metadata,storefrontAddress&pageSize=100`;
-            
-            if (nextPageToken) {
-                locationsUrl += `&pageToken=${nextPageToken}`;
-            }
+            if (nextPageToken) locationsUrl += `&pageToken=${nextPageToken}`;
 
             const locRes = await fetch(locationsUrl, {
                 headers: { Authorization: `Bearer ${accessToken}` }
@@ -128,17 +134,17 @@ serve(async (req) => {
                 }
                 nextPageToken = locData.nextPageToken;
                 pageCount++;
-                console.log(`Page ${pageCount} fetched for ${account.name}. Total so far: ${allLocations.length}`);
             } else {
                 console.error(`Error fetching locations for ${account.name}:`, await locRes.text())
-                nextPageToken = undefined; // Stop loop on error
+                nextPageToken = undefined;
             }
         } while (nextPageToken);
     }
 
-    // Transform data for frontend
+    // 6. Map and Save/Return
+    // For now we just return them for UI selection/confirmation, UI calls another endpoint to create
+    // Or we create them here directly. Let's return mapped data.
     const mappedLocations = allLocations.map((loc: any) => {
-        // Format address roughly for display
         const addr = loc.storefrontAddress;
         let addressStr = "Adresse inconnue";
         if (addr) {
@@ -147,12 +153,35 @@ serve(async (req) => {
         }
 
         return {
-            name: loc.name, // resource name (ex: accounts/X/locations/Y) -> used as ID for mapping
+            name: loc.name, // resource name
             title: loc.title,
             storeCode: loc.storeCode || 'N/A',
             address: addressStr
         }
     })
+    
+    // Automatically Upsert logic if requested (or simple return)
+    // Here we perform basic upsert for convenience
+    for (const loc of mappedLocations) {
+        // Find existing or create
+        const { data: existing } = await supabase.from('locations')
+            .select('id')
+            .eq('organization_id', profile.organization_id)
+            .eq('external_reference', loc.name)
+            .maybeSingle();
+            
+        if (!existing) {
+             await supabase.from('locations').insert({
+                 organization_id: profile.organization_id,
+                 name: loc.title,
+                 address: loc.address,
+                 city: loc.address.split(',').pop()?.trim() || 'Inconnue',
+                 country: 'France', // Default
+                 external_reference: loc.name,
+                 connection_status: 'connected'
+             });
+        }
+    }
 
     return new Response(
       JSON.stringify(mappedLocations),

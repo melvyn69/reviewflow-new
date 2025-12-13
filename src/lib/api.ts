@@ -67,27 +67,47 @@ export const api = {
             localStorage.clear();
         },
         connectGoogleBusiness: async () => {
-            if (!supabase) return;
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: window.location.origin,
-                    queryParams: {
-                        access_type: 'offline',
-                        prompt: 'consent',
-                    },
-                    scopes: 'https://www.googleapis.com/auth/business.manage'
+            // FLUX OAUTH MANUEL POUR GOOGLE BUSINESS PROFILE
+            const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+            if (!clientId) throw new Error("VITE_GOOGLE_CLIENT_ID manquant");
+
+            const redirectUri = window.location.origin + '/settings';
+            const scope = 'https://www.googleapis.com/auth/business.manage';
+            
+            // On force prompt=consent et access_type=offline pour avoir un refresh_token
+            const url = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                `client_id=${clientId}&` +
+                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+                `response_type=code&` +
+                `scope=${encodeURIComponent(scope)}&` +
+                `access_type=offline&` +
+                `prompt=consent&` +
+                `state=google_connect`;
+            
+            window.location.href = url;
+        },
+        handleGoogleCallback: async (code: string) => {
+            if (!supabase) throw new Error("Supabase non configuré");
+            // Appel à l'Edge Function pour échanger le code contre les tokens
+            const { data, error } = await supabase.functions.invoke('social_oauth', {
+                body: {
+                    action: 'exchange',
+                    platform: 'google',
+                    code,
+                    redirectUri: window.location.origin + '/settings'
                 }
             });
             if (error) throw error;
+            return data;
         },
         disconnectGoogle: async () => {
+            if (!supabase) return;
             const user = await api.auth.getUser();
-            if (user?.organization_id && supabase) {
-                await supabase.from('organizations').update({
-                    google_access_token: null,
-                    google_refresh_token: null
-                }).eq('id', user.organization_id);
+            if (user?.organization_id) {
+                await supabase.from('social_accounts')
+                    .delete()
+                    .eq('organization_id', user.organization_id)
+                    .eq('platform', 'google');
             }
         },
         updateProfile: async (data: Partial<User>) => {
@@ -120,11 +140,19 @@ export const api = {
 
             if (error) return null;
 
+            // Check connection status via social_accounts table
+            const { data: googleAccount } = await supabase
+                .from('social_accounts')
+                .select('id')
+                .eq('organization_id', user.organization_id)
+                .eq('platform', 'google')
+                .maybeSingle();
+
             return {
                 ...data,
                 integrations: {
                     ...data.integrations,
-                    google: !!data.google_refresh_token
+                    google: !!googleAccount // True if row exists
                 }
             };
         },
@@ -141,20 +169,8 @@ export const api = {
         },
         update: async (data: any) => { if(supabase) { const u = await api.auth.getUser(); if(u?.organization_id) await supabase.from('organizations').update(data).eq('id', u.organization_id); } },
         saveGoogleTokens: async () => {
-            // Implementation typically involves checking hash params or session, usually handled by supabase auth callback automatically storing tokens if using implicit flow, but for offline access we often need to grab provider token from session
-            if (!supabase) return false;
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.provider_token && session?.provider_refresh_token) {
-                const user = await api.auth.getUser();
-                if (user?.organization_id) {
-                    await supabase.from('organizations').update({
-                        google_access_token: session.provider_token,
-                        google_refresh_token: session.provider_refresh_token
-                    }).eq('id', user.organization_id);
-                    return true;
-                }
-            }
-            return false;
+            // Legacy / unused for custom flow, keeping simple return
+            return true; 
         },
         addStaffMember: async (name: string, role: string, email: string) => { 
             if(supabase) { 
@@ -177,12 +193,11 @@ export const api = {
         delete: async (id: string) => { if(supabase) await supabase.from('locations').delete().eq('id', id); },
         importFromGoogle: async () => {
             if (supabase) {
-                // This typically triggers a function or fetches from google api using stored tokens
-                // For now we assume a function call or local implementation
+                // Trigger import function which uses social_accounts tokens
                 const { data, error } = await supabase.functions.invoke('fetch_google_locations');
                 if (error) throw error;
-                // Process data to create locations... simplified:
-                return data?.length || 0;
+                // If it returns a count, return it, otherwise assume array length
+                return typeof data === 'number' ? data : (data?.length || 0);
             }
             return 0;
         }
@@ -190,18 +205,14 @@ export const api = {
 
     notifications: {
         list: async (): Promise<AppNotification[]> => {
-            // Mock notifications or fetch from DB
             return [];
         },
-        markAllRead: async () => {
-            // Update DB
-        },
+        markAllRead: async () => {},
         sendTestEmail: async (email: string) => {}
     },
 
     global: {
         search: async (query: string) => {
-            // Global search implementation
             return [];
         }
     },
@@ -214,8 +225,6 @@ export const api = {
             
             let query = supabase.from('reviews').select('*').order('received_at', {ascending: false});
             
-            // Apply location filter via join if needed or two steps. 
-            // Simplified: get org locations first
             const { data: locs } = await supabase.from('locations').select('id').eq('organization_id', u.organization_id);
             if(!locs?.length) return [];
             
@@ -239,7 +248,6 @@ export const api = {
              }).eq('id', id);
         },
         addNote: async (id: string, text: string) => {
-            // Add note logic
             return { id: '1', text, author_name: 'Moi', created_at: new Date().toISOString() };
         },
         addTag: async (id: string, tag: string) => {},
@@ -308,7 +316,6 @@ export const api = {
         getPosts: async (locationId?: string) => [], 
         schedulePost: async (post: any) => { if(supabase) await supabase.from('social_posts').insert(post); }, 
         uploadMedia: async (file: File) => {
-            // Upload to Supabase Storage
             if (!supabase) return "https://via.placeholder.com/500";
             const fileName = `${Date.now()}-${file.name}`;
             const { data, error } = await supabase.storage.from('media').upload(fileName, file);
@@ -316,9 +323,7 @@ export const api = {
             const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(fileName);
             return publicUrl;
         }, 
-        connectAccount: async (platform: string) => {
-            // OAuth flow usually involves redirect
-        }, 
+        connectAccount: async (platform: string) => {}, 
         saveTemplate: async (template: any) => {}
     },
 

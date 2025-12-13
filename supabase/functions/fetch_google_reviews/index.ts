@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 declare const Deno: any;
@@ -29,45 +28,61 @@ Deno.serve(async (req: Request) => {
     const googleClientId = Deno.env.get('GOOGLE_CLIENT_ID');
     const googleClientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
 
-    if (!supabaseUrl || !serviceRoleKey || !googleClientId || !googleClientSecret) {
-        throw new Error("Server Config Error: Missing secrets (DB or Google)");
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error("Server Config Error: Missing secrets");
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // 2. Récupérer le Refresh Token de l'organisation
-    const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('google_refresh_token')
-        .eq('id', organizationId)
+    // 2. Fetch Token from social_accounts
+    const { data: socialAcc } = await supabase
+        .from('social_accounts')
+        .select('access_token, refresh_token, token_expires_at')
+        .eq('organization_id', organizationId)
+        .eq('platform', 'google')
         .single();
 
-    if (orgError || !org?.google_refresh_token) {
-        throw new Error("No Google Refresh Token found for this organization. Please reconnect Google Account.");
+    if (!socialAcc) {
+        throw new Error("No Google Social Account found for this organization.");
     }
 
-    // 3. Echanger le Refresh Token contre un Access Token
-    console.log("Refreshing Google Token...");
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            client_id: googleClientId,
-            client_secret: googleClientSecret,
-            refresh_token: org.google_refresh_token,
-            grant_type: 'refresh_token'
-        })
-    });
+    let accessToken = socialAcc.access_token;
 
-    const tokenData = await tokenRes.json();
-    if (!tokenRes.ok) {
-        throw new Error(`Google Token Refresh Failed: ${tokenData.error_description || tokenData.error}`);
+    // Check expiration and refresh
+    const now = new Date();
+    const expiresAt = socialAcc.token_expires_at ? new Date(socialAcc.token_expires_at) : new Date(0);
+
+    if (expiresAt < now && socialAcc.refresh_token) {
+        console.log("Refreshing Google Token...");
+        if (!googleClientId || !googleClientSecret) throw new Error("Missing Google Client ID/Secret for refresh");
+
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_id: googleClientId,
+                client_secret: googleClientSecret,
+                refresh_token: socialAcc.refresh_token,
+                grant_type: 'refresh_token'
+            })
+        });
+
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok) {
+            throw new Error(`Google Token Refresh Failed: ${tokenData.error_description || tokenData.error}`);
+        }
+
+        accessToken = tokenData.access_token;
+        const newExpiresIn = tokenData.expires_in || 3600;
+        const newExpiresAt = new Date(now.getTime() + newExpiresIn * 1000).toISOString();
+
+        await supabase.from('social_accounts').update({
+            access_token: accessToken,
+            token_expires_at: newExpiresAt
+        }).eq('organization_id', organizationId).eq('platform', 'google');
     }
 
-    const accessToken = tokenData.access_token;
-    console.log("Access Token Refreshed successfully.");
-
-    // 4. Fetch Reviews using the new Access Token
+    // 3. Fetch Reviews
     console.log(`Fetching reviews for: ${googleLocationName}`);
     const googleUrl = `https://mybusiness.googleapis.com/v4/${googleLocationName}/reviews?pageSize=50`;
     
@@ -83,7 +98,7 @@ Deno.serve(async (req: Request) => {
     const googleData = await googleRes.json();
     const googleReviews = googleData.reviews || [];
     
-    // 5. Upsert Reviews into Supabase
+    // 4. Upsert Reviews into Supabase
     let importedCount = 0;
     for (const gReview of googleReviews) {
         const ratingMap: any = { "ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "FIVE": 5, "STAR_RATING_UNSPECIFIED": 0 };
