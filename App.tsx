@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 
 import { AppLayout } from './components/Layout';
 
@@ -31,8 +31,7 @@ import { DevelopersPage } from './pages/Developers';
 import { MarketingPage } from './pages/Marketing';
 import { ProgressPage } from './pages/Progress';
 
-import { api } from './lib/api';
-import { supabase } from './lib/supabase';
+import { useAuth } from './lib/auth';
 import { isFeatureActive } from './lib/features';
 import { I18nProvider } from './lib/i18n';
 
@@ -69,7 +68,12 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) => {
-  if (!user) return <Navigate to="/login" replace />;
+  const location = useLocation();
+
+  if (!user) {
+    sessionStorage.setItem('redirectAfterLogin', location.pathname + location.search + location.hash);
+    return <Navigate to="/login" replace />;
+  }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
@@ -82,82 +86,22 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
 // App Routes
 // ---------------------------
 function AppRoutes() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-
-  const checkUser = async () => {
-    try {
-      const userData = await api.auth.getUser();
-      setUser(userData);
-    } catch (err) {
-      console.error('User check failed', err);
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // 1) Vérification initiale
-    checkUser();
-
-    // 2) Timeout sécurité pour éviter un loader infini
-    const safetyTimeout = setTimeout(() => {
-      setLoading(false);
-    }, 3000);
-
-    // 3) Listener Supabase (✅ safe)
-    let unsubscribe: (() => void) | null = null;
-
-    try {
-      if (supabase?.auth?.onAuthStateChange) {
-        const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-          try {
-            if (event === 'SIGNED_IN' && session) {
-              // Optionnel: si tu relies Google via session.provider_token
-              const providerToken = (session as any).provider_token;
-              if (providerToken) {
-                await api.organization.saveGoogleTokens();
-              }
-
-              await checkUser();
-
-              const hash = window.location.hash || '';
-              if (hash === '#/' || hash.includes('login') || hash.includes('register')) {
-                navigate('/dashboard');
-              }
-            }
-
-            if (event === 'SIGNED_OUT') {
-              setUser(null);
-              navigate('/');
-            }
-          } catch (err) {
-            console.error('Auth listener error', err);
-          }
-        });
-
-        unsubscribe = () => {
-          try {
-            data?.subscription?.unsubscribe?.();
-          } catch (err) {
-            console.warn('Unsubscribe failed', err);
-          }
-        };
+  const { user, loading } = useAuth(
+    () => {
+      const redirectTo = sessionStorage.getItem('redirectAfterLogin');
+      if (redirectTo) {
+        sessionStorage.removeItem('redirectAfterLogin');
+        navigate(redirectTo);
       } else {
-        console.warn('Supabase auth not initialized: onAuthStateChange missing');
+        const hash = window.location.hash || '';
+        if (hash === '#/' || hash.includes('login') || hash.includes('register')) {
+          navigate('/dashboard');
+        }
       }
-    } catch (err) {
-      console.error('Failed to init Supabase listener', err);
-    }
-
-    return () => {
-      clearTimeout(safetyTimeout);
-      unsubscribe?.();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    },
+    () => navigate('/')
+  );
+  const navigate = useNavigate();
 
   if (loading) {
     return (
@@ -179,11 +123,11 @@ function AppRoutes() {
           path="/login"
           element={
             user ? <Navigate to="/dashboard" replace /> : (
-              <AuthPage initialMode="login" onLoginSuccess={checkUser} />
+              <AuthPage initialMode="login" />
             )
           }
         />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />} />
+        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" />} />
         <Route path="/book-demo" element={<BookDemoPage />} />
 
         <Route path="/legal" element={<LegalPage />} />

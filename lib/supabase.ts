@@ -20,7 +20,14 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 export const supabase =
   SUPABASE_URL && SUPABASE_ANON_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        },
+      })
     : null;
 
 export const isSupabaseConfigured = () => supabase !== null;

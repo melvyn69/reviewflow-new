@@ -6,7 +6,7 @@ import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, ArrowLeft } fr
 import { useNavigate } from '../components/ui';
 
 interface AuthPageProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess?: () => void;
   initialMode?: 'login' | 'register';
 }
 
@@ -51,10 +51,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
           }
       } else if (isLogin) {
         await api.auth.login(email, password);
-        onLoginSuccess();
+        onLoginSuccess?.();
       } else {
         await api.auth.register(name, email, password);
-        onLoginSuccess();
+        onLoginSuccess?.();
       }
     } catch (err: any) {
       setError(err.message || 'Une erreur inattendue est survenue');

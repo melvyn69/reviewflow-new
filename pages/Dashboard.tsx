@@ -87,14 +87,9 @@ const CoachWidget = ({
   );
 };
 
-const ActionCenter = ({
-  actions,
-}: {
-  actions?: ClientProgress['next_actions'];
-}) => {
+const ActionCenter = ({ actions }: { actions?: ClientProgress['next_actions'] }) => {
   const navigate = useNavigate();
 
-  // ✅ anti-crash
   const safeActions = Array.isArray(actions) ? actions : [];
   if (safeActions.length === 0) return null;
 
@@ -108,11 +103,11 @@ const ActionCenter = ({
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {safeActions.map((action: any) => (
+          {safeActions.map((action) => (
             <div
               key={action.id}
               className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all cursor-pointer"
-              onClick={() => action?.action_link && navigate(action.action_link)}
+              onClick={() => navigate(action.action_link)}
             >
               <div className="flex items-start gap-3">
                 <div
@@ -136,38 +131,24 @@ const ActionCenter = ({
   );
 };
 
-const AlertBanner = ({
-  progress,
-  organization,
-}: {
-  progress?: ClientProgress | null;
-  organization?: Organization | null;
-}) => {
+
+const AlertBanner = ({ progress }: { progress?: ClientProgress | null }) => {
   const navigate = useNavigate();
 
-  // ✅ anti-crash (organization peut être null)
-  const googleConnected = Boolean(
-    organization?.integrations?.google ||
-      (organization as any)?.google_connected ||
-      (organization as any)?.integrations?.google_connected
-  );
+  const steps = progress?.steps ?? {};
+  // si steps n'existe pas encore, on ne crash pas, on considère "pas connecté"
+  const isGoogleConnected = Boolean((steps as any).google_connected);
 
-  // ✅ anti-crash (steps peut être undefined)
-  const progressSaysGoogleConnected = Boolean(progress?.steps?.google_connected);
+  if (!progress) return null;
 
-  // On considère connecté si l’un des deux le dit
-  const isConnected = googleConnected || progressSaysGoogleConnected;
-
-  if (!isConnected) {
+  if (!isGoogleConnected) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between mb-6 animate-in slide-in-from-top-2">
         <div className="flex items-center gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-600" />
           <div>
             <h4 className="font-bold text-amber-900 text-sm">Connexion Google manquante</h4>
-            <p className="text-xs text-amber-800">
-              Vous ne pouvez pas recevoir d’avis sans connecter votre fiche.
-            </p>
+            <p className="text-xs text-amber-800">Vous ne pouvez pas recevoir d'avis sans connecter votre fiche.</p>
           </div>
         </div>
         <Button
@@ -183,6 +164,7 @@ const AlertBanner = ({
 
   return null;
 };
+
 
 const KPI = ({
   title,
