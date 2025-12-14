@@ -30,7 +30,7 @@ import {
   Target,
   Gift
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { api } from '../lib/api.ts.OLD';
 import { AppNotification, User, Organization } from '../types';
 import { useTranslation } from '../lib/i18n';
 import { hasAccess, FeatureId, isFeatureActive } from '../lib/features';

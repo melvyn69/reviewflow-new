@@ -104,27 +104,49 @@ export const api = {
         deleteAccount: async () => {},
         resetPassword: async (email: string) => {}
     },
-    organization: {
-        get: async (): Promise<Organization | null> => {
-            const user = await api.auth.getUser();
-            if (!supabase || !user?.organization_id) {
-                if(user?.is_super_admin) return { ...INITIAL_ORG, id: 'org1', name: 'Reviewflow HQ' };
-                return null;
-            }
-            const { data } = await supabase.from('organizations').select('*, locations(*), staff_members(*), offers(*), workflows(*)').eq('id', user.organization_id).single();
-            return data ? { ...data, integrations: { ...data.integrations, google: !!data.google_refresh_token } } : null;
-        },
-        create: async (name: string, industry: string) => { 
-            if(supabase) { 
-                const u = await api.auth.getUser();
-                if(u) {
-                    const {data} = await supabase.from('organizations').insert({name, industry, subscription_plan: 'free'}).select().single();
-                    if(data) await supabase.from('users').update({organization_id: data.id}).eq('id', u.id);
-                    return data;
-                }
-            }
-            return INITIAL_ORG; 
-        },
+ organization: {
+  get: async (): Promise<Organization | null> => {
+  const user = await api.auth.getUser();
+  if (!supabase || !user?.organization_id) return null;
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('*, locations(*), staff_members(*), offers(*), workflows(*)')
+    .eq('id', user.organization_id)
+    .single();
+
+  if (error || !data) return null;
+
+  // ⚠️ Normalisation anti-crash : toujours des tableaux
+  const locations = Array.isArray((data as any).locations) ? (data as any).locations : [];
+  const staffMembers = Array.isArray((data as any).staff_members) ? (data as any).staff_members : [];
+  const offers = Array.isArray((data as any).offers) ? (data as any).offers : [];
+  const workflows = Array.isArray((data as any).workflows) ? (data as any).workflows : [];
+
+  // Google connected via social_accounts
+  const { data: googleAccount } = await supabase
+    .from('social_accounts')
+    .select('id')
+    .eq('organization_id', user.organization_id)
+    .eq('platform', 'google')
+    .maybeSingle();
+
+  const integrations = {
+    ...((data as any).integrations || {}),
+    google: !!googleAccount,
+  };
+
+  return {
+    ...(data as any),
+    locations,
+    staff_members: staffMembers,
+    offers,
+    workflows,
+    integrations,
+  } as Organization;
+},
+
+
         update: async (data: any) => { if(supabase) { const u = await api.auth.getUser(); if(u?.organization_id) await supabase.from('organizations').update(data).eq('id', u.organization_id); } },
         saveGoogleTokens: async () => true,
         addStaffMember: async (name: string, role: string, email: string) => { if(supabase) { const u = await api.auth.getUser(); if(u?.organization_id) await supabase.from('staff_members').insert({name, role, email, organization_id: u.organization_id}); } },
