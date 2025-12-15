@@ -549,14 +549,18 @@ export const SettingsPage = () => {
         try { payload = JSON.parse(stored); } catch { return; }
 
         if (payload.error) {
-            toast?.({ title: "Erreur OAuth", description: payload.error_description || payload.error, type: "error" });
+            toast.error(payload.error_description || payload.error);
+            navigate('/settings?tab=integrations', { replace: true });
             return;
         }
 
-        if (!payload.code) return;
+        if (!payload.code) {
+            navigate('/settings?tab=integrations', { replace: true });
+            return;
+        }
 
         (async () => {
-            const { data, error } = await supabase.functions.invoke('social_oauth', {
+            const resp = await supabase?.functions.invoke('social_oauth', {
                 body: {
                     action: 'exchange',
                     provider: 'google',
@@ -565,16 +569,17 @@ export const SettingsPage = () => {
                     state: payload.state,
                 }
             });
-
-            console.log('[OAuth] social_oauth response:', { data, error });
-
+            const data = resp && resp.data;
+            const error = resp && resp.error;
+            console.log('[OAuth] social_oauth exchange:', { data, error });
             if (error || data?.error) {
-                toast?.({ title: "Erreur de connexion", description: error?.message || data?.error_description || data?.error, type: "error" });
+                toast.error((error && error.message) || data?.error_description || data?.error);
+                navigate('/settings?tab=integrations', { replace: true });
                 return;
             }
-
-            toast?.({ title: "Connexion réussie", description: "Google Business Profile connecté.", type: "success" });
+            toast.success('Google Business Profile connecté.');
             api.organization.get().then(setOrg);
+            navigate('/settings?tab=integrations', { replace: true });
         })();
     }, [location.search]);
 
@@ -583,12 +588,7 @@ export const SettingsPage = () => {
       isLoadingRef.current = true;
       setLoading(true);
       try {
-        const promises = [api.organization.get()];
-        if (!hasLoadedUserRef.current) {
-            promises.unshift(api.auth.getUser());
-        }
-        const results = await Promise.all(promises);
-        const orgData = hasLoadedUserRef.current ? results[0] : results[1];
+        const orgData = await api.organization.get();
         if (!org || org.id !== orgData?.id) {
             setOrg(orgData);
         }
@@ -671,6 +671,29 @@ export const SettingsPage = () => {
       }
   };
 
+    // --- GMB OAuth: robust Edge Function orchestration ---
+    const handleConnectGoogle = async () => {
+        try {
+            const resp = await supabase?.functions.invoke('social_oauth', {
+                body: {
+                    action: 'start',
+                    provider: 'google',
+                    redirectUri: 'https://reviewflow2.vercel.app/auth/callback',
+                }
+            });
+            const data = resp && resp.data;
+            const error = resp && resp.error;
+            console.log('[OAuth] social_oauth start:', { data, error });
+            if (error || !data?.url) {
+                toast.error((error && error.message) || data?.error_description || data?.error || 'URL manquante');
+                return;
+            }
+            window.location.href = data.url;
+        } catch (e: any) {
+            toast.error(e.message);
+        }
+    };
+
   const handleChangePassword = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!passwordForm.current) return toast.error("Veuillez saisir votre mot de passe actuel.");
@@ -750,18 +773,7 @@ export const SettingsPage = () => {
                                 title="Google Business Profile"
                                 description="Connectez votre compte pour centraliser tous vos avis au même endroit, booster votre SEO local et permettre à l'IA d'y répondre automatiquement."
                                 connected={org?.integrations?.google}
-                                onConnect={async () => {
-                                    console.log(window.location.origin);
-                                    try {
-                                        await api.auth.connectGoogleBusiness();
-                                    } catch (error: any) {
-                                        if (error.message.includes('redirect') || error.message.includes('URL') || window.location.origin.includes('localhost')) {
-                                            toast({ title: "Configuration requise", description: `Ajoute cette URL dans Supabase → Authentication → URL Configuration → Redirect URLs : ${window.location.origin}/*`, type: "error" });
-                                        } else {
-                                            toast({ title: "Erreur de connexion", description: error.message, type: "error" });
-                                        }
-                                    }
-                                }}
+                                onConnect={handleConnectGoogle}
                                 type="Source Principale"
                                 helpLink="#"
                             />
