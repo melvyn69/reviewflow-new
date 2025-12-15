@@ -2,23 +2,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 declare const Deno: any;
 
-const ALLOWED_ORIGINS = new Set([
-  "https://reviewflow2.vercel.app",
-  "http://localhost:5173",
-  "http://localhost:3000",
-]);
-
-function buildCorsHeaders(req: Request) {
-  const origin = req.headers.get("origin") ?? "";
-  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "https://reviewflow2.vercel.app";
-
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Vary": "Origin",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-}
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
+};
 
 // Configuration Map
 const CONFIG: Record<string, any> = {
@@ -45,8 +34,6 @@ const CONFIG: Record<string, any> = {
 };
 
 Deno.serve(async (req: Request) => {
-  const corsHeaders = buildCorsHeaders(req);
-
   // ✅ Preflight CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
@@ -54,32 +41,33 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseUrl || !anonKey) {
+      throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Unauthorized (missing bearer token)" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    // ✅ Auth (uniquement sur POST)
-    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized (missing bearer token)" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+      const supabase = createClient(
+        supabaseUrl,
+        anonKey,
+        {
+          global: {
+            headers: {
+              Authorization: authHeader,
+            },
+          },
+        }
+      );
 
-    const jwt = authHeader.replace("Bearer ", "").trim();
-    const { data: userData, error: authError } = await supabase.auth.getUser(jwt);
-    const user = userData?.user;
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // Org
     const { data: userProfile, error: profileError } = await supabase
@@ -94,10 +82,54 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const { action, platform, code, redirectUri } = body;
 
-    if (action !== "exchange") throw new Error("Action inconnue");
-    if (!platform || !CONFIG[platform]) throw new Error("Plateforme non supportée");
-    if (!code) throw new Error("Missing code");
-    if (!redirectUri) throw new Error("Missing redirectUri");
+    if (!action || (action !== "start" && action !== "callback")) throw new Error("Action inconnue");
+    // Simplified: only Google supported for now
+    if (platform !== "google") throw new Error("Plateforme non supportée");
+    if (action === "callback" && !code) throw new Error("Missing code");
+    if (action === "callback" && !redirectUri) throw new Error("Missing redirectUri");
+
+      // START: return provider auth URL
+      if (action === "start") {
+        if (!redirectUri) throw new Error("Missing redirectUri");
+        const clientId = Deno.env.get(CONFIG[platform].clientIdEnv);
+        if (!clientId) throw new Error(`Configuration serveur manquante pour ${platform}`);
+
+        let authUrl = "";
+        if (platform === "google") {
+          const params = new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            response_type: "code",
+            scope: "https://www.googleapis.com/auth/business.manage openid email profile",
+            access_type: "offline",
+            prompt: "consent",
+          });
+          authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+        } else if (platform === "facebook" || platform === "instagram") {
+          const params = new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            response_type: "code",
+            scope: "pages_read_engagement,pages_manage_posts",
+          });
+          authUrl = `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
+        } else if (platform === "linkedin") {
+          const params = new URLSearchParams({
+            response_type: "code",
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            scope: "r_liteprofile r_emailaddress w_member_social",
+          });
+          authUrl = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
+        } else {
+          throw new Error("Start not implemented for this platform");
+        }
+
+        return new Response(JSON.stringify({ authUrl }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
     const clientId = Deno.env.get(CONFIG[platform].clientIdEnv);
     const clientSecret = Deno.env.get(CONFIG[platform].clientSecretEnv);
@@ -187,7 +219,6 @@ Deno.serve(async (req: Request) => {
     );
 
     if (dbError) throw dbError;
-
     return new Response(JSON.stringify({ success: true, name: accountName }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -196,7 +227,7 @@ Deno.serve(async (req: Request) => {
     console.error("Social OAuth Error:", error?.message || error);
     return new Response(JSON.stringify({ error: error?.message || "Unknown error" }), {
       status: 400,
-      headers: { ...buildCorsHeaders(req), "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

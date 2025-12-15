@@ -619,6 +619,69 @@ const DeleteAccountModal = ({
 
 // --- MAIN PAGE ---
 export const SettingsPage = () => {
+    // --- Gère le callback OAuth Google sur /auth/callback ---
+    useEffect(() => {
+      const runCallback = async () => {
+        if (window.location.pathname !== "/auth/callback") return;
+
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
+        const error = params.get("error");
+
+        if (error) {
+          toast.error("Google OAuth error: " + error);
+          window.location.href = "/#/settings?tab=integrations";
+          return;
+        }
+
+        if (!code) {
+          toast.error("Code OAuth manquant.");
+          window.location.href = "/#/settings?tab=integrations";
+          return;
+        }
+
+        try {
+          // 1) Récup session supabase (IMPORTANT pour Authorization header côté Edge)
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData?.session?.access_token;
+
+          if (!accessToken) {
+            toast.error("Session Supabase manquante (reconnecte-toi).");
+            window.location.href = "/#/auth";
+            return;
+          }
+
+          // 2) échange du code via l’edge function
+          const res = await fetch(
+            "https://nlgqwmhktlpbkvyaxcuv.supabase.co/functions/v1/social_oauth",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                action: "exchange",
+                platform: "google",
+                code,
+                redirectUri: "https://reviewflow2.vercel.app/auth/callback",
+              }),
+            }
+          );
+
+          const json = await res.json();
+          if (!res.ok) throw new Error(json?.error || "Exchange failed");
+
+          toast.success("Google connecté ✅");
+        } catch (e: any) {
+          toast.error("Erreur connexion Google: " + e.message);
+        } finally {
+          // 3) retour settings
+          window.location.href = "/#/settings?tab=integrations";
+        }
+      };
+      runCallback();
+    }, []);
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
