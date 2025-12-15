@@ -473,6 +473,7 @@ const DeleteAccountModal = ({ isOpen, onClose, onConfirm }: { isOpen: boolean, o
 
 // --- MAIN PAGE ---
 export const SettingsPage = () => {
+  console.log("Settings mounted");
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
   const [activeTab, setActiveTab] = useState('integrations');
