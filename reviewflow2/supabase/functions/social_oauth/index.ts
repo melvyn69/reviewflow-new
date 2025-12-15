@@ -32,119 +32,157 @@ const CONFIG: any = {
 };
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, serviceRoleKey)
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        const OAUTH_REDIRECT_URI = Deno.env.get('OAUTH_REDIRECT_URI')
 
-    // 1. Auth Check
-    const authHeader = req.headers.get('Authorization')!
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+        if (!OAUTH_REDIRECT_URI) {
+            return new Response(JSON.stringify({ error: 'OAUTH_REDIRECT_URI_NOT_SET' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
 
-    if (authError || !user) throw new Error('Unauthorized')
+        const supabase = createClient(supabaseUrl, serviceRoleKey)
 
-    // 2. Get User Org
-    const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
-    if (!userProfile?.organization_id) throw new Error('No organization linked')
+        // 1. Auth Check (accept Authorization or authorization)
+        const authHeader = req.headers.get('Authorization') || req.headers.get('authorization')
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return new Response(JSON.stringify({ error: 'Unauthorized (missing bearer token)' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+        const token = authHeader.replace(/^Bearer\s+/i, '')
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+        if (authError || !user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-    const { action, platform, code, redirectUri } = await req.json()
-    
-    // --- ACTION: EXCHANGE CODE ---
-    if (action === 'exchange') {
-        if (!CONFIG[platform]) throw new Error("Plateforme non supportée");
+        // 2. Get User Org
+        const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).single()
+        if (!userProfile?.organization_id) return new Response(JSON.stringify({ error: 'No organization linked' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-        const clientId = Deno.env.get(CONFIG[platform].clientIdEnv);
-        const clientSecret = Deno.env.get(CONFIG[platform].clientSecretEnv);
+        const body = await req.json().catch(() => ({}))
+        let { action, platform, code } = body
+        if (action === 'exchange') action = 'callback'
 
-        if (!clientId || !clientSecret) throw new Error(`Configuration serveur manquante pour ${platform}`);
+        if (!action || (action !== 'start' && action !== 'callback')) {
+            return new Response(JSON.stringify({ error: 'Action inconnue' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+        if (!CONFIG[platform]) return new Response(JSON.stringify({ error: 'Plateforme non supportée' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-        let payload: any = {
+        // START: return provider auth URL
+        if (action === 'start') {
+            const clientId = Deno.env.get(CONFIG[platform].clientIdEnv)
+            if (!clientId) return new Response(JSON.stringify({ error: `Configuration serveur manquante pour ${platform}` }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+            // Minimal state: random UUID or timestamp
+            let state = ''
+            try { state = crypto.randomUUID(); } catch (e) { state = `${user.id}-${Date.now()}` }
+
+            try {
+                await supabase.from('oauth_states').insert({ state, user_id: user.id, created_at: new Date().toISOString() })
+            } catch (e) {
+                // ignore storage errors
+            }
+
+            let authUrl = ''
+            if (platform === 'google') {
+                const params = new URLSearchParams({
+                    client_id: clientId,
+                    redirect_uri: OAUTH_REDIRECT_URI,
+                    response_type: 'code',
+                    scope: 'https://www.googleapis.com/auth/business.manage openid email profile',
+                    access_type: 'offline',
+                    prompt: 'consent',
+                    state,
+                })
+                authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
+            } else {
+                return new Response(JSON.stringify({ error: 'Start not implemented for this platform' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+            }
+
+            return new Response(JSON.stringify({ authUrl }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+
+        // CALLBACK: exchange code using server redirect URI
+        const clientId = Deno.env.get(CONFIG[platform].clientIdEnv)
+        const clientSecret = Deno.env.get(CONFIG[platform].clientSecretEnv)
+        if (!clientId || !clientSecret) return new Response(JSON.stringify({ error: `Configuration serveur manquante pour ${platform}` }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+        if (!code) return new Response(JSON.stringify({ error: 'Missing code' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+        const payload: any = {
             client_id: clientId,
             client_secret: clientSecret,
             code: code,
-            redirect_uri: redirectUri,
-            grant_type: 'authorization_code'
-        };
-
-        // LinkedIn, Instagram & Google accept form-urlencoded
-        let response = await fetch(CONFIG[platform].tokenUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(payload)
-        });
-
-        const data = await response.json();
-
-        if (data.error || !data.access_token) {
-            console.error("OAuth Error", data);
-            throw new Error(data.error_description || data.error?.message || "Échec de l'échange de token");
+            redirect_uri: OAUTH_REDIRECT_URI,
+            grant_type: 'authorization_code',
         }
 
-        let accessToken = data.access_token;
-        let refreshToken = data.refresh_token || null;
-        let expiresIn = data.expires_in; // Seconds
+        const tokenRes = await fetch(CONFIG[platform].tokenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(payload),
+        })
 
-        // --- FACEBOOK/INSTA: EXCHANGE FOR LONG-LIVED TOKEN ---
+        const tokenJson = await tokenRes.json().catch(() => ({}))
+        if (!tokenRes.ok || tokenJson.error || !tokenJson.access_token) {
+            console.error('OAuth token exchange failed:', tokenJson)
+            return new Response(JSON.stringify({ error: tokenJson.error_description || tokenJson.error?.message || 'Échec échange token' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        }
+
+        let accessToken = tokenJson.access_token as string
+        let refreshToken = (tokenJson.refresh_token as string) || null
+        let expiresIn = (tokenJson.expires_in as number) || null
+
         if (platform === 'facebook' || platform === 'instagram') {
-            const longLivedUrl = `https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${accessToken}`;
-            const longRes = await fetch(longLivedUrl);
-            const longData = await longRes.json();
-            
-            if (longData.access_token) {
-                accessToken = longData.access_token;
-                expiresIn = longData.expires_in || (60 * 60 * 24 * 60); // Default 60 days
+            const longLivedUrl = `https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${accessToken}`
+            const longRes = await fetch(longLivedUrl)
+            const longJson = await longRes.json().catch(() => ({}))
+            if (longJson?.access_token) {
+                accessToken = longJson.access_token
+                expiresIn = longJson.expires_in || 60 * 60 * 24 * 60
             }
         }
 
-        // Calculate Expiration Date
-        const expiresAt = expiresIn ? new Date(Date.now() + (expiresIn * 1000)).toISOString() : null;
+        const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null
 
-        // Fetch User Info to identify account
-        let accountId = 'unknown';
-        let accountName = platform;
-        let avatarUrl = '';
-
+        // Identify account
+        let accountId = 'unknown'
+        let accountName = platform
+        let avatarUrl = ''
         if (platform === 'linkedin') {
-            const meRes = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } });
-            const meData = await meRes.json();
-            accountId = meData.sub;
-            accountName = meData.name;
-            avatarUrl = meData.picture;
+            const meRes = await fetch('https://api.linkedin.com/v2/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } })
+            const me = await meRes.json().catch(() => ({}))
+            accountId = me.sub || 'linkedin'
+            accountName = me.name || 'LinkedIn'
+            avatarUrl = me.picture || ''
         } else if (platform === 'facebook') {
-            const meRes = await fetch(`https://graph.facebook.com/me?fields=id,name,picture&access_token=${accessToken}`);
-            const meData = await meRes.json();
-            accountId = meData.id;
-            accountName = meData.name;
-            avatarUrl = meData.picture?.data?.url;
+            const meRes = await fetch(`https://graph.facebook.com/me?fields=id,name,picture&access_token=${accessToken}`)
+            const me = await meRes.json().catch(() => ({}))
+            accountId = me.id || 'facebook'
+            accountName = me.name || 'Facebook'
+            avatarUrl = me.picture?.data?.url || ''
         } else if (platform === 'google') {
-            // Can be fetched from https://www.googleapis.com/oauth2/v2/userinfo or business API
-            // Here we just use 'google' as we manage Business Locations
-            accountId = 'google_business';
-            accountName = 'Google Business Profile';
+            accountId = 'google_business'
+            accountName = 'Google Business Profile'
         }
 
-        // Save to DB (social_accounts)
-        const { error: dbError } = await supabase.from('social_accounts').upsert({
-            organization_id: userProfile.organization_id,
-            platform,
-            access_token: accessToken,
-            refresh_token: refreshToken, // Important for Google offline access
-            token_expires_at: expiresAt,
-            external_id: accountId,
-            name: accountName,
-            avatar_url: avatarUrl,
-            updated_at: new Date().toISOString()
-        }, { onConflict: 'organization_id, platform' }); // Assume one account per platform per org for now
+        const { error: dbError } = await supabase.from('social_accounts').upsert(
+            {
+                organization_id: userProfile.organization_id,
+                platform,
+                access_token: accessToken,
+                refresh_token: refreshToken,
+                token_expires_at: expiresAt,
+                external_id: accountId,
+                name: accountName,
+                avatar_url: avatarUrl,
+                updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'organization_id, platform' }
+        )
 
-        if (dbError) throw dbError;
+        if (dbError) return new Response(JSON.stringify({ error: dbError.message || 'DB error' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-        return new Response(JSON.stringify({ success: true, name: accountName }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    throw new Error("Action inconnue");
+        return new Response(JSON.stringify({ success: true, name: accountName }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (error: any) {
     console.error("Social OAuth Error:", error.message);

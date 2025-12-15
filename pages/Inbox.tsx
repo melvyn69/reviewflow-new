@@ -280,7 +280,11 @@ export const InboxPage = () => {
   useEffect(() => {
     const init = async () => {
         const orgData = await api.organization.get();
-        setOrg(orgData);
+        setOrg((prev) => {
+            if (!orgData) return prev;
+            if (!prev || prev.id !== orgData.id) return orgData;
+            return prev;
+        });
         if (orgData && orgData.locations) {
             setLocations(orgData.locations);
         }

@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Missing SUPABASE_URL or SUPABASE_ANON_KEY" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     if (!OAUTH_REDIRECT_URI) {
-      return new Response(JSON.stringify({ error: "Missing OAUTH_REDIRECT_URI env" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "OAUTH_REDIRECT_URI_NOT_SET" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");

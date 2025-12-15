@@ -668,7 +668,11 @@ export const SettingsPage = () => {
         api.auth.me ? api.auth.me() : Promise.resolve(null),
       ]);
 
-      setOrg(orgData);
+      setOrg((prev) => {
+        if (!orgData) return prev;
+        if (!prev || prev.id !== orgData.id) return orgData;
+        return prev;
+      });
       if (userData) setUser(userData);
     } catch (e: any) {
       console.error(e);
@@ -715,7 +719,11 @@ export const SettingsPage = () => {
     if (!org) return;
     try {
       await api.organization.update(updates);
-      setOrg({ ...org, ...updates });
+      setOrg((prev) => {
+        const next = { ...prev, ...updates } as any;
+        if (!prev || prev.id !== next.id || JSON.stringify(prev) !== JSON.stringify(next)) return next;
+        return prev;
+      });
       toast.success('Organisation mise à jour');
     } catch (e: any) {
       toast.error(e.message || "Erreur lors de la mise à jour");

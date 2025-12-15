@@ -275,7 +275,11 @@ export const BillingPage = () => {
             try {
                 const data = await api.organization.get();
                 if (data && data.subscription_plan !== 'free') {
-                    setOrg(data);
+                    setOrg((prev) => {
+                        if (!data) return prev;
+                        if (!prev || prev.id !== data.id) return data;
+                        return prev;
+                    });
                     setIsVerifyingPayment(false);
                     setShowSuccess(true);
                     toast.success("Paiement validé ! Votre abonnement est actif.");
@@ -303,7 +307,11 @@ export const BillingPage = () => {
         setLoading(true);
         try {
             const data = await api.organization.get();
-            setOrg(data);
+            setOrg((prev) => {
+                if (!data) return prev;
+                if (!prev || prev.id !== data.id) return data;
+                return prev;
+            });
             const usage = await api.billing.getUsage();
             setUsageCount(usage);
         } catch (e) {

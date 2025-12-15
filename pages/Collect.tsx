@@ -158,9 +158,13 @@ export const CollectPage = () => {
 
   const loadOrg = async () => {
     try {
-        const data = await api.organization.get();
-        if (data) {
-            setOrg(data);
+                const data = await api.organization.get();
+                if (data) {
+                        setOrg((prev) => {
+                            if (!data) return prev;
+                            if (!prev || prev.id !== data.id) return data;
+                            return prev;
+                        });
             if (data.locations?.length > 0) {
               setSelectedLocationId(data.locations[0].id);
             }

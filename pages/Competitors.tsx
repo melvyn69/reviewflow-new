@@ -152,7 +152,11 @@ export const CompetitorsPage = () => {
         setLoading(true);
         try {
             const organization = await api.organization.get();
-            setOrg(organization);
+            setOrg((prev) => {
+                if (!organization) return prev;
+                if (!prev || prev.id !== organization.id) return organization;
+                return prev;
+            });
             // We fetch regardless, but UI will block display if needed
             const data = await api.competitors.list();
             setCompetitors(data || []);

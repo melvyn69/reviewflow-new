@@ -210,7 +210,11 @@ export const SocialPage = () => {
 
     const loadData = async () => {
         const organization = await api.organization.get();
-        setOrg(organization);
+        setOrg((prev) => {
+            if (!organization) return prev;
+            if (!prev || prev.id !== organization.id) return organization;
+            return prev;
+        });
         setLocations(organization?.locations || []);
         
         const locFilter = selectedLocationId === 'all' ? undefined : selectedLocationId;

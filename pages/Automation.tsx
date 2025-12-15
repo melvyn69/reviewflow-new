@@ -343,7 +343,11 @@ export const AutomationPage = () => {
           api.organization.get()
       ]);
       setWorkflows(wfs);
-      setOrg(organization);
+      setOrg((prev) => {
+          if (!organization) return prev;
+          if (!prev || prev.id !== organization.id) return organization;
+          return prev;
+      });
       setLoading(false);
   };
 

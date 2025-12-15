@@ -525,14 +525,20 @@ export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
   const [user, setUser] = useState<User | undefined>(undefined);
   const [org, setOrg] = useState<Organization | null>(null);
 
-  useEffect(() => {
+    useEffect(() => {
       api.auth.getUser().then(u => {
-          setUser(u || undefined);
-          if (u) {
-              api.organization.get().then(setOrg);
-          }
+        setUser(u || undefined);
+        if (u) {
+          api.organization.get().then((orgData) => {
+          setOrg((prev) => {
+            if (!orgData) return prev;
+            if (!prev || prev.id !== orgData.id) return orgData;
+            return prev;
+          });
+          });
+        }
       });
-  }, []);
+    }, []);
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex font-sans text-slate-900">

@@ -742,7 +742,11 @@ export const ReportsPage = () => {
             api.organization.get(),
             api.team.list()
         ]);
-        setOrg(organization);
+        setOrg((prev) => {
+            if (!organization) return prev;
+            if (!prev || prev.id !== organization.id) return organization;
+            return prev;
+        });
         setTeam(teamMembers);
         
         if (organization?.staff_members) {
