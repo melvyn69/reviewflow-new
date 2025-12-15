@@ -532,6 +532,29 @@ export const SettingsPage = () => {
       }
   }, [activeTab]);
 
+  // Handle Google OAuth callback
+  useEffect(() => {
+      const params = new URLSearchParams(location.search);
+      const code = params.get('code');
+      const tab = params.get('tab');
+      if (code && tab === 'integrations') {
+          api.auth.handleGoogleCallback(code)
+              .then(() => {
+                  toast({ title: "Connexion Google réussie", description: "Votre compte Google Business a été connecté.", type: "success" });
+                  // Reload org data
+                  api.organization.get().then(setOrg);
+              })
+              .catch((error) => {
+                  console.error("Google callback error", error);
+                  toast({ title: "Erreur de connexion Google", description: error.message || "Une erreur est survenue.", type: "error" });
+              })
+              .finally(() => {
+                  // Clean URL
+                  navigate('/settings?tab=integrations', { replace: true });
+              });
+      }
+  }, [location.search, navigate, toast]);
+
   const loadData = async () => {
       setLoading(true);
       try {
