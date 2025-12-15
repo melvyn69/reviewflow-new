@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, User, BrandSettings, NotificationSettings } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle } from '../components/ui';
@@ -481,6 +481,7 @@ export const SettingsPage = () => {
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const oauthHandledRef = useRef(false);
 
   // Profile Form States
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
@@ -535,22 +536,35 @@ export const SettingsPage = () => {
   // Handle Google OAuth callback
   useEffect(() => {
       const params = new URLSearchParams(location.search);
-      const code = params.get('code');
       const tab = params.get('tab');
-      if (code && tab === 'integrations') {
-          api.auth.handleGoogleCallback(code)
+      const code = params.get('code');
+      const error = params.get('error');
+      console.log("[OAuth] tab=", tab, "code?", !!code, "error=", error);
+
+      if (tab !== 'integrations') return;
+      if (oauthHandledRef.current) return;
+
+      if (error) {
+          toast({ title: "Erreur OAuth", description: error, type: "error" });
+          navigate('/settings?tab=integrations', { replace: true });
+          return;
+      }
+
+      if (code) {
+          oauthHandledRef.current = true;
+          api.social.handleGoogleCallback(code)
               .then(() => {
-                  toast({ title: "Connexion Google réussie", description: "Votre compte Google Business a été connecté.", type: "success" });
+                  toast({ title: "Google connecté ✅", type: "success" });
                   // Reload org data
                   api.organization.get().then(setOrg);
-              })
-              .catch((error) => {
-                  console.error("Google callback error", error);
-                  toast({ title: "Erreur de connexion Google", description: error.message || "Une erreur est survenue.", type: "error" });
-              })
-              .finally(() => {
-                  // Clean URL
                   navigate('/settings?tab=integrations', { replace: true });
+              })
+              .catch((err) => {
+                  console.error("Google callback error", err);
+                  toast({ title: "Erreur de connexion Google", description: err.message || "Une erreur est survenue.", type: "error" });
+                  navigate('/settings?tab=integrations', { replace: true });
+                  // Optionally reset for retry
+                  // oauthHandledRef.current = false;
               });
       }
   }, [location.search, navigate, toast]);
