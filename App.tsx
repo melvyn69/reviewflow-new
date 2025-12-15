@@ -178,7 +178,7 @@ function AppRoutes() {
 
                   {/* Sensitive */}
                   <Route
-                    path="settings"
+                    path="/settings"
                     element={
                       <ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}>
                         <SettingsPage />
