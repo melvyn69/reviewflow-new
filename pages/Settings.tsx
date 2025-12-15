@@ -900,25 +900,17 @@ export const SettingsPage = () => {
 
   const handleConnectGoogle = async () => {
     try {
-      const resp = await supabase.functions.invoke('social_oauth', {
-        body: {
-          action: 'start',
-          provider: 'google',
-          redirectUri: 'https://reviewflow2.vercel.app/auth/callback',
-        },
+      const redirectUri = `${window.location.origin}/oauth/google/callback`;
+
+      const { data, error } = await supabase.functions.invoke('social_oauth', {
+        body: { action: 'start', platform: 'google', redirectUri },
       });
 
-      const data = resp?.data;
-      const error = resp?.error;
+      console.log('oauth error =', error);
+      alert(error ? JSON.stringify(error, null, 2) : 'OK');
 
-      console.log('[OAuth] start:', { data, error });
-
-      if (error || !data?.url) {
-        toast.error((error as any)?.message || data?.error_description || data?.error || 'URL manquante');
-        return;
-      }
-
-      window.location.href = data.url;
+      if (error) throw error;
+      window.location.href = (data as any)?.authUrl;
     } catch (e: any) {
       toast.error(e.message || 'Erreur connexion Google');
     }
