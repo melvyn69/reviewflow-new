@@ -22,7 +22,6 @@ export const api = {
             if (sessionError || !session?.user) return null;
 
             const authUser = session.user;
-            console.log("[PROFILE FETCH]");
             const { data: profile, error } = await supabase
                 .from('users')
                 .select('*')
@@ -68,22 +67,34 @@ export const api = {
             localStorage.clear();
         },
         connectGoogleBusiness: async () => {
-            // Start custom OAuth flow via Edge Function (server determines redirect_uri)
-            const { data, error } = await supabase.functions.invoke('social_oauth', {
-                body: { action: 'start', platform: 'google' }
-            });
-            if (error || (data && (data as any).error)) throw error || new Error((data as any).error);
-            // redirect to provider URL
-            window.location.href = (data as any)?.authUrl;
+            // FLUX OAUTH MANUEL POUR GOOGLE BUSINESS PROFILE
+            const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+            if (!clientId) throw new Error("VITE_GOOGLE_CLIENT_ID manquant");
+
+            const redirectUri = window.location.origin + '/settings';
+            const scope = 'https://www.googleapis.com/auth/business.manage';
+            
+            // On force prompt=consent et access_type=offline pour avoir un refresh_token
+            const url = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                `client_id=${clientId}&` +
+                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+                `response_type=code&` +
+                `scope=${encodeURIComponent(scope)}&` +
+                `access_type=offline&` +
+                `prompt=consent&` +
+                `state=google_connect`;
+            
+            window.location.href = url;
         },
         handleGoogleCallback: async (code: string) => {
             if (!supabase) throw new Error("Supabase non configuré");
             // Appel à l'Edge Function pour échanger le code contre les tokens
             const { data, error } = await supabase.functions.invoke('social_oauth', {
                 body: {
-                    action: 'callback',
+                    action: 'exchange',
                     platform: 'google',
-                    code
+                    code,
+                    redirectUri: window.location.origin + '/settings'
                 }
             });
             if (error) throw error;

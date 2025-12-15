@@ -47,6 +47,7 @@ import {
 } from './components/ui';
 
 import type { User } from './types';
+import GoogleOAuthCallback from './pages/oauth/google/callback';
 
 // ---------------------------
 // Utils
@@ -225,6 +226,10 @@ function AppRoutes() {
 // App Root
 // ---------------------------
 export default function App() {
+  if (typeof window !== 'undefined' && window.location.pathname === '/oauth/google/callback') {
+    return <GoogleOAuthCallback />;
+  }
+
   return (
     <HashRouter>
       <I18nProvider>

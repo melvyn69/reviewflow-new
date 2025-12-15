@@ -619,69 +619,7 @@ const DeleteAccountModal = ({
 
 // --- MAIN PAGE ---
 export const SettingsPage = () => {
-    // --- Gère le callback OAuth Google sur /auth/callback ---
-    useEffect(() => {
-      const runCallback = async () => {
-        if (window.location.pathname !== "/auth/callback") return;
-
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
-        const error = params.get("error");
-
-        if (error) {
-          toast.error("Google OAuth error: " + error);
-          window.location.href = "/#/settings?tab=integrations";
-          return;
-        }
-
-        if (!code) {
-          toast.error("Code OAuth manquant.");
-          window.location.href = "/#/settings?tab=integrations";
-          return;
-        }
-
-        try {
-          // 1) Récup session supabase (IMPORTANT pour Authorization header côté Edge)
-          const { data: sessionData } = await supabase.auth.getSession();
-          const accessToken = sessionData?.session?.access_token;
-
-          if (!accessToken) {
-            toast.error("Session Supabase manquante (reconnecte-toi).");
-            window.location.href = "/#/auth";
-            return;
-          }
-
-          // 2) échange du code via l’edge function
-          const res = await fetch(
-            "https://nlgqwmhktlpbkvyaxcuv.supabase.co/functions/v1/social_oauth",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({
-                action: "exchange",
-                platform: "google",
-                code,
-                redirectUri: "https://reviewflow2.vercel.app/auth/callback",
-              }),
-            }
-          );
-
-          const json = await res.json();
-          if (!res.ok) throw new Error(json?.error || "Exchange failed");
-
-          toast.success("Google connecté ✅");
-        } catch (e: any) {
-          toast.error("Erreur connexion Google: " + e.message);
-        } finally {
-          // 3) retour settings
-          window.location.href = "/#/settings?tab=integrations";
-        }
-      };
-      runCallback();
-    }, []);
+    // OAuth callbacks are handled in the dedicated callback page.
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -770,55 +708,7 @@ export const SettingsPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // ---------- OAuth Google : on ne traite qu’une fois (hash router) ----------
-  useEffect(() => {
-    if (oauthHandledRef.current) return;
-
-    // Exemple hash: "#/settings?tab=integrations&code=...&state=..."
-    // ou parfois "#/auth/callback?code=...&state=..."
-    const hash = window.location.hash || '';
-    const queryPart = hash.includes('?') ? hash.split('?')[1] : '';
-    if (!queryPart) return;
-
-    const params = new URLSearchParams(queryPart);
-    const code = params.get('code');
-    const state = params.get('state');
-    if (!code) return;
-
-    oauthHandledRef.current = true;
-
-    (async () => {
-      try {
-        const resp = await supabase.functions.invoke('social_oauth', {
-          body: {
-            action: 'exchange',
-            provider: 'google',
-            code,
-            state,
-            redirectUri: 'https://reviewflow2.vercel.app/auth/callback',
-          },
-        });
-
-        const data = resp?.data;
-        const error = resp?.error;
-
-        console.log('[OAuth] exchange:', { data, error });
-
-        if (error || data?.error) {
-          toast.error((error && (error as any).message) || data?.error_description || data?.error || 'Erreur OAuth');
-        } else {
-          toast.success('Google Business Profile connecté.');
-          await loadData();
-        }
-      } catch (e: any) {
-        toast.error(e.message || 'Erreur OAuth');
-      } finally {
-        // Nettoie l’URL pour éviter de retraiter code/state à chaque refresh
-        navigate('/settings?tab=integrations', { replace: true });
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigate, toast]);
+  // OAuth handled in dedicated callback route; do not process codes here.
 
   // ---------- Actions ----------
   const handleUpdateOrg = async (updates: Partial<Organization>) => {
@@ -900,16 +790,16 @@ export const SettingsPage = () => {
 
   const handleConnectGoogle = async () => {
     try {
-      const redirectUri = `${window.location.origin}/oauth/google/callback`;
-
       const { data, error } = await supabase.functions.invoke('social_oauth', {
-        body: { action: 'start', platform: 'google', redirectUri },
+        body: { action: 'start', platform: 'google' },
       });
 
-      console.log('oauth error =', error);
-      alert(error ? JSON.stringify(error, null, 2) : 'OK');
+      if (error || (data && (data as any).error)) {
+        const msg = (error && (error as any).message) || (data && (data as any).error) || 'Erreur connexion Google';
+        toast.error(String(msg));
+        return;
+      }
 
-      if (error) throw error;
       window.location.href = (data as any)?.authUrl;
     } catch (e: any) {
       toast.error(e.message || 'Erreur connexion Google');

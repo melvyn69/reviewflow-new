@@ -42,32 +42,36 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const OAUTH_REDIRECT_URI = Deno.env.get("OAUTH_REDIRECT_URI");
     if (!supabaseUrl || !anonKey) {
-      throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
+      return new Response(JSON.stringify({ error: "Missing SUPABASE_URL or SUPABASE_ANON_KEY" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (!OAUTH_REDIRECT_URI) {
+      return new Response(JSON.stringify({ error: "Missing OAUTH_REDIRECT_URI env" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-      const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Unauthorized (missing bearer token)" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized (missing bearer token)" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      const supabase = createClient(
-        supabaseUrl,
-        anonKey,
-        {
-          global: {
-            headers: {
-              Authorization: authHeader,
-            },
+    const supabase = createClient(
+      supabaseUrl,
+      anonKey,
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
           },
-        }
-      );
+        },
+      }
+    );
 
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     let organizationId: string | null = null;
 
@@ -78,77 +82,72 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (profileError) {
-      // si ta table users/RLS pose souci, on ne bloque pas le flow OAuth
       organizationId = null;
     } else {
       organizationId = userProfile?.organization_id ?? null;
     }
 
-    // ✅ fallback pour débloquer le flow tout de suite
     const ownerKey = organizationId ?? user.id;
 
     const body = await req.json().catch(() => ({}));
-    const { action, platform, code, redirectUri } = body;
+    let { action, platform, code } = body;
+    // Backwards compat: accept old 'exchange' name
+    if (action === 'exchange') action = 'callback';
 
-    if (!action || (action !== "start" && action !== "callback")) throw new Error("Action inconnue");
-    // Simplified: only Google supported for now
-    if (platform !== "google") throw new Error("Plateforme non supportée");
-    if (action === "callback" && !code) throw new Error("Missing code");
-    if (action === "callback" && !redirectUri) throw new Error("Missing redirectUri");
+    if (!action || (action !== "start" && action !== "callback")) {
+      return new Response(JSON.stringify({ error: "Action inconnue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (platform !== "google") return new Response(JSON.stringify({ error: "Plateforme non supportée" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-      // START: return provider auth URL
-      if (action === "start") {
-        if (!redirectUri) throw new Error("Missing redirectUri");
-        const clientId = Deno.env.get(CONFIG[platform].clientIdEnv);
-        if (!clientId) throw new Error(`Configuration serveur manquante pour ${platform}`);
+    // START: return provider auth URL
+    if (action === "start") {
+      const clientId = Deno.env.get(CONFIG[platform].clientIdEnv);
+      if (!clientId) return new Response(JSON.stringify({ error: `Configuration serveur manquante pour ${platform}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-        let authUrl = "";
-        if (platform === "google") {
-          const params = new URLSearchParams({
-            client_id: clientId,
-            redirect_uri: redirectUri,
-            response_type: "code",
-            scope: "https://www.googleapis.com/auth/business.manage openid email profile",
-            access_type: "offline",
-            prompt: "consent",
-          });
-          authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-        } else if (platform === "facebook" || platform === "instagram") {
-          const params = new URLSearchParams({
-            client_id: clientId,
-            redirect_uri: redirectUri,
-            response_type: "code",
-            scope: "pages_read_engagement,pages_manage_posts",
-          });
-          authUrl = `https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`;
-        } else if (platform === "linkedin") {
-          const params = new URLSearchParams({
-            response_type: "code",
-            client_id: clientId,
-            redirect_uri: redirectUri,
-            scope: "r_liteprofile r_emailaddress w_member_social",
-          });
-          authUrl = `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
-        } else {
-          throw new Error("Start not implemented for this platform");
-        }
+      // Minimal state: associate user id (for debug/compatibility). A production app should generate a signed random state.
+      const state = user.id;
 
-        return new Response(JSON.stringify({ authUrl }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      // store state to allow server-side verification later (best-effort)
+      try {
+        await supabase.from('oauth_states').insert({ state, user_id: user.id, created_at: new Date().toISOString() });
+      } catch (e) {
+        // ignore errors inserting state
+        console.warn('Failed to store oauth state', e);
       }
 
+      let authUrl = "";
+      if (platform === "google") {
+        const params = new URLSearchParams({
+          client_id: clientId,
+          redirect_uri: OAUTH_REDIRECT_URI,
+          response_type: "code",
+          scope: "https://www.googleapis.com/auth/business.manage openid email profile",
+          access_type: "offline",
+          prompt: "consent",
+          state,
+        });
+        authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      } else {
+        return new Response(JSON.stringify({ error: "Start not implemented for this platform" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      return new Response(JSON.stringify({ authUrl }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // For callback: use server-side configured redirect URI
     const clientId = Deno.env.get(CONFIG[platform].clientIdEnv);
     const clientSecret = Deno.env.get(CONFIG[platform].clientSecretEnv);
-    if (!clientId || !clientSecret) throw new Error(`Configuration serveur manquante pour ${platform}`);
+    if (!clientId || !clientSecret) return new Response(JSON.stringify({ error: `Configuration serveur manquante pour ${platform}` }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // Exchange code -> token
     const payload: Record<string, string> = {
       client_id: clientId,
       client_secret: clientSecret,
       code: code,
-      redirect_uri: redirectUri,
+      redirect_uri: OAUTH_REDIRECT_URI,
       grant_type: "authorization_code",
     };
 
