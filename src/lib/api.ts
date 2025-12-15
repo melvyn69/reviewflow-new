@@ -67,24 +67,19 @@ export const api = {
             localStorage.clear();
         },
         connectGoogleBusiness: async () => {
-            // FLUX OAUTH MANUEL POUR GOOGLE BUSINESS PROFILE
-            const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-            if (!clientId) throw new Error("VITE_GOOGLE_CLIENT_ID manquant");
-
-            const redirectUri = window.location.origin + '/settings';
-            const scope = 'https://www.googleapis.com/auth/business.manage';
-            
-            // On force prompt=consent et access_type=offline pour avoir un refresh_token
-            const url = `https://accounts.google.com/o/oauth2/v2/auth?` +
-                `client_id=${clientId}&` +
-                `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-                `response_type=code&` +
-                `scope=${encodeURIComponent(scope)}&` +
-                `access_type=offline&` +
-                `prompt=consent&` +
-                `state=google_connect`;
-            
-            window.location.href = url;
+            console.log(window.location.origin);
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    scopes: 'https://www.googleapis.com/auth/business.manage',
+                    queryParams: {
+                        access_type: 'offline',
+                        prompt: 'consent',
+                    },
+                    redirectTo: `${window.location.origin}/#/settings?tab=integrations`,
+                },
+            });
+            if (error) throw error;
         },
         handleGoogleCallback: async (code: string) => {
             if (!supabase) throw new Error("Supabase non configuré");
@@ -94,7 +89,7 @@ export const api = {
                     action: 'exchange',
                     platform: 'google',
                     code,
-                    redirectUri: window.location.origin + '/settings'
+                    redirectUri: window.location.origin + '/auth/callback'
                 }
             });
             if (error) throw error;

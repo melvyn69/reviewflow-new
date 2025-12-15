@@ -541,33 +541,9 @@ export const SettingsPage = () => {
       const error = params.get('error');
       console.log("[OAuth] tab=", tab, "code?", !!code, "error=", error);
 
-      if (tab !== 'integrations') return;
-      if (oauthHandledRef.current) return;
-
-      if (error) {
-          toast({ title: "Erreur OAuth", description: error, type: "error" });
-          navigate('/settings?tab=integrations', { replace: true });
-          return;
-      }
-
-      if (code) {
-          oauthHandledRef.current = true;
-          api.social.handleGoogleCallback(code)
-              .then(() => {
-                  toast({ title: "Google connecté ✅", type: "success" });
-                  // Reload org data
-                  api.organization.get().then(setOrg);
-                  navigate('/settings?tab=integrations', { replace: true });
-              })
-              .catch((err) => {
-                  console.error("Google callback error", err);
-                  toast({ title: "Erreur de connexion Google", description: err.message || "Une erreur est survenue.", type: "error" });
-                  navigate('/settings?tab=integrations', { replace: true });
-                  // Optionally reset for retry
-                  // oauthHandledRef.current = false;
-              });
-      }
-  }, [location.search, navigate, toast]);
+      // Supabase OAuth handles the session automatically
+      // No manual code handling needed
+  }, [location.search]);
 
   const loadData = async () => {
       setLoading(true);
@@ -735,7 +711,18 @@ export const SettingsPage = () => {
                                 title="Google Business Profile"
                                 description="Connectez votre compte pour centraliser tous vos avis au même endroit, booster votre SEO local et permettre à l'IA d'y répondre automatiquement."
                                 connected={org?.integrations?.google}
-                                onConnect={() => api.auth.connectGoogleBusiness()}
+                                onConnect={async () => {
+                                    console.log(window.location.origin);
+                                    try {
+                                        await api.auth.connectGoogleBusiness();
+                                    } catch (error: any) {
+                                        if (error.message.includes('redirect') || error.message.includes('URL') || window.location.origin.includes('localhost')) {
+                                            toast({ title: "Configuration requise", description: `Ajoute cette URL dans Supabase → Authentication → URL Configuration → Redirect URLs : ${window.location.origin}/*`, type: "error" });
+                                        } else {
+                                            toast({ title: "Erreur de connexion", description: error.message, type: "error" });
+                                        }
+                                    }
+                                }}
                                 type="Source Principale"
                                 helpLink="#"
                             />
