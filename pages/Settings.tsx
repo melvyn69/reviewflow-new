@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { Organization, Location, User, BrandSettings, NotificationSettings } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle } from '../components/ui';
 import { 
@@ -535,17 +536,47 @@ export const SettingsPage = () => {
       }
   }, [activeTab]);
 
-  // Handle Google OAuth callback
-  useEffect(() => {
-      const params = new URLSearchParams(location.search);
-      const tab = params.get('tab');
-      const code = params.get('code');
-      const error = params.get('error');
-      console.log("[OAuth] tab=", tab, "code?", !!code, "error=", error);
+    // Handle Google OAuth callback (aligné social_oauth, invoke only)
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('tab') !== 'integrations') return;
 
-      // Supabase OAuth handles the session automatically
-      // No manual code handling needed
-  }, [location.search]);
+        const stored = sessionStorage.getItem('gmb_oauth_result');
+        if (!stored) return;
+        sessionStorage.removeItem('gmb_oauth_result');
+
+        let payload;
+        try { payload = JSON.parse(stored); } catch { return; }
+
+        if (payload.error) {
+            toast?.({ title: "Erreur OAuth", description: payload.error_description || payload.error, type: "error" });
+            return;
+        }
+
+        if (!payload.code) return;
+
+        (async () => {
+            const { data, error } = await supabase.functions.invoke('social_oauth', {
+                body: {
+                    action: 'exchange',
+                    provider: 'google',
+                    code: payload.code,
+                    redirectUri: 'https://reviewflow2.vercel.app/auth/callback',
+                    state: payload.state,
+                }
+            });
+
+            console.log('[OAuth] social_oauth response:', { data, error });
+
+            if (error || data?.error) {
+                toast?.({ title: "Erreur de connexion", description: error?.message || data?.error_description || data?.error, type: "error" });
+                return;
+            }
+
+            toast?.({ title: "Connexion réussie", description: "Google Business Profile connecté.", type: "success" });
+            api.organization.get().then(setOrg);
+        })();
+    }, [location.search]);
 
   const loadData = async () => {
       if (isLoadingRef.current) return;
