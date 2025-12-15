@@ -22,6 +22,7 @@ export const api = {
             if (sessionError || !session?.user) return null;
 
             const authUser = session.user;
+            console.log("[PROFILE FETCH]");
             const { data: profile, error } = await supabase
                 .from('users')
                 .select('*')

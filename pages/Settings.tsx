@@ -482,6 +482,7 @@ export const SettingsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const oauthHandledRef = useRef(false);
+  const hasLoadedUserRef = useRef(false);
 
   // Profile Form States
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
@@ -548,12 +549,15 @@ export const SettingsPage = () => {
   const loadData = async () => {
       setLoading(true);
       try {
-        const [userData, orgData] = await Promise.all([
-            api.auth.getUser(),
-            api.organization.get(),
-        ]);
-        setUser(userData);
-        setOrg(orgData);
+        const promises = [api.organization.get()];
+        if (!hasLoadedUserRef.current) {
+            promises.unshift(api.auth.getUser());
+        }
+        const results = await Promise.all(promises);
+        const orgData = hasLoadedUserRef.current ? results[0] : results[1];
+        if (!org || org.id !== orgData?.id) {
+            setOrg(orgData);
+        }
       } catch (e) {
           console.error(e);
       } finally {
