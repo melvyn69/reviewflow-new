@@ -483,6 +483,7 @@ export const SettingsPage = () => {
   const location = useLocation();
   const oauthHandledRef = useRef(false);
   const hasLoadedUserRef = useRef(false);
+  const isLoadingRef = useRef(false);
 
   // Profile Form States
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
@@ -547,6 +548,8 @@ export const SettingsPage = () => {
   }, [location.search]);
 
   const loadData = async () => {
+      if (isLoadingRef.current) return;
+      isLoadingRef.current = true;
       setLoading(true);
       try {
         const promises = [api.organization.get()];
@@ -562,6 +565,7 @@ export const SettingsPage = () => {
           console.error(e);
       } finally {
           setLoading(false);
+          isLoadingRef.current = false;
       }
   };
 
