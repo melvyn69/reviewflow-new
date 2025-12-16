@@ -82,26 +82,29 @@ function AppRoutes() {
     }, 3000);
 
     // 3. Listener Supabase
-    const { data: authListener } = (supabase?.auth as any).onAuthStateChange(async (event: any, session: any) => {
+    const { data } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
       if (event === 'SIGNED_IN' && session) {
-        // Critical: Save tokens immediately when detected
         if (session.provider_token) {
-            await api.organization.saveGoogleTokens();
+          await api.organization.saveGoogleTokens();
         }
         await checkUser();
-        
-        if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
-            navigate('/dashboard');
+
+        if (
+          window.location.hash === '#/' ||
+          window.location.href.includes('login') ||
+          window.location.hash.includes('register')
+        ) {
+          navigate('/dashboard');
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         navigate('/');
       }
-    }) || { data: { subscription: { unsubscribe: () => {} } } };
+    });
 
     return () => {
       clearTimeout(safetyTimeout);
-      authListener.data.subscription.unsubscribe();
+      data?.subscription?.unsubscribe();
     };
   }, []);
 
