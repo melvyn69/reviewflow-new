@@ -25,9 +25,9 @@ dist-ssr
 .env
 .env.*
 .vercel
-/_legacy_dump/
-/index.css
-/src/index.css
-/_legacy_dump/
-/index.css
-/supabase/.temp/
+_legacy_dump/
+index.css
+supabase/.temp/
+
+reviewflow2/supabase/.temp/
+*.zip
