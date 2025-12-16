@@ -46,8 +46,25 @@ const Confetti = () => (
     </div>
 );
 
-const CoachWidget = ({ progress, coachMessage }: { progress: ClientProgress, coachMessage?: AiCoachMessage }) => {
+const CoachWidget = ({
+    progress,
+    coachMessage,
+}: {
+    progress?: Partial<ClientProgress>;
+    coachMessage?: AiCoachMessage;
+}) => {
     if (!coachMessage) return <Skeleton className="h-40 w-full rounded-2xl" />;
+
+    const steps = progress?.steps ?? {
+        google_connected: false,
+        reviews_imported: false,
+        ai_reply_configured: false,
+        auto_sync_enabled: false,
+    };
+
+    const score = progress?.score ?? 0;
+    const level = progress?.level ?? 0;
+    const nextActions = progress?.next_actions ?? [];
 
     return (
         <Card className="bg-gradient-to-r from-indigo-900 to-purple-900 text-white border-none shadow-xl relative overflow-hidden">
@@ -73,9 +90,9 @@ const CoachWidget = ({ progress, coachMessage }: { progress: ClientProgress, coa
                 
                 <div className="flex flex-col items-center gap-2 shrink-0 bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10 min-w-[140px]">
                     <span className="text-xs font-bold text-indigo-200 uppercase">Score Global</span>
-                    <div className="text-4xl font-black text-white">{progress.score}%</div>
+                    <div className="text-4xl font-black text-white">{score}%</div>
                     <div className="w-full bg-slate-700/50 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-green-400 h-full transition-all duration-1000" style={{ width: `${progress.score}%` }}></div>
+                        <div className="bg-green-400 h-full transition-all duration-1000" style={{ width: `${score}%` }}></div>
                     </div>
                 </div>
             </CardContent>
