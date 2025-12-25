@@ -31,6 +31,7 @@ import { supabase } from './lib/supabase';
 import { User } from './types';
 import { ToastProvider } from './components/ui';
 import { I18nProvider } from './lib/i18n';
+import { ENABLE_EXTRAS } from './lib/flags';
 
 // ScrollToTop component
 const ScrollToTop = () => {
@@ -47,13 +48,15 @@ interface ProtectedRouteProps {
   allowedRoles?: string[];
 }
 
+const DEFAULT_PRIVATE_ROUTE = ENABLE_EXTRAS ? '/dashboard' : '/inbox';
+
 const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) => {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={DEFAULT_PRIVATE_ROUTE} replace />;
   }
 
   return <>{children}</>;
@@ -64,6 +67,7 @@ function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
 
   useEffect(() => {
     checkUser();
@@ -81,7 +85,7 @@ function AppRoutes() {
         
         // If we are on login/register/landing, go to dashboard
         if (window.location.hash === '#/' || window.location.hash.includes('login') || window.location.hash.includes('register')) {
-            navigate('/dashboard');
+            navigate(defaultPrivateRoute);
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
@@ -118,19 +122,19 @@ function AppRoutes() {
       <ScrollToTop />
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="login" onLoginSuccess={checkUser} />} />
-        <Route path="/book-demo" element={<BookDemoPage />} />
+        <Route path="/" element={user ? <Navigate to={defaultPrivateRoute} replace /> : <LandingPage />} />
+        <Route path="/login" element={user ? <Navigate to={defaultPrivateRoute} replace /> : <AuthPage initialMode="login" onLoginSuccess={checkUser} />} />
+        <Route path="/book-demo" element={ENABLE_EXTRAS ? <BookDemoPage /> : <Navigate to="/" replace />} />
         
         {/* Hidden Registration */}
-        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />} />
+        <Route path="/register" element={user ? <Navigate to={defaultPrivateRoute} replace /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />} />
         
         <Route path="/legal" element={<LegalPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/contact" element={<ContactPage />} />
-        <Route path="/feedback/:locationId" element={<ReviewFunnel />} />
-        <Route path="/widget/:locationId" element={<WidgetPage />} />
-        <Route path="/v/:locationId" element={<PublicProfilePage />} />
+        <Route path="/feedback/:locationId" element={ENABLE_EXTRAS ? <ReviewFunnel /> : <Navigate to="/" replace />} />
+        <Route path="/widget/:locationId" element={ENABLE_EXTRAS ? <WidgetPage /> : <Navigate to="/" replace />} />
+        <Route path="/v/:locationId" element={ENABLE_EXTRAS ? <PublicProfilePage /> : <Navigate to="/" replace />} />
         
         {/* Protected Route: Onboarding (No Layout) */}
         <Route path="/onboarding" element={user ? <OnboardingPage /> : <Navigate to="/login" replace />} />
@@ -140,18 +144,18 @@ function AppRoutes() {
             <ProtectedRoute user={user}>
                 <AppLayout>
                     <Routes>
-                        <Route path="dashboard" element={<DashboardPage />} />
+                        <Route path="dashboard" element={ENABLE_EXTRAS ? <DashboardPage /> : <Navigate to="/inbox" replace />} />
                         <Route path="inbox" element={<InboxPage />} />
-                        <Route path="social" element={<SocialPage />} /> 
-                        <Route path="analytics" element={<AnalyticsPage />} />
-                        <Route path="competitors" element={<CompetitorsPage />} />
-                        <Route path="automation" element={<AutomationPage />} />
-                        <Route path="collect" element={<CollectPage />} />
-                        <Route path="customers" element={<CustomersPage />} />
-                        <Route path="offers" element={<OffersPage />} />
-                        <Route path="reports" element={<ReportsPage />} />
-                        <Route path="help" element={<HelpPage />} />
-                        <Route path="playground" element={<PlaygroundPage />} />
+                        <Route path="social" element={ENABLE_EXTRAS ? <SocialPage /> : <Navigate to="/inbox" replace />} /> 
+                        <Route path="analytics" element={ENABLE_EXTRAS ? <AnalyticsPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="competitors" element={ENABLE_EXTRAS ? <CompetitorsPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="automation" element={ENABLE_EXTRAS ? <AutomationPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="collect" element={ENABLE_EXTRAS ? <CollectPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="customers" element={ENABLE_EXTRAS ? <CustomersPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="offers" element={ENABLE_EXTRAS ? <OffersPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="reports" element={ENABLE_EXTRAS ? <ReportsPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="help" element={ENABLE_EXTRAS ? <HelpPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="playground" element={ENABLE_EXTRAS ? <PlaygroundPage /> : <Navigate to="/inbox" replace />} />
                         
                         {/* Sensitive Routes - Admin Only */}
                         <Route 
@@ -160,17 +164,17 @@ function AppRoutes() {
                         />
                         <Route 
                             path="billing" 
-                            element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><BillingPage /></ProtectedRoute>} 
+                            element={ENABLE_EXTRAS ? <ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><BillingPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
                         />
                         <Route 
                             path="team" 
-                            element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute>} 
+                            element={ENABLE_EXTRAS ? <ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
                         />
                         
                         {/* Super Admin Route */}
                         <Route 
                             path="admin" 
-                            element={<ProtectedRoute user={user} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute>} 
+                            element={ENABLE_EXTRAS ? <ProtectedRoute user={user} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
                         />
                         
                         {/* Fallback for protected routes */}

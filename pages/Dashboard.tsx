@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
 import { useTranslation } from '../lib/i18n';
+import { ENABLE_EXTRAS } from '../lib/flags';
 
 // --- CONFETTI COMPONENT ---
 const Confetti = () => (
@@ -277,6 +278,10 @@ export const DashboardPage = () => {
   };
 
   const handleSeedData = async () => {
+      if (!ENABLE_EXTRAS) {
+          toast.info("Cette fonctionnalité est désactivée en production.");
+          return;
+      }
       setSeeding(true);
       try {
           await api.seedCloudDatabase();
@@ -331,15 +336,19 @@ export const DashboardPage = () => {
                       <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 border-none px-10 py-7 text-lg shadow-xl hover:scale-105 transition-transform font-bold" onClick={() => navigate('/settings?tab=integrations')}>
                           <UploadCloud className="mr-3 h-6 w-6" /> Connecter Google Business
                       </Button>
-                      <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 py-7 text-lg backdrop-blur-sm" onClick={handleSeedData} isLoading={seeding}>
-                          Mode Démo
-                      </Button>
+                      {ENABLE_EXTRAS && (
+                        <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 py-7 text-lg backdrop-blur-sm" onClick={handleSeedData} isLoading={seeding}>
+                            Mode Démo
+                        </Button>
+                      )}
                   </div>
-                  <div className="mt-8">
-                      <button onClick={handleSkip} className="text-sm text-indigo-200 hover:text-white underline">
-                          Accéder au dashboard sans connexion (Mode manuel)
-                      </button>
-                  </div>
+                  {ENABLE_EXTRAS && (
+                    <div className="mt-8">
+                        <button onClick={handleSkip} className="text-sm text-indigo-200 hover:text-white underline">
+                            Accéder au dashboard sans connexion (Mode manuel)
+                        </button>
+                    </div>
+                  )}
               </CardContent>
           </Card>
       );

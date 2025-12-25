@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { Button, Input, Select, useToast, Card } from '../components/ui';
 import { Building2, Globe, Sparkles, Check, ArrowRight, Zap, RefreshCw, LogOut } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
+import { ENABLE_DEMO_MODE } from '../lib/flags';
 
 const GoogleIcon = () => (
     <svg viewBox="0 0 48 48" className="w-5 h-5 mr-2">
@@ -68,9 +69,11 @@ export const OnboardingPage = () => {
         setLoading(true);
         try {
             await api.auth.connectGoogleBusiness();
-            // In a real flow, this redirects. For mock, we simulate success.
-            setGoogleConnected(true);
-            toast.success("Compte Google connecté !");
+            if (ENABLE_DEMO_MODE) {
+                // In demo mode, we simulate success without OAuth redirect.
+                setGoogleConnected(true);
+                toast.success("Compte Google connecté !");
+            }
         } catch (e) {
             toast.error("Erreur de connexion Google");
         } finally {

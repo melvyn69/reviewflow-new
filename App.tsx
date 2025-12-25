@@ -47,6 +47,8 @@ interface ProtectedRouteProps {
   allowedRoles?: string[];
 }
 
+const DEFAULT_PRIVATE_ROUTE = ENABLE_EXTRAS ? '/dashboard' : '/inbox';
+
 const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) => {
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -54,7 +56,7 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // If user is restricted, redirect to dashboard
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={DEFAULT_PRIVATE_ROUTE} replace />;
   }
 
   return <>{children}</>;
@@ -64,7 +66,7 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
 function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const defaultPrivateRoute = ENABLE_EXTRAS ? '/dashboard' : '/inbox';
+  const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
 
   useEffect(() => {
     checkUser();
