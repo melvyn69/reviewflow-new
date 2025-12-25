@@ -215,7 +215,7 @@ const SetupProgress = ({ status }: { status: SetupStatus | null }) => {
     );
 }
 
-export const DashboardPage = () => {
+export const DashboardPage = ({ user: initialUser }: { user?: User | null }) => {
   const [stats, setStats] = useState<AnalyticsSummary | null>(null);
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [urgentReviews, setUrgentReviews] = useState<Review[]>([]);
@@ -224,7 +224,7 @@ export const DashboardPage = () => {
   const [realLocationId, setRealLocationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(initialUser || null);
   const [skipOnboarding, setSkipOnboarding] = useState(false);
   
   const toast = useToast();
@@ -233,10 +233,18 @@ export const DashboardPage = () => {
 
   useEffect(() => {
     loadData();
-    api.auth.getUser().then(setUser);
+    if (!initialUser) {
+      api.auth.getUser().then(setUser);
+    }
     const skipped = localStorage.getItem('skip_onboarding');
     if (skipped) setSkipOnboarding(true);
   }, [period]);
+
+  useEffect(() => {
+    if (initialUser) {
+      setUser(initialUser);
+    }
+  }, [initialUser]);
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);

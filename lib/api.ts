@@ -128,6 +128,12 @@ export const api = {
     }
   },
   organization: {
+      ensureDefaultForCurrentUser: async (): Promise<Organization | null> => {
+          if (!supabase) throw new Error("Supabase not initialized");
+          const { data, error } = await supabase.rpc('create_default_org_for_current_user');
+          if (error) throw error;
+          return data as Organization;
+      },
       get: async (): Promise<Organization | null> => {
           if (isDemoModeEnabled()) {
               if (DEMO_ORG.locations && DEMO_ORG.locations.length > 0 && !DEMO_ORG.locations[0].public_config) {

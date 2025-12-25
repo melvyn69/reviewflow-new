@@ -25,10 +25,12 @@ Pour que l'application fonctionne réellement (stockage des avis, authentificati
 
 ### 1. Configuration Supabase (Base de Données)
 
+Note : la source de vérité du schéma est `supabase/migrations/*`. Les fichiers `schema*.sql` sont des archives/références et ne doivent pas être utilisés pour initier la base.
+
 1. Créez un projet sur [Supabase](https://supabase.com).
 2. Allez dans l'onglet **SQL Editor**.
-3. Ouvrez le fichier `supabase/schema.sql` de ce projet, copiez tout le contenu.
-4. Collez-le dans l'éditeur SQL de Supabase et cliquez sur **Run**.
+3. Appliquez les migrations `supabase/migrations/*` via Supabase CLI ou SQL Editor.
+4. Vérifiez que la dernière migration a bien été exécutée.
    *Cela va créer les tables, la sécurité RLS et les triggers.*
 
 ### 2. Variables d'Environnement

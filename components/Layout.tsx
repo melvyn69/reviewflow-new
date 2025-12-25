@@ -56,22 +56,23 @@ const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = fa
   );
 };
 
-const BottomNav = () => {
+const BottomNav = ({ user }: { user?: User | null }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { t } = useTranslation();
     
     const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+    const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
     const navItems = ENABLE_EXTRAS
         ? [
             { path: '/dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
             { path: '/inbox', label: t('sidebar.inbox'), icon: Inbox },
             { path: '/collect', label: t('sidebar.collect'), icon: QrCode },
-            { path: '/settings', label: t('sidebar.settings'), icon: Settings }
+            ...(isAdmin ? [{ path: '/settings', label: t('sidebar.settings'), icon: Settings }] : [])
           ]
         : [
             { path: '/inbox', label: t('sidebar.inbox'), icon: Inbox },
-            { path: '/settings', label: t('sidebar.settings'), icon: Settings }
+            ...(isAdmin ? [{ path: '/settings', label: t('sidebar.settings'), icon: Settings }] : [])
           ];
 
     return (
@@ -101,6 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstall, setShowInstall] = useState(false);
   const { t } = useTranslation();
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -186,7 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
 
           <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.org')}</div>
           {ENABLE_EXTRAS && <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />}
-          <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={onClose} />
+          {isAdmin && <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={onClose} />}
           {ENABLE_EXTRAS && <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />}
           
           {ENABLE_EXTRAS && user?.role === 'super_admin' && (
@@ -242,8 +244,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
   );
 };
 
-const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
-  const [user, setUser] = React.useState<any>(null);
+const Topbar = ({ onMenuClick, user }: { onMenuClick: () => void; user?: User | null }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -256,7 +257,6 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.auth.getUser().then(setUser);
     if (ENABLE_EXTRAS) {
       loadNotifications();
     }
@@ -306,6 +306,7 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30">
@@ -435,15 +436,17 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
                     </div>
                     
                     <div className="p-1">
-                        <button 
-                            onClick={() => {
-                                setShowUserMenu(false);
-                                navigate('/settings');
-                            }}
-                            className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 mb-1 transition-colors"
-                        >
-                            <Settings className="h-4 w-4 text-slate-400" /> Paramètres
-                        </button>
+                        {isAdmin && (
+                            <button 
+                                onClick={() => {
+                                    setShowUserMenu(false);
+                                    navigate('/settings');
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 mb-1 transition-colors"
+                            >
+                                <Settings className="h-4 w-4 text-slate-400" /> Paramètres
+                            </button>
+                        )}
                         <button 
                             onClick={() => {
                                 api.auth.logout().then(() => window.location.reload());
@@ -462,19 +465,8 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
   );
 };
 
-export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
+export const AppLayout = ({ children, user, org }: { children?: React.ReactNode; user?: User | null; org?: Organization | null }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState<User | undefined>(undefined);
-  const [org, setOrg] = useState<Organization | null>(null);
-
-  useEffect(() => {
-      api.auth.getUser().then(u => {
-          setUser(u || undefined);
-          if (u) {
-              api.organization.get().then(setOrg);
-          }
-      });
-  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -486,11 +478,11 @@ export const AppLayout = ({ children }: { children?: React.ReactNode }) => {
       />
       
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        <Topbar onMenuClick={() => setSidebarOpen(true)} user={user} />
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           {children}
         </main>
-        <BottomNav />
+        <BottomNav user={user} />
       </div>
     </div>
   );

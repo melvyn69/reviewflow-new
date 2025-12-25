@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, ToastProvider } from './components/ui';
+import React, { useState, useEffect, useRef } from 'react';
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, ToastProvider, useToast } from './components/ui';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
 import { AnalyticsPage } from './pages/Analytics';
@@ -27,10 +27,11 @@ import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
 import { PublicProfilePage } from './pages/PublicProfile';
 import { api } from './lib/api';
-import { User } from './types';
+import { Organization, User } from './types';
 import { I18nProvider } from './lib/i18n';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ENABLE_EXTRAS } from './lib/flags';
+import { supabase } from './lib/supabase';
 
 // ScrollToTop component
 const ScrollToTop = () => {
@@ -65,23 +66,83 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
 // Wrapper to handle auth check on initial load
 function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
+  const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
+  const navigate = useNavigate();
+  const toast = useToast();
+  const orgInitAttempted = useRef(false);
+  const hasCheckedRef = useRef(false);
+  const isCheckingRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    checkUser();
+    if (!hasCheckedRef.current) {
+      hasCheckedRef.current = true;
+      checkUser();
+    }
+    const authListener =
+      supabase?.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          await checkUser();
+          if (
+            window.location.hash === '#/' ||
+            window.location.hash.includes('login') ||
+            window.location.hash.includes('register')
+          ) {
+            navigate(defaultPrivateRoute);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setOrg(null);
+          navigate('/');
+        }
+      }) || { data: { subscription: { unsubscribe: () => {} } } };
+
+    return () => {
+      authListener.data.subscription.unsubscribe();
+    };
   }, []);
 
   const checkUser = async () => {
+    if (isCheckingRef.current) return;
+    isCheckingRef.current = true;
     try {
       const userData = await api.auth.getUser();
-      setUser(userData);
+      if (userData?.id !== lastUserIdRef.current) {
+        orgInitAttempted.current = false;
+        lastUserIdRef.current = userData?.id || null;
+      }
+      if (userData && !userData.organization_id && !orgInitAttempted.current) {
+        orgInitAttempted.current = true;
+        try {
+          await api.organization.ensureDefaultForCurrentUser();
+          const refreshedUser = await api.auth.getUser();
+          setUser(refreshedUser);
+        } catch (e: any) {
+          console.error("Org init failed", e);
+          toast.error("Impossible de créer votre organisation. Vérifiez la configuration Supabase.");
+          setUser(userData);
+        }
+      } else {
+        setUser(userData);
+      }
     } catch (e) {
       setUser(null);
+      setOrg(null);
     } finally {
       setLoading(false);
+      isCheckingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!user) {
+      setOrg(null);
+      return;
+    }
+    api.organization.get().then(setOrg).catch(() => setOrg(null));
+  }, [user?.id]);
 
   if (loading) {
     return (
@@ -116,9 +177,9 @@ function AppRoutes() {
         {/* Protected Routes (App Layout) */}
         <Route path="/*" element={
             <ProtectedRoute user={user}>
-                <AppLayout>
+                <AppLayout user={user} org={org}>
                     <Routes>
-                        <Route path="dashboard" element={ENABLE_EXTRAS ? <DashboardPage /> : <Navigate to="/inbox" replace />} />
+                        <Route path="dashboard" element={ENABLE_EXTRAS ? <DashboardPage user={user} /> : <Navigate to="/inbox" replace />} />
                         <Route path="inbox" element={<InboxPage />} />
                         <Route path="social" element={ENABLE_EXTRAS ? <SocialPage /> : <Navigate to="/inbox" replace />} /> 
                         <Route path="analytics" element={ENABLE_EXTRAS ? <AnalyticsPage /> : <Navigate to="/inbox" replace />} />
