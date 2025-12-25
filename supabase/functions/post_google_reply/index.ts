@@ -60,7 +60,12 @@ Deno.serve(async (req: Request) => {
     const org = location?.organization as any;
 
     if (!location?.external_reference) throw new Error("Location not linked to Google");
-    if (!org?.google_refresh_token) throw new Error("Organization not connected to Google");
+    if (!org?.google_refresh_token) {
+        return new Response(
+          JSON.stringify({ error: "Organization not connected to Google" }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
 
     // 3. Refresh Google Access Token
     console.log("Refreshing Google Token...");

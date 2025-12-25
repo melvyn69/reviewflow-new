@@ -43,7 +43,10 @@ Deno.serve(async (req: Request) => {
         .single();
 
     if (orgError || !org?.google_refresh_token) {
-        throw new Error("No Google Refresh Token found for this organization. Please reconnect Google Account.");
+        return new Response(
+          JSON.stringify({ error: "No Google Refresh Token found for this organization. Please reconnect Google Account." }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
     }
 
     // 3. Echanger le Refresh Token contre un Access Token

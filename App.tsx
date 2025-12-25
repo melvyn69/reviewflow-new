@@ -75,6 +75,7 @@ function AppRoutes() {
   const hasCheckedRef = useRef(false);
   const isCheckingRef = useRef(false);
   const lastUserIdRef = useRef<string | null>(null);
+  const tokensSavedRef = useRef(false);
 
   useEffect(() => {
     if (!hasCheckedRef.current) {
@@ -84,6 +85,20 @@ function AppRoutes() {
     const authListener =
       supabase?.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
+          if ((session.provider_token || session.provider_refresh_token) && !tokensSavedRef.current) {
+            tokensSavedRef.current = true;
+            try {
+              const { error } = await supabase.rpc('save_google_tokens', {
+                access_token: session.provider_token ?? null,
+                refresh_token: session.provider_refresh_token ?? null
+              });
+              if (error) {
+                console.error("Failed to save Google tokens", error);
+              }
+            } catch (e) {
+              console.error("Failed to save Google tokens", e);
+            }
+          }
           await checkUser();
           if (
             window.location.hash === '#/' ||
@@ -111,6 +126,7 @@ function AppRoutes() {
       const userData = await api.auth.getUser();
       if (userData?.id !== lastUserIdRef.current) {
         orgInitAttempted.current = false;
+        tokensSavedRef.current = false;
         lastUserIdRef.current = userData?.id || null;
       }
       if (userData && !userData.organization_id && !orgInitAttempted.current) {

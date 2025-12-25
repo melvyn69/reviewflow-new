@@ -51,6 +51,14 @@ VITE_STRIPE_PUBLIC_KEY=votre_cle_publique_stripe
 3. Configurez les ID OAuth et ajoutez l'URL de votre site en "Redirect URI".
 4. Copiez les Client ID/Secret dans Supabase.
 
+### 3.bis. Promotion d'un utilisateur en admin (accès Paramètres)
+
+```sql
+update public.users
+set role = 'admin'
+where email = 'user@example.com';
+```
+
 ### 4. Déploiement des Edge Functions
 
 Pour que le backend fonctionne :

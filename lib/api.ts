@@ -210,37 +210,26 @@ export const api = {
           const { error } = await supabase!.from('organizations').update(data).eq('id', org.id);
           if (error) throw error;
       },
-      saveGoogleTokens: async () => {
+      saveGoogleTokens: async (tokens?: { accessToken?: string | null; refreshToken?: string | null }) => {
           if (isDemoModeEnabled()) return true;
           if (!supabase) return false;
           
+          const sessionTokens = tokens || {};
           const { data: { session } } = await supabase.auth.getSession();
+          const accessToken = sessionTokens.accessToken ?? session?.provider_token ?? null;
+          const refreshToken = sessionTokens.refreshToken ?? session?.provider_refresh_token ?? null;
           
-          if (session?.provider_token) {
-              const user = session.user;
-              const { data: profile } = await supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle();
-              
-              if (profile?.organization_id) {
-                  const { data: org } = await supabase.from('organizations').select('integrations').eq('id', profile.organization_id).single();
-                  const currentIntegrations = org?.integrations || {};
+          if (accessToken) {
+              const { error } = await supabase.rpc('save_google_tokens', {
+                  access_token: accessToken,
+                  refresh_token: refreshToken
+              });
 
-                  const updates: any = {
-                      integrations: { ...currentIntegrations, google: true }
-                  };
-
-                  if (session.provider_refresh_token) {
-                      updates.google_refresh_token = session.provider_refresh_token;
-                  }
-
-                  const { error } = await supabase.from('organizations').update(updates).eq('id', profile.organization_id);
-                  
-                  if (!error) {
-                      console.log("✅ Google Tokens & Status Saved to DB");
-                      return true;
-                  } else {
-                      console.error("❌ Failed to save Google Tokens", error);
-                  }
+              if (!error) {
+                  console.log("✅ Google Tokens & Status Saved to DB");
+                  return true;
               }
+              console.error("❌ Failed to save Google Tokens", error);
           }
           return false;
       },
@@ -944,6 +933,10 @@ export const api = {
       syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
           if (isDemoModeEnabled()) return 5;
           const org = await api.organization.get();
+          if (!org?.google_refresh_token) {
+              console.warn("Google refresh token missing; skipping sync.");
+              return 0;
+          }
           const res = await invoke('fetch_google_reviews', { 
               locationId, 
               googleLocationName,
