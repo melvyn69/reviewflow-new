@@ -76,11 +76,20 @@ function AppRoutes() {
   const isCheckingRef = useRef(false);
   const lastUserIdRef = useRef<string | null>(null);
   const tokensSavedRef = useRef(false);
+  const hasLoggedBuildRef = useRef(false);
 
   useEffect(() => {
     if (!hasCheckedRef.current) {
       hasCheckedRef.current = true;
       checkUser();
+    }
+    if (!hasLoggedBuildRef.current) {
+      hasLoggedBuildRef.current = true;
+      const commit =
+        (import.meta as any).env?.VITE_COMMIT_SHA ||
+        (import.meta as any).env?.VERCEL_GIT_COMMIT_SHA ||
+        'unknown';
+      console.info('[build]', window.location.origin, 'commit:', commit);
     }
     const authListener =
       supabase?.auth.onAuthStateChange(async (event, session) => {
@@ -89,13 +98,19 @@ function AppRoutes() {
           console.log('[oauth] provider_refresh_token:', session.provider_refresh_token);
           if ((session.provider_token || session.provider_refresh_token) && !tokensSavedRef.current) {
             tokensSavedRef.current = true;
+            (window as any).__rf_metrics = (window as any).__rf_metrics || {};
+            (window as any).__rf_metrics.saveGoogleTokensCalls =
+              ((window as any).__rf_metrics.saveGoogleTokensCalls || 0) + 1;
             try {
+              console.info('[rpc] save_google_tokens start');
               const { error } = await supabase.rpc('save_google_tokens', {
                 access_token: session.provider_token ?? null,
                 refresh_token: session.provider_refresh_token ?? null
               });
               if (error) {
                 console.error("Failed to save Google tokens", error);
+              } else {
+                console.info('[rpc] save_google_tokens ok');
               }
             } catch (e) {
               console.error("Failed to save Google tokens", e);

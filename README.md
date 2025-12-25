@@ -51,6 +51,22 @@ VITE_STRIPE_PUBLIC_KEY=votre_cle_publique_stripe
 3. Configurez les ID OAuth et ajoutez l'URL de votre site en "Redirect URI".
 4. Copiez les Client ID/Secret dans Supabase.
 
+### 3.bis. Supabase Auth URL Configuration (Preview/Prod)
+
+Dans Supabase > Authentication > URL Configuration :
+- Site URL : URL de prod (ex: https://app.example.com)
+- Additional Redirect URLs : ajouter les URLs Vercel Preview, ex:
+  - https://<branch>-<project>.vercel.app
+  - https://<branch>---<project>.vercel.app
+
+### 3.ter. Variables Vercel (Preview vs Production)
+
+Vérifier que les variables suivantes sont bien définies pour Preview **et** Production :
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_API_KEY`
+- `VITE_STRIPE_PUBLIC_KEY`
+
 ### 3.bis. Promotion d'un utilisateur en admin (accès Paramètres)
 
 ```sql

@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation, ProLock } from '../components/ui';
 import { ENABLE_EXTRAS, getRuntimeModeLabel } from '../lib/flags';
+import { supabase } from '../lib/supabase';
 import { 
     Building2, 
     Plus, 
@@ -675,6 +676,32 @@ export const SettingsPage = () => {
       toast.success("Préférences de notification enregistrées");
   };
 
+  const handleSaveGoogleTokens = async () => {
+      try {
+          const { data: { session } } = await supabase!.auth.getSession();
+          const accessToken = session?.provider_token ?? null;
+          const refreshToken = session?.provider_refresh_token ?? null;
+          if (!accessToken && !refreshToken) {
+              toast.error("Aucun token Google disponible dans la session.");
+              return;
+          }
+          const { error } = await supabase!.rpc('save_google_tokens', {
+              access_token: accessToken,
+              refresh_token: refreshToken
+          });
+          if (error) {
+              console.error("save_google_tokens failed", error);
+              toast.error("Erreur lors de la sauvegarde des tokens Google.");
+              return;
+          }
+          toast.success("Tokens Google sauvegardés.");
+          loadData();
+      } catch (e) {
+          console.error("save_google_tokens exception", e);
+          toast.error("Erreur lors de la sauvegarde des tokens Google.");
+      }
+  };
+
   const handleTestEmail = async () => {
       if (!ENABLE_EXTRAS) {
           toast.info("Cette fonctionnalité est désactivée en production.");
@@ -1108,6 +1135,12 @@ export const SettingsPage = () => {
                             connected={false}
                             comingSoon
                         />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={handleSaveGoogleTokens}>
+                            Sauvegarder tokens Google
+                        </Button>
+                        <span className="text-xs text-slate-500">Debug: force la sauvegarde via RPC.</span>
                     </div>
                 </div>
             )}
