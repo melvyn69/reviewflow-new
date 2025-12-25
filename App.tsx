@@ -84,7 +84,9 @@ function AppRoutes() {
     }
     const authListener =
       supabase?.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+          console.log('[oauth] provider_token:', session.provider_token);
+          console.log('[oauth] provider_refresh_token:', session.provider_refresh_token);
           if ((session.provider_token || session.provider_refresh_token) && !tokensSavedRef.current) {
             tokensSavedRef.current = true;
             try {
