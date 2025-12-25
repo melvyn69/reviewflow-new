@@ -7,6 +7,7 @@ import { FileText, Plus, Download, Mail, Trash2, X, PieChart, TrendingUp, Award,
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toPng } from 'html-to-image';
+import { ENABLE_EXTRAS } from '../lib/flags';
 
 // --- VISUAL TEMPLATES FOR PDF GENERATION ---
 const ReportCoverTemplate = React.forwardRef<HTMLDivElement, { title: string, date: string, orgName: string }>(({ title, date, orgName }, ref) => (
@@ -130,6 +131,10 @@ export const ReportsPage = () => {
   const [editFrequency, setEditFrequency] = useState<'weekly'|'monthly'|'daily'>('weekly');
 
   useEffect(() => {
+    if (!ENABLE_EXTRAS) {
+        setReports([]);
+        return;
+    }
     // Initial fetch
     const init = async () => {
         const organization = await api.organization.get();

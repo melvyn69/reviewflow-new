@@ -2,21 +2,12 @@
 import { supabase } from './supabase';
 import { Review, User, Organization, SetupStatus, Competitor, WorkflowRule, AnalyticsSummary, Customer, Offer, StaffMember, MarketReport, SocialPost, SocialAccount, SocialPlatform, PublicProfileConfig, Location, ReviewTimelineEvent, AppNotification } from '../types';
 import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from './demo';
+import { ENABLE_DEMO_MODE, ENABLE_EXTRAS, isDemoModeEnabled, setDemoModeEnabled } from './flags';
 import { GoogleGenAI } from "@google/genai";
-
-// --- DEMO MODE UTILS ---
-const isDemoMode = () => {
-    return localStorage.getItem('is_demo_mode') === 'true';
-};
-
-const setDemoMode = (active: boolean) => {
-    if (active) localStorage.setItem('is_demo_mode', 'true');
-    else localStorage.removeItem('is_demo_mode');
-};
 
 // Helper for Edge Functions
 const invoke = async (functionName: string, body: any) => {
-    if (isDemoMode()) {
+    if (isDemoModeEnabled()) {
         console.log(`[DEMO] Skipping Edge Function ${functionName}`, body);
         return {}; // Mock return for edge functions in demo
     }
@@ -34,7 +25,7 @@ const getAIClient = () => {
 export const api = {
   auth: {
     getUser: async (): Promise<User | null> => {
-      if (isDemoMode()) return DEMO_USER;
+      if (isDemoModeEnabled()) return DEMO_USER;
       
       if (!supabase) return null;
       const { data: { user } } = await supabase.auth.getUser();
@@ -54,17 +45,20 @@ export const api = {
     },
     login: async (email: string, password: string) => {
       if (email === 'demo@reviewflow.com') {
-          setDemoMode(true);
+          if (!ENABLE_DEMO_MODE) {
+              throw new Error("Demo mode disabled in production.");
+          }
+          setDemoModeEnabled(true);
           return;
       }
-      setDemoMode(false);
+      setDemoModeEnabled(false);
       
       if (!supabase) throw new Error("No database connection");
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
     },
     register: async (name: string, email: string, password: string) => {
-      setDemoMode(false);
+      setDemoModeEnabled(false);
       if (!supabase) throw new Error("No database connection");
       const { error } = await supabase.auth.signUp({ 
           email, 
@@ -74,11 +68,11 @@ export const api = {
       if (error) throw error;
     },
     logout: async () => {
-        setDemoMode(false);
+        setDemoModeEnabled(false);
         if (supabase) await supabase.auth.signOut();
     },
     loginWithGoogle: async () => {
-        if (isDemoMode()) return;
+        if (isDemoModeEnabled()) return;
         if (!supabase) return;
         await supabase.auth.signInWithOAuth({ 
             provider: 'google',
@@ -92,7 +86,7 @@ export const api = {
         });
     },
     connectGoogleBusiness: async () => {
-        if (isDemoMode()) return true;
+        if (isDemoModeEnabled()) return true;
         if (!supabase) return;
         const { data } = await supabase.auth.signInWithOAuth({
             provider: 'google',
@@ -108,7 +102,7 @@ export const api = {
         return true;
     },
     updateProfile: async (data: Partial<User> & { password?: string }) => {
-        if (isDemoMode()) return data;
+        if (isDemoModeEnabled()) return data;
         const { data: { user } } = await supabase!.auth.getUser();
         if (!user) throw new Error("Not logged in");
         
@@ -123,19 +117,19 @@ export const api = {
         return data;
     },
     resetPassword: async (email: string) => {
-        if (isDemoMode()) return;
+        if (isDemoModeEnabled()) return;
         if (supabase) await supabase.auth.resetPasswordForEmail(email, {
             redirectTo: window.location.origin + '/#/login?mode=reset'
         });
     },
     deleteAccount: async () => {
-        if (isDemoMode()) return;
+        if (isDemoModeEnabled()) return;
         await invoke('delete_account', {});
     }
   },
   organization: {
       get: async (): Promise<Organization | null> => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               if (DEMO_ORG.locations && DEMO_ORG.locations.length > 0 && !DEMO_ORG.locations[0].public_config) {
                   DEMO_ORG.locations[0].public_config = {
                       template: 'modern',
@@ -170,7 +164,7 @@ export const api = {
           return data as any;
       },
       create: async (name: string, industry: string) => {
-          if (isDemoMode()) return;
+          if (isDemoModeEnabled()) return;
           if (!supabase) return;
           
           const user = await api.auth.getUser();
@@ -204,14 +198,14 @@ export const api = {
           return org;
       },
       update: async (data: Partial<Organization>) => {
-          if (isDemoMode()) return;
+          if (isDemoModeEnabled()) return;
           const org = await api.organization.get();
           if (!org) return;
           const { error } = await supabase!.from('organizations').update(data).eq('id', org.id);
           if (error) throw error;
       },
       saveGoogleTokens: async () => {
-          if (isDemoMode()) return true;
+          if (isDemoModeEnabled()) return true;
           if (!supabase) return false;
           
           const { data: { session } } = await supabase.auth.getSession();
@@ -245,26 +239,32 @@ export const api = {
           return false;
       },
       generateApiKey: async (name: string) => {
-          if (isDemoMode()) return { key: 'sk_demo_123' };
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return { key: 'sk_demo_123' };
           return await invoke('manage_org_settings', { action: 'generate_api_key', data: { name } });
       },
       revokeApiKey: async (id: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return;
           return await invoke('manage_org_settings', { action: 'revoke_api_key', data: { id } });
       },
       saveWebhook: async (url: string, events: string[]) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return;
           return await invoke('manage_org_settings', { action: 'save_webhook', data: { url, events } });
       },
       deleteWebhook: async (id: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return;
           return await invoke('manage_org_settings', { action: 'delete_webhook', data: { id } });
       },
       testWebhook: async (id: string) => {
+          if (!ENABLE_EXTRAS) return false;
           return true;
       },
       simulatePlanChange: async (plan: 'pro' | 'starter') => {
-          if (isDemoMode()) {
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) {
               DEMO_ORG.subscription_plan = plan;
               return;
           }
@@ -272,7 +272,8 @@ export const api = {
           if (org) await supabase!.from('organizations').update({ subscription_plan: plan }).eq('id', org.id);
       },
       addStaffMember: async (name: string, role: string) => {
-          if (isDemoMode()) {
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) {
               DEMO_ORG.staff_members?.push({ id: Date.now().toString(), name, role, reviews_count: 0, average_rating: 0, organization_id: 'demo-org-id' });
               return;
           }
@@ -286,19 +287,21 @@ export const api = {
           });
       },
       removeStaffMember: async (id: string) => {
-          if (isDemoMode()) {
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) {
               DEMO_ORG.staff_members = DEMO_ORG.staff_members?.filter(s => s.id !== id);
               return;
           }
           await supabase!.from('staff_members').delete().eq('id', id);
       },
       sendCongratulationEmail: async (id: string) => {
+          if (!ENABLE_EXTRAS) return;
           console.log('Congratulating', id);
       }
   },
   reviews: {
       list: async (filters: any) => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               let res = [...DEMO_REVIEWS];
               if (filters.rating && filters.rating !== 'Tout') {
                   const r = parseInt(filters.rating.toString().replace(/\D/g, ''));
@@ -363,7 +366,7 @@ export const api = {
           return data.map((r: any) => ({ ...r, body: r.text }));
       },
       reply: async (reviewId: string, text: string) => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               const r = DEMO_REVIEWS.find(r => r.id === reviewId);
               if (r) {
                   r.status = 'sent';
@@ -405,14 +408,14 @@ export const api = {
           }
       },
       saveDraft: async (reviewId: string, text: string) => {
-          if (isDemoMode()) return;
+          if (isDemoModeEnabled()) return;
           await supabase!.from('reviews').update({
               status: 'draft',
               ai_reply: { text, needs_manual_validation: true, created_at: new Date().toISOString() }
           }).eq('id', reviewId);
       },
       addNote: async (reviewId: string, text: string) => {
-          if (isDemoMode()) return { id: 'note-1', text, author_name: 'Moi', created_at: new Date().toISOString() };
+          if (isDemoModeEnabled()) return { id: 'note-1', text, author_name: 'Moi', created_at: new Date().toISOString() };
           const { data: review } = await supabase!.from('reviews').select('internal_notes').eq('id', reviewId).single();
           const currentNotes = review?.internal_notes || [];
           
@@ -428,7 +431,7 @@ export const api = {
           return newNote;
       },
       addTag: async (reviewId: string, tag: string) => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               const r = DEMO_REVIEWS.find(r => r.id === reviewId);
               if (r) r.tags = [...(r.tags || []), tag];
               return;
@@ -440,7 +443,7 @@ export const api = {
           }
       },
       removeTag: async (reviewId: string, tag: string) => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               const r = DEMO_REVIEWS.find(r => r.id === reviewId);
               if (r) r.tags = r.tags?.filter(t => t !== tag);
               return;
@@ -507,7 +510,7 @@ export const api = {
           return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       },
       subscribe: (callback: (payload: any) => void) => {
-          if (isDemoMode()) return { unsubscribe: () => {} };
+          if (isDemoModeEnabled()) return { unsubscribe: () => {} };
           if (!supabase) return { unsubscribe: () => {} };
           return supabase
             .channel('reviews-channel')
@@ -515,7 +518,8 @@ export const api = {
             .subscribe();
       },
       uploadCsv: async (file: File, locationId: string) => {
-          if (isDemoMode()) return 10;
+          if (!ENABLE_EXTRAS) return 0;
+          if (isDemoModeEnabled()) return 10;
           const text = await file.text();
           const lines = text.split('\n');
           let count = 0;
@@ -541,7 +545,8 @@ export const api = {
   },
   ai: {
       generateReply: async (review: Review, config: any) => {
-          if (isDemoMode()) {
+          if (!ENABLE_EXTRAS) return '';
+          if (isDemoModeEnabled()) {
               return "Bonjour " + review.author_name + ", merci pour votre avis 5 étoiles ! Nous sommes ravis que l'expérience vous ait plu.";
           }
           
@@ -573,7 +578,8 @@ export const api = {
           }
       },
       generateSocialPost: async (review: Review, platform: string) => {
-          if (isDemoMode()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. #Reviewflow #CustomerLove";
+          if (!ENABLE_EXTRAS) return '';
+          if (isDemoModeEnabled()) return "🌟 Avis 5 étoiles ! Merci " + review.author_name + " pour ce retour incroyable. #Reviewflow #CustomerLove";
           
           const ai = getAIClient();
           const prompt = `
@@ -606,7 +612,8 @@ export const api = {
           }
       },
       previewBrandVoice: async (config: any, review: any) => {
-          if (isDemoMode()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
+          if (!ENABLE_EXTRAS) return '';
+          if (isDemoModeEnabled()) return "Ceci est un exemple de réponse généré avec le ton " + config.tone;
           
           const ai = getAIClient();
           const prompt = `
@@ -635,7 +642,8 @@ export const api = {
           }
       },
       runCustomTask: async (payload: any) => {
-          if (isDemoMode()) return { result: "Demo Mode Custom Task Executed" };
+          if (!ENABLE_EXTRAS) return { result: "" };
+          if (isDemoModeEnabled()) return { result: "Demo Mode Custom Task Executed" };
           
           const ai = getAIClient();
           try {
@@ -651,7 +659,22 @@ export const api = {
   },
   analytics: {
       getOverview: async (period: string = '30j'): Promise<AnalyticsSummary> => {
-          if (isDemoMode()) return DEMO_STATS;
+          if (!ENABLE_EXTRAS) {
+              return {
+                  period,
+                  total_reviews: 0,
+                  average_rating: 0,
+                  response_rate: 0,
+                  nps_score: 0,
+                  global_rating: 0,
+                  sentiment_distribution: { positive: 0, neutral: 0, negative: 0 },
+                  volume_by_date: [],
+                  top_themes_positive: [],
+                  top_themes_negative: [],
+                  top_keywords: []
+              };
+          }
+          if (isDemoModeEnabled()) return DEMO_STATS;
 
           const org = await api.organization.get();
           if (!org || org.locations.length === 0) {
@@ -727,13 +750,15 @@ export const api = {
   },
   competitors: {
       list: async () => {
-          if (isDemoMode()) return DEMO_COMPETITORS;
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return DEMO_COMPETITORS;
           if (!supabase) return [];
           const { data } = await supabase.from('competitors').select('*');
           return data || [];
       },
       create: async (data: Partial<Competitor>) => {
-          if (isDemoMode()) {
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) {
               DEMO_COMPETITORS.push({ id: 'new-comp', ...data } as Competitor);
               return;
           }
@@ -742,11 +767,13 @@ export const api = {
           await supabase.from('competitors').insert({ ...data, organization_id: org?.id });
       },
       delete: async (id: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           await supabase!.from('competitors').delete().eq('id', id);
       },
       autoDiscover: async (radius: number, sector: string, lat: number, lng: number) => {
-          if (isDemoMode()) return DEMO_COMPETITORS;
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return DEMO_COMPETITORS;
           const { results } = await invoke('fetch_places', {
               latitude: lat,
               longitude: lng,
@@ -756,7 +783,8 @@ export const api = {
           return results;
       },
       getDeepAnalysis: async (sector?: string, location?: string, competitors?: Competitor[]) => {
-          if (isDemoMode()) {
+          if (!ENABLE_EXTRAS) return {};
+          if (isDemoModeEnabled()) {
               return { 
                   trends: ["Montée des prix", "Demande bio"], 
                   swot: { strengths: ["Service"], weaknesses: ["Prix"], opportunities: ["Livraison"], threats: ["Nouveaux entrants"] },
@@ -776,11 +804,13 @@ export const api = {
           }
       },
       saveReport: async (report: Omit<MarketReport, 'id'>) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           if (supabase) await supabase.from('market_reports').insert(report);
       },
       getReports: async (): Promise<MarketReport[]> => {
-          if (isDemoMode()) return [];
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return [];
           if (supabase) {
               const { data } = await supabase.from('market_reports').select('*').order('created_at', { ascending: false });
               return data || [];
@@ -790,11 +820,13 @@ export const api = {
   },
   automation: {
       getWorkflows: async () => {
+          if (!ENABLE_EXTRAS) return [];
           const org = await api.organization.get();
           return org?.workflows || [];
       },
       saveWorkflow: async (wf: WorkflowRule) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           const org = await api.organization.get();
           if (!org) return;
           let workflows = org.workflows || [];
@@ -804,25 +836,29 @@ export const api = {
           await supabase!.from('organizations').update({ workflows }).eq('id', org.id);
       },
       deleteWorkflow: async (id: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           const org = await api.organization.get();
           if (!org) return;
           const workflows = org.workflows?.filter(w => w.id !== id);
           await supabase!.from('organizations').update({ workflows }).eq('id', org.id);
       },
       run: async () => {
-          if (isDemoMode()) return { processed: 5, actions: 5 };
+          if (!ENABLE_EXTRAS) return { processed: 0, actions: 0 };
+          if (isDemoModeEnabled()) return { processed: 5, actions: 5 };
           const { processed, actions } = await invoke('process_reviews', {});
           return { processed, actions };
       }
   },
   notifications: {
       list: async (): Promise<AppNotification[]> => {
+          if (!ENABLE_EXTRAS) return [];
           return [];
       },
       markAllRead: async () => {},
       sendTestEmail: async () => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           const user = await api.auth.getUser();
           await invoke('send_campaign_emails', {
               emails: [user?.email],
@@ -833,30 +869,35 @@ export const api = {
   },
   team: {
       list: async () => {
-          if (isDemoMode()) return [DEMO_USER];
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return [DEMO_USER];
           const org = await api.organization.get();
           if (!org) return [];
           const { data } = await supabase!.from('users').select('*').eq('organization_id', org.id);
           return data || [];
       },
       invite: async (email: string, role: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           await invoke('invite_user', { email, role });
       }
   },
   company: {
       search: async (query: string) => {
+          if (!ENABLE_EXTRAS) return [];
           return [{ legal_name: query + ' (Démo)', siret: '000000000', address: 'France' }];
       }
   },
   billing: {
       getInvoices: async () => {
-          if (isDemoMode()) return [];
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return [];
           const { invoices } = await invoke('get_invoices', {});
           return invoices || [];
       },
       createCheckoutSession: async (plan: string) => {
-          if (isDemoMode()) return 'https://example.com/checkout';
+          if (!ENABLE_EXTRAS) return '';
+          if (isDemoModeEnabled()) return 'https://example.com/checkout';
           const { url } = await invoke('create_checkout', { 
               plan,
               successUrl: window.location.origin + '/#/billing?success=true',
@@ -865,7 +906,8 @@ export const api = {
           return url;
       },
       createPortalSession: async () => {
-          if (isDemoMode()) return 'https://example.com/portal';
+          if (!ENABLE_EXTRAS) return '';
+          if (isDemoModeEnabled()) return 'https://example.com/portal';
           const { url } = await invoke('create_portal', {
               returnUrl: window.location.origin + '/#/billing'
           });
@@ -886,7 +928,7 @@ export const api = {
   },
   google: {
       fetchAllGoogleLocations: async () => {
-          if (isDemoMode()) return [{ name: 'locations/123', title: 'Demo Google Loc', storeCode: 'STORE-1', address: '123 Demo St' }];
+          if (isDemoModeEnabled()) return [{ name: 'locations/123', title: 'Demo Google Loc', storeCode: 'STORE-1', address: '123 Demo St' }];
           if (!supabase) return [];
           const { data } = await supabase.auth.getSession();
           const token = data.session?.provider_token || data.session?.access_token; 
@@ -894,7 +936,7 @@ export const api = {
           return result || [];
       },
       syncReviewsForLocation: async (locationId: string, googleLocationName: string) => {
-          if (isDemoMode()) return 5;
+          if (isDemoModeEnabled()) return 5;
           const org = await api.organization.get();
           const res = await invoke('fetch_google_reviews', { 
               locationId, 
@@ -906,7 +948,7 @@ export const api = {
   },
   locations: {
       create: async (data: Partial<Location>) => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               DEMO_ORG.locations.push({ ...data, id: 'loc-new-' + Date.now() } as any);
               return;
           }
@@ -917,7 +959,7 @@ export const api = {
           if (error) throw new Error(error.message);
       },
       update: async (id: string, data: Partial<Location>) => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               const idx = DEMO_ORG.locations.findIndex(l => l.id === id);
               if (idx >= 0) DEMO_ORG.locations[idx] = { ...DEMO_ORG.locations[idx], ...data };
               return;
@@ -926,7 +968,7 @@ export const api = {
           if (error) throw new Error(error.message);
       },
       delete: async (id: string) => {
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               DEMO_ORG.locations = DEMO_ORG.locations.filter(l => l.id !== id);
               return;
           }
@@ -934,13 +976,13 @@ export const api = {
           if (error) throw new Error(error.message);
       },
       importFromGoogle: async () => {
-          if (isDemoMode()) return 2;
+          if (isDemoModeEnabled()) return 2;
           return 0;
       }
   },
   onboarding: {
       checkStatus: async (): Promise<SetupStatus> => {
-          if (isDemoMode()) return { googleConnected: true, brandVoiceConfigured: false, firstReviewReplied: true, completionPercentage: 66 };
+          if (isDemoModeEnabled()) return { googleConnected: true, brandVoiceConfigured: false, firstReviewReplied: true, completionPercentage: 66 };
           if (!supabase) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) return { googleConnected: false, brandVoiceConfigured: false, firstReviewReplied: false, completionPercentage: 0 };
@@ -961,11 +1003,13 @@ export const api = {
       }
   },
   seedCloudDatabase: async () => {
+      if (!ENABLE_EXTRAS) return;
       await new Promise(r => setTimeout(r, 2000));
   },
   campaigns: {
       send: async (type: 'sms'|'email', recipient: string, subject: string, content: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           await invoke('send_campaign_emails', {
               emails: [recipient],
               subject,
@@ -975,13 +1019,15 @@ export const api = {
   },
   public: {
       getLocationInfo: async (id: string) => {
-          if (isDemoMode()) return DEMO_ORG.locations.find(l => l.id === id);
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return DEMO_ORG.locations.find(l => l.id === id);
           if (!supabase) return null;
           const { data } = await supabase.from('locations').select('*').eq('id', id).single();
           return data;
       },
       getActiveOffer: async (locationId: string, score: number) => {
-          if (isDemoMode()) return null;
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return null;
           if (!supabase) return null;
           
           try {
@@ -1003,7 +1049,8 @@ export const api = {
           }
       },
       submitFeedback: async (locationId: string, rating: number, feedback: string, userInfo: { firstName: string, lastName: string, email: string, phone: string }, tags: string[], staffName?: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return;
           
           const payload = {
               locationId,
@@ -1054,7 +1101,8 @@ export const api = {
           }
       },
       getWidgetReviews: async (locationId: string) => {
-          if (isDemoMode()) return DEMO_REVIEWS;
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return DEMO_REVIEWS;
           if (!supabase) return [];
           const { data } = await supabase.from('reviews').select('*').eq('location_id', locationId).eq('status', 'sent').order('received_at', { ascending: false }).limit(10);
           return data || [];
@@ -1062,12 +1110,14 @@ export const api = {
   },
   offers: {
       create: async (data: any) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           const org = await api.organization.get();
           await supabase!.from('offers').insert({ ...data, organization_id: org?.id });
       },
       generateCoupon: async (offerId: string, email: string) => {
-          if (isDemoMode()) return { code: 'DEMO-123', offer_title: 'Offre Démo', discount_detail: '-10%', expires_at: new Date().toISOString(), status: 'active' };
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return { code: 'DEMO-123', offer_title: 'Offre Démo', discount_detail: '-10%', expires_at: new Date().toISOString(), status: 'active' };
           
           try {
               // Try edge function first
@@ -1098,21 +1148,25 @@ export const api = {
           }
       },
       distributeCampaign: async (offerId: string, segment: string, channel: string) => {
-          if (isDemoMode()) return { sent_count: 150 };
+          if (!ENABLE_EXTRAS) return { sent_count: 0 };
+          if (isDemoModeEnabled()) return { sent_count: 150 };
           return { sent_count: 0 };
       },
       validate: async (code: string) => {
-          if (isDemoMode()) return { valid: true, discount: 'Café Offert' };
+          if (!ENABLE_EXTRAS) return { valid: false };
+          if (isDemoModeEnabled()) return { valid: true, discount: 'Café Offert' };
           return await invoke('manage_coupons', { action: 'validate', code });
       },
       redeem: async (code: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           return await invoke('manage_coupons', { action: 'redeem', code });
       }
   },
   customers: {
       list: async () => {
-          if (isDemoMode()) return [
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return [
               { id: 'c1', name: 'Sophie Martin', email: 'sophie@mail.com', source: 'Google', last_interaction: new Date().toISOString(), total_reviews: 3, average_rating: 4.8, status: 'promoter', ltv_estimate: 450, stage: 'loyal', tags: ['VIP', 'Habitué'] }
           ] as Customer[];
           if (!supabase) return [];
@@ -1120,45 +1174,53 @@ export const api = {
           return data || [];
       },
       update: async (id: string, data: Partial<Customer>) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           await supabase!.from('customers').update(data).eq('id', id);
       },
       enrichProfile: async (id: string) => {
-          if (isDemoMode()) return { profile: "Client exigent mais fidèle", suggestion: "Proposer une table calme", last_updated: new Date().toISOString() };
+          if (!ENABLE_EXTRAS) return null;
+          if (isDemoModeEnabled()) return { profile: "Client exigent mais fidèle", suggestion: "Proposer une table calme", last_updated: new Date().toISOString() };
           return { profile: "Analyse IA...", suggestion: "...", last_updated: new Date().toISOString() };
       }
   },
   admin: {
       getStats: async () => {
-          if (isDemoMode()) return { mrr: '12 450€', active_tenants: 142, total_reviews_processed: 45890, tenants: [] };
+          if (!ENABLE_EXTRAS) return { mrr: '0€', active_tenants: 0, total_reviews_processed: 0, tenants: [] };
+          if (isDemoModeEnabled()) return { mrr: '12 450€', active_tenants: 142, total_reviews_processed: 45890, tenants: [] };
           return { mrr: '0€', active_tenants: 0, total_reviews_processed: 0, tenants: [] };
       }
   },
   social: {
       getPosts: async () => {
-          if (isDemoMode()) return [];
+          if (!ENABLE_EXTRAS) return [];
+          if (isDemoModeEnabled()) return [];
           if (!supabase) return [];
           const { data } = await supabase.from('social_posts').select('*');
           return data || [];
       },
       schedulePost: async (post: Partial<SocialPost>) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           const org = await api.organization.get();
           await supabase!.from('social_posts').insert({ ...post, organization_id: org?.id, status: 'scheduled' });
       },
       deletePost: async (id: string) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
           await supabase!.from('social_posts').delete().eq('id', id);
       },
       connectAccount: async (platform: SocialPlatform, status: boolean) => {
-          if (isDemoMode()) return;
+          if (!ENABLE_EXTRAS) return;
+          if (isDemoModeEnabled()) return;
       }
   },
   global: {
       search: async (query: string) => {
+          if (!ENABLE_EXTRAS) return [];
           const lowerQuery = query.toLowerCase();
           
-          if (isDemoMode()) {
+          if (isDemoModeEnabled()) {
               const results = [];
               if ('sophie'.includes(lowerQuery)) results.push({ type: 'customer', title: 'Sophie Martin', subtitle: 'Client VIP', link: '/customers' });
               if ('avis'.includes(lowerQuery)) results.push({ type: 'review', title: 'Avis de Jean', subtitle: '5 étoiles - "Super..."', link: '/inbox' });
@@ -1206,7 +1268,8 @@ export const api = {
   },
   system: {
       checkHealth: async () => {
-          if (isDemoMode()) return { db: false, latency: 0 };
+          if (!ENABLE_EXTRAS) return { db: false, latency: 0 };
+          if (isDemoModeEnabled()) return { db: false, latency: 0 };
           const start = Date.now();
           const { error } = await supabase!.from('organizations').select('id').limit(1);
           const end = Date.now();

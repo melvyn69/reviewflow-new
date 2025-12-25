@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
 import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, Copy, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useNavigate, useLocation } from '../components/ui';
+import { ENABLE_DEMO_MODE, ENABLE_EXTRAS } from '../lib/flags';
 
 interface AuthPageProps {
   onLoginSuccess: () => void;
@@ -89,6 +90,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   };
 
   const handleDemoLogin = async () => {
+      if (!ENABLE_DEMO_MODE) {
+          setError("Le mode démo est désactivé en production.");
+          return;
+      }
       setIsLoading(true);
       
       try {
@@ -256,27 +261,31 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                 </p>
                 
                 {/* Demo Login Button - Hidden on mobile if screen is too small to avoid clutter, or kept small */}
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                    <button 
-                        onClick={handleDemoLogin}
-                        className="text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-indigo-600 transition-colors flex items-center justify-center gap-1 mx-auto"
-                        title="Mode Simulation pour Démonstration Commerciale"
-                    >
-                        <HelpCircle className="h-3 w-3" />
-                        Accès Démo Commerciale
-                    </button>
-                </div>
+                {ENABLE_DEMO_MODE && (
+                    <div className="mt-6 pt-6 border-t border-slate-100">
+                        <button 
+                            onClick={handleDemoLogin}
+                            className="text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-indigo-600 transition-colors flex items-center justify-center gap-1 mx-auto"
+                            title="Mode Simulation pour Démonstration Commerciale"
+                        >
+                            <HelpCircle className="h-3 w-3" />
+                            Accès Démo Commerciale
+                        </button>
+                    </div>
+                )}
             </div>
           )}
         </div>
       </div>
 
       {/* DEBUG HELPER - Only visible on large screens or if specifically needed */}
-      <div className="hidden lg:block fixed bottom-4 left-4 max-w-xs bg-amber-50 border border-amber-200 rounded-lg p-3 text-[10px] text-amber-800 opacity-50 hover:opacity-100 transition-opacity">
-          <div className="font-bold mb-1">Debug URL Redirect</div>
-          <div className="truncate mb-1">{currentUrl}</div>
-          <button onClick={copyUrl} className="underline">Copier pour Supabase</button>
-      </div>
+      {ENABLE_EXTRAS && (
+          <div className="hidden lg:block fixed bottom-4 left-4 max-w-xs bg-amber-50 border border-amber-200 rounded-lg p-3 text-[10px] text-amber-800 opacity-50 hover:opacity-100 transition-opacity">
+              <div className="font-bold mb-1">Debug URL Redirect</div>
+              <div className="truncate mb-1">{currentUrl}</div>
+              <button onClick={copyUrl} className="underline">Copier pour Supabase</button>
+          </div>
+      )}
     </div>
   );
 };

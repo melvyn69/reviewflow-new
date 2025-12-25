@@ -32,6 +32,7 @@ import { api } from '../lib/api';
 import { AppNotification, User, Organization } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
+import { ENABLE_DEMO_MODE, ENABLE_EXTRAS } from '../lib/flags';
 
 // Sidebar Item Component
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isPro?: boolean }) => {
@@ -61,37 +62,30 @@ const BottomNav = () => {
     const { t } = useTranslation();
     
     const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
+    const navItems = ENABLE_EXTRAS
+        ? [
+            { path: '/dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
+            { path: '/inbox', label: t('sidebar.inbox'), icon: Inbox },
+            { path: '/collect', label: t('sidebar.collect'), icon: QrCode },
+            { path: '/settings', label: t('sidebar.settings'), icon: Settings }
+          ]
+        : [
+            { path: '/inbox', label: t('sidebar.inbox'), icon: Inbox },
+            { path: '/settings', label: t('sidebar.settings'), icon: Settings }
+          ];
 
     return (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 lg:hidden z-50 flex justify-around items-center px-2 py-2 pb-safe">
-            <button 
-                onClick={() => navigate('/dashboard')}
-                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/dashboard') ? 'text-indigo-600' : 'text-slate-400'}`}
-            >
-                <LayoutDashboard className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">{t('sidebar.dashboard')}</span>
-            </button>
-            <button 
-                onClick={() => navigate('/inbox')}
-                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/inbox') ? 'text-indigo-600' : 'text-slate-400'}`}
-            >
-                <Inbox className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">{t('sidebar.inbox')}</span>
-            </button>
-            <button 
-                onClick={() => navigate('/collect')}
-                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/collect') ? 'text-indigo-600' : 'text-slate-400'}`}
-            >
-                <QrCode className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">{t('sidebar.collect')}</span>
-            </button>
-            <button 
-                onClick={() => navigate('/settings')}
-                className={`flex flex-col items-center justify-center w-full p-2 ${isActive('/settings') ? 'text-indigo-600' : 'text-slate-400'}`}
-            >
-                <Settings className="h-6 w-6" />
-                <span className="text-[10px] mt-1 font-medium">{t('sidebar.settings')}</span>
-            </button>
+            {navItems.map((item) => (
+                <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className={`flex flex-col items-center justify-center w-full p-2 ${isActive(item.path) ? 'text-indigo-600' : 'text-slate-400'}`}
+                >
+                    <item.icon className="h-6 w-6" />
+                    <span className="text-[10px] mt-1 font-medium">{item.label}</span>
+                </button>
+            ))}
         </div>
     );
 };
@@ -163,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
             <div className="px-6 pt-4">
                 <div className={`flex items-center justify-between p-2 rounded-lg border text-xs font-bold uppercase tracking-wide ${plan === 'pro' ? 'bg-indigo-50 border-indigo-100 text-indigo-700' : plan === 'starter' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
                     <span>Plan {plan === 'starter' ? 'Essential' : plan === 'pro' ? 'Growth' : 'Gratuit'}</span>
-                    {plan !== 'pro' && (
+                    {ENABLE_EXTRAS && plan !== 'pro' && (
                         <Link to="/billing" onClick={onClose} className="text-[10px] underline hover:text-indigo-600">Upgrade</Link>
                     )}
                 </div>
@@ -172,29 +166,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           <div className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.platform')}</div>
-          <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />
+          {ENABLE_EXTRAS && <SidebarItem to="/dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} exact onClick={onClose} />}
           <SidebarItem to="/inbox" icon={Inbox} label={t('sidebar.inbox')} onClick={onClose} />
           
           {/* Pro Features */}
-          <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isLocked} />
-          <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
-          <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isPro={isLocked} />
-          
-          <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
-          <SidebarItem to="/collect" icon={QrCode} label={t('sidebar.collect')} onClick={onClose} />
-          <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={onClose} />
-          <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
-          
-          {/* Pro Features */}
-          <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isPro={isLocked} />
-          <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isPro={isLocked} />
+          {ENABLE_EXTRAS && (
+            <>
+              <SidebarItem to="/social" icon={Share2} label={t('sidebar.social')} onClick={onClose} isPro={isLocked} />
+              <SidebarItem to="/analytics" icon={BarChart3} label={t('sidebar.analytics')} onClick={onClose} />
+              <SidebarItem to="/competitors" icon={Target} label={t('sidebar.competitors')} onClick={onClose} isPro={isLocked} />
+              <SidebarItem to="/team" icon={Users} label={t('sidebar.team')} onClick={onClose} />
+              <SidebarItem to="/collect" icon={QrCode} label={t('sidebar.collect')} onClick={onClose} />
+              <SidebarItem to="/customers" icon={Users} label="CRM Clients" onClick={onClose} />
+              <SidebarItem to="/offers" icon={Gift} label={t('sidebar.offers')} onClick={onClose} />
+              <SidebarItem to="/reports" icon={FileText} label={t('sidebar.reports')} onClick={onClose} isPro={isLocked} />
+              <SidebarItem to="/automation" icon={Workflow} label={t('sidebar.automation')} onClick={onClose} isPro={isLocked} />
+            </>
+          )}
 
           <div className="px-3 mt-8 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">{t('sidebar.org')}</div>
-          <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />
+          {ENABLE_EXTRAS && <SidebarItem to="/billing" icon={CreditCard} label={t('sidebar.billing')} onClick={onClose} />}
           <SidebarItem to="/settings" icon={Settings} label={t('sidebar.settings')} onClick={onClose} />
-          <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />
+          {ENABLE_EXTRAS && <SidebarItem to="/help" icon={HelpCircle} label={t('sidebar.help')} onClick={onClose} />}
           
-          {user?.role === 'super_admin' && (
+          {ENABLE_EXTRAS && user?.role === 'super_admin' && (
             <>
                 <div className="px-3 mt-8 mb-2 text-xs font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
                     <ShieldAlert className="h-3 w-3" /> {t('sidebar.admin')}
@@ -221,7 +216,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, user, org }) => {
           )}
         </nav>
 
-        {!isSupabaseConfigured() && (
+        {ENABLE_DEMO_MODE && !isSupabaseConfigured() && (
             <div className="bg-amber-50 border-t border-amber-100 p-2 text-center">
                 <div className="text-[10px] font-bold text-amber-700 flex items-center justify-center gap-1">
                     <span className="relative flex h-2 w-2">
@@ -262,7 +257,9 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
 
   useEffect(() => {
     api.auth.getUser().then(setUser);
-    loadNotifications();
+    if (ENABLE_EXTRAS) {
+      loadNotifications();
+    }
 
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
@@ -318,92 +315,96 @@ const Topbar = ({ onMenuClick }: { onMenuClick: () => void }) => {
         </button>
         
         {/* GLOBAL SEARCH */}
-        <div className="relative w-full max-w-sm hidden sm:block" ref={searchRef}>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Rechercher (Client, Avis, Page)..." 
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                  {searchResults.map((res, i) => (
-                      <div 
-                        key={i}
-                        className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
-                        onClick={() => handleResultClick(res.link)}
-                      >
-                          <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{res.type}</span>
-                              <ChevronRight className="h-3 w-3 text-slate-300" />
-                          </div>
-                          <div className="font-medium text-slate-900">{res.title}</div>
-                          <div className="text-xs text-slate-500 truncate">{res.subtitle}</div>
-                      </div>
-                  ))}
-              </div>
-          )}
-        </div>
+        {ENABLE_EXTRAS && (
+          <div className="relative w-full max-w-sm hidden sm:block" ref={searchRef}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Rechercher (Client, Avis, Page)..." 
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchResults.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                    {searchResults.map((res, i) => (
+                        <div 
+                          key={i}
+                          className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0"
+                          onClick={() => handleResultClick(res.link)}
+                        >
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{res.type}</span>
+                                <ChevronRight className="h-3 w-3 text-slate-300" />
+                            </div>
+                            <div className="font-medium text-slate-900">{res.title}</div>
+                            <div className="text-xs text-slate-500 truncate">{res.subtitle}</div>
+                        </div>
+                    ))}
+                </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
         
         {/* Notifications */}
-        <div className="relative" ref={notifRef}>
-            <button 
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full relative"
-                onClick={() => setShowNotifications(!showNotifications)}
-            >
-                <Bell className="h-5 w-5" />
-                {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
-                )}
-            </button>
+        {ENABLE_EXTRAS && (
+          <div className="relative" ref={notifRef}>
+              <button 
+                  className="p-2 text-slate-500 hover:bg-slate-100 rounded-full relative"
+                  onClick={() => setShowNotifications(!showNotifications)}
+              >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
+                  )}
+              </button>
 
-            {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                    <div className="p-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Notifications</span>
-                        {unreadCount > 0 && (
-                            <button onClick={handleMarkAllRead} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
-                                Tout marquer comme lu
-                            </button>
-                        )}
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                        {notifications.length === 0 ? (
-                            <div className="p-8 text-center text-slate-400 text-sm">
-                                Aucune notification.
-                            </div>
-                        ) : (
-                            notifications.map(notif => (
-                                <div 
-                                    key={notif.id} 
-                                    className={`p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3 ${!notif.read ? 'bg-indigo-50/30' : ''}`}
-                                    onClick={() => {
-                                        if (notif.link) {
-                                            navigate(notif.link);
-                                            setShowNotifications(false);
-                                        }
-                                    }}
-                                >
-                                    <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${notif.type === 'error' ? 'bg-red-500' : notif.type === 'success' ? 'bg-green-500' : notif.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
-                                    <div>
-                                        <h4 className={`text-sm ${!notif.read ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>{notif.title}</h4>
-                                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{notif.message}</p>
-                                        <span className="text-[10px] text-slate-400 mt-1 block">
-                                            {new Date(notif.created_at).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
+              {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      <div className="p-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Notifications</span>
+                          {unreadCount > 0 && (
+                              <button onClick={handleMarkAllRead} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                                  Tout marquer comme lu
+                              </button>
+                          )}
+                      </div>
+                      <div className="max-h-80 overflow-y-auto">
+                          {notifications.length === 0 ? (
+                              <div className="p-8 text-center text-slate-400 text-sm">
+                                  Aucune notification.
+                              </div>
+                          ) : (
+                              notifications.map(notif => (
+                                  <div 
+                                      key={notif.id} 
+                                      className={`p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3 ${!notif.read ? 'bg-indigo-50/30' : ''}`}
+                                      onClick={() => {
+                                          if (notif.link) {
+                                              navigate(notif.link);
+                                              setShowNotifications(false);
+                                          }
+                                      }}
+                                  >
+                                      <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${notif.type === 'error' ? 'bg-red-500' : notif.type === 'success' ? 'bg-green-500' : notif.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
+                                      <div>
+                                          <h4 className={`text-sm ${!notif.read ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>{notif.title}</h4>
+                                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                                          <span className="text-[10px] text-slate-400 mt-1 block">
+                                              {new Date(notif.created_at).toLocaleDateString()}
+                                          </span>
+                                      </div>
+                                  </div>
+                              ))
+                          )}
+                      </div>
+                  </div>
+              )}
+          </div>
+        )}
 
         <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
         

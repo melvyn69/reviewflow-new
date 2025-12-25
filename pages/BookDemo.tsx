@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Card, Button } from '../components/ui';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from '../components/ui';
+import { ENABLE_EXTRAS } from '../lib/flags';
 
 declare global {
   interface Window {
@@ -12,6 +13,19 @@ declare global {
 
 export const BookDemoPage = () => {
   const navigate = useNavigate();
+
+  if (!ENABLE_EXTRAS) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+        <div className="max-w-md text-center">
+          <p className="text-slate-600 mb-6">Cette page est désactivée en production.</p>
+          <Button variant="outline" onClick={() => navigate('/')}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Retour à l'accueil
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     // Initialize Calendly widget if script is loaded

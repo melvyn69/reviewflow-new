@@ -25,6 +25,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n';
+import { ENABLE_EXTRAS } from '../lib/flags';
 
 // --- COMPONENTS ---
 
@@ -53,13 +54,15 @@ const PricingCard = ({ title, price, features, recommended = false, buttonLabel,
                 </li>
             ))}
         </ul>
-        <Button 
-            variant={recommended ? 'primary' : 'outline'} 
-            className={`w-full py-6 rounded-xl font-bold tracking-wide ${recommended ? 'shadow-xl shadow-indigo-200 hover:shadow-indigo-300' : ''}`}
-            onClick={onAction}
-        >
-            {buttonLabel}
-        </Button>
+        {onAction && (
+            <Button 
+                variant={recommended ? 'primary' : 'outline'} 
+                className={`w-full py-6 rounded-xl font-bold tracking-wide ${recommended ? 'shadow-xl shadow-indigo-200 hover:shadow-indigo-300' : ''}`}
+                onClick={onAction}
+            >
+                {buttonLabel}
+            </Button>
+        )}
     </div>
 );
 
@@ -204,7 +207,10 @@ export const LandingPage = () => {
   const navigate = useNavigate();
   const { t, setLang, lang } = useTranslation();
 
-  const handleBookDemo = () => navigate('/book-demo');
+  const handleBookDemo = () => {
+    if (!ENABLE_EXTRAS) return;
+    navigate('/book-demo');
+  };
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 overflow-x-hidden selection:bg-indigo-100 selection:text-indigo-900">
@@ -246,12 +252,14 @@ export const LandingPage = () => {
               {t('nav.login')}
             </button>
             
-            <Button 
-                onClick={handleBookDemo} 
-                className="shadow-lg shadow-indigo-600/20 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-4 sm:px-6 transition-all hover:scale-105 hover:shadow-indigo-600/30 whitespace-nowrap text-xs sm:text-sm"
-            >
-              {t('nav.demo')}
-            </Button>
+            {ENABLE_EXTRAS && (
+              <Button 
+                  onClick={handleBookDemo} 
+                  className="shadow-lg shadow-indigo-600/20 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-4 sm:px-6 transition-all hover:scale-105 hover:shadow-indigo-600/30 whitespace-nowrap text-xs sm:text-sm"
+              >
+                {t('nav.demo')}
+              </Button>
+            )}
           </div>
         </div>
       </nav>
@@ -278,10 +286,12 @@ export const LandingPage = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row justify-center gap-4 animate-in fade-in slide-in-from-bottom-10 duration-700">
-                <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-xl shadow-indigo-600/30 bg-indigo-600 hover:bg-indigo-700 text-white transition-all hover:scale-105" onClick={handleBookDemo}>
-                    {t('cta.book')}
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
+                {ENABLE_EXTRAS && (
+                  <Button size="lg" className="h-14 px-8 text-lg rounded-full shadow-xl shadow-indigo-600/30 bg-indigo-600 hover:bg-indigo-700 text-white transition-all hover:scale-105" onClick={handleBookDemo}>
+                      {t('cta.book')}
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                )}
                 <Button size="lg" variant="secondary" className="h-14 px-8 text-lg rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-all hover:border-slate-300" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth'})}>
                     <Play className="mr-2 h-4 w-4 fill-slate-700" /> Voir la démo
                 </Button>
@@ -401,8 +411,8 @@ export const LandingPage = () => {
                     title="Essential" 
                     price="49€"
                     subtitle="Pour les indépendants" 
-                    buttonLabel={t('cta.book')}
-                    onAction={handleBookDemo}
+                    buttonLabel={ENABLE_EXTRAS ? t('cta.book') : ''}
+                    onAction={ENABLE_EXTRAS ? handleBookDemo : undefined}
                     features={[
                         "1 Établissement",
                         "Réponses IA Illimitées",
@@ -415,8 +425,8 @@ export const LandingPage = () => {
                     price="89€"
                     subtitle="Pour les gérants exigeants" 
                     recommended
-                    buttonLabel={t('cta.book')}
-                    onAction={handleBookDemo}
+                    buttonLabel={ENABLE_EXTRAS ? t('cta.book') : ''}
+                    onAction={ENABLE_EXTRAS ? handleBookDemo : undefined}
                     features={[
                         "Jusqu'à 3 Établissements",
                         "Tout du plan Essential",

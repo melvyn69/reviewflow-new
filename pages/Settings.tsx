@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation, ProLock } from '../components/ui';
+import { ENABLE_EXTRAS, getRuntimeModeLabel } from '../lib/flags';
 import { 
     Building2, 
     Plus, 
@@ -60,6 +61,9 @@ const GoogleIcon = () => (
     </svg>
 );
 const TripAdvisorIcon = () => <div className="font-serif font-bold text-green-600 text-lg tracking-tighter">TA</div>;
+const AVAILABLE_TABS = ENABLE_EXTRAS
+    ? ['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team', 'developer', 'system']
+    : ['profile', 'organization', 'locations', 'integrations'];
 
 // ... [Keep IntegrationCard, LocationModal, GoogleMappingModal, InviteModal as is] ...
 const IntegrationCard = ({ icon: Icon, title, description, connected, onConnect, comingSoon = false, type = "source" }: any) => (
@@ -518,8 +522,12 @@ export const SettingsPage = () => {
     // 1. Check URL for tab
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
-    if (tabParam) {
+    if (tabParam && AVAILABLE_TABS.includes(tabParam)) {
         setActiveTab(tabParam);
+    }
+    if (tabParam && !AVAILABLE_TABS.includes(tabParam)) {
+        setActiveTab(AVAILABLE_TABS[0]);
+        navigate(`/settings?tab=${AVAILABLE_TABS[0]}`, { replace: true });
     }
 
     // 2. Tentative de capture du token au chargement si retour de login
@@ -534,7 +542,7 @@ export const SettingsPage = () => {
   }, [location.search]);
 
   useEffect(() => {
-      if (activeTab === 'system') {
+      if (ENABLE_EXTRAS && activeTab === 'system') {
           api.system.checkHealth().then(setSystemHealth);
       }
   }, [activeTab]);
@@ -668,6 +676,10 @@ export const SettingsPage = () => {
   };
 
   const handleTestEmail = async () => {
+      if (!ENABLE_EXTRAS) {
+          toast.info("Cette fonctionnalité est désactivée en production.");
+          return;
+      }
       setTestingEmail(true);
       try {
           await api.notifications.sendTestEmail();
@@ -729,6 +741,10 @@ export const SettingsPage = () => {
   };
 
   const handleTestVoice = async () => {
+      if (!ENABLE_EXTRAS) {
+          toast.info("Cette fonctionnalité est désactivée en production.");
+          return;
+      }
       setTestingVoice(true);
       try {
           const mockReview = {
@@ -843,6 +859,10 @@ export const SettingsPage = () => {
   };
 
   const handleSimulateStripe = async () => {
+      if (!ENABLE_EXTRAS) {
+          toast.info("Cette fonctionnalité est désactivée en production.");
+          return;
+      }
       try {
           // Effectively update the org plan via mock API or real endpoint if backend exists
           await api.organization.simulatePlanChange('pro');
@@ -884,7 +904,7 @@ export const SettingsPage = () => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="flex border-b border-slate-200 overflow-x-auto">
-            {['profile', 'organization', 'locations', 'integrations', 'brand', 'notifications', 'team', 'developer', 'system'].map((tab) => (
+            {AVAILABLE_TABS.map((tab) => (
                 <button 
                     key={tab}
                     onClick={() => {
@@ -1342,7 +1362,7 @@ export const SettingsPage = () => {
                                 <div className="p-4 border border-slate-200 rounded-lg">
                                     <div className="text-xs font-bold text-slate-500 uppercase mb-1">Mode</div>
                                     <div className="text-2xl font-bold text-indigo-600">
-                                        {localStorage.getItem('is_demo_mode') === 'true' ? 'DÉMO' : 'PRODUCTION'}
+                                        {getRuntimeModeLabel()}
                                     </div>
                                 </div>
                             </div>
