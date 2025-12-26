@@ -56,7 +56,7 @@ export const AuthCallbackPage = () => {
       }
 
       let sessionAfter = await supabase.auth.getSession();
-      for (let attempt = 1; attempt <= 10 && !sessionAfter.data.session; attempt += 1) {
+      for (let attempt = 1; attempt <= 5 && !sessionAfter.data.session; attempt += 1) {
         console.info('[auth/callback] wait session retry', { attempt });
         await new Promise((resolve) => setTimeout(resolve, 200));
         sessionAfter = await supabase.auth.getSession();
@@ -70,7 +70,7 @@ export const AuthCallbackPage = () => {
       }
 
       window.history.replaceState({}, document.title, '/auth/callback');
-      navigate('/dashboard', { replace: true });
+      window.location.replace('/inbox');
     };
 
     run().catch((e) => {
