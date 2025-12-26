@@ -80,7 +80,6 @@ function AppRoutes() {
   const [authStatus, setAuthStatus] = useState<'booting' | 'authenticated' | 'unauthenticated'>('booting');
   const [isSyncing, setIsSyncing] = useState(false);
   const [orgFetchDegraded, setOrgFetchDegraded] = useState(false);
-  const [orgFetchRetryToken, setOrgFetchRetryToken] = useState(0);
   const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
   const navigate = useNavigate();
   const toast = useToast();
@@ -98,8 +97,9 @@ function AppRoutes() {
   const lastRedirectRef = useRef<string | null>(null);
   const location = useLocation();
   const checkUserRetryScheduledRef = useRef(false);
-  const orgRetryScheduledRef = useRef(false);
-  const ORG_FETCH_TIMEOUT_MS = 6000;
+  const orgFetchInFlightRef = useRef(false);
+  const orgFetchAttemptRef = useRef(0);
+  const orgFetchRetryTimerRef = useRef<number | null>(null);
 
   const logStep = (label: string, start: number, extra?: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - start);
@@ -220,8 +220,10 @@ function AppRoutes() {
           if (!user && session.user) {
             setUser(buildFallbackUser(session.user));
           }
-          console.log('[oauth] provider_token:', session.provider_token);
-          console.log('[oauth] provider_refresh_token:', session.provider_refresh_token);
+          console.info('[oauth] tokens present', {
+            hasProviderToken: !!session?.provider_token,
+            hasProviderRefreshToken: !!session?.provider_refresh_token
+          });
           if ((session.provider_token || session.provider_refresh_token) && !tokensSavedRef.current) {
             tokensSavedRef.current = true;
             (window as any).__rf_metrics = (window as any).__rf_metrics || {};
@@ -453,6 +455,11 @@ function AppRoutes() {
     if (!user) {
       setOrg(null);
       setOrgFetchDegraded(false);
+      orgFetchAttemptRef.current = 0;
+      if (orgFetchRetryTimerRef.current) {
+        window.clearTimeout(orgFetchRetryTimerRef.current);
+        orgFetchRetryTimerRef.current = null;
+      }
       return;
     }
     if (isAuthCallback()) {
@@ -460,53 +467,53 @@ function AppRoutes() {
       setOrgFetchDegraded(false);
       return;
     }
-    console.info('[auth] org fetch start');
-    setIsSyncing(true);
-    setOrgFetchDegraded(false);
-    const controller = new AbortController();
-    const clearOrgSlow = logSlow('api.organization.get');
-    const run = async () => {
+    const fetchOrg = async () => {
+      if (orgFetchInFlightRef.current) return;
+      if (orgFetchRetryTimerRef.current) return;
+      orgFetchInFlightRef.current = true;
+
+      orgFetchAttemptRef.current += 1;
+      const attempt = orgFetchAttemptRef.current;
+      console.info('[auth] org fetch start', { attempt });
+      setIsSyncing(true);
+      setOrgFetchDegraded(false);
+
       try {
         const nextOrg = await withTimeout(
-          api.organization.get({ signal: controller.signal }),
-          ORG_FETCH_TIMEOUT_MS,
+          api.organization.get(),
+          20000,
           'api.organization.get'
         );
-        clearOrgSlow();
         console.info('[auth] org fetch done', { hasOrg: !!nextOrg, orgId: nextOrg?.id });
         setOrg(nextOrg);
+        orgFetchAttemptRef.current = 0;
       } catch (e) {
-        clearOrgSlow();
-        if (isTimeoutError(e)) {
-          controller.abort();
-          console.warn('[auth] org fetch timeout → degraded mode');
+        console.warn('[auth] org fetch error', e);
+        if (attempt >= 3) {
+          console.warn('[auth] org fetch: max retries reached -> degraded mode');
           setOrg(null);
           setOrgFetchDegraded(true);
-          if (!orgRetryScheduledRef.current) {
-            orgRetryScheduledRef.current = true;
-            window.setTimeout(() => {
-              orgRetryScheduledRef.current = false;
-              if (authStatusRef.current === 'authenticated' && !isAuthCallback()) {
-                setOrgFetchRetryToken((value) => value + 1);
-              }
-            }, 2000);
-          }
           return;
         }
-        if ((e as any)?.name === 'AbortError') {
-          return;
-        }
-        console.error('[auth] org fetch error', e);
-        setOrg(null);
+        const delay = [1000, 3000, 7000][attempt - 1] ?? 7000;
+        orgFetchRetryTimerRef.current = window.setTimeout(() => {
+          orgFetchRetryTimerRef.current = null;
+          fetchOrg();
+        }, delay);
       } finally {
         setIsSyncing(false);
+        orgFetchInFlightRef.current = false;
       }
     };
-    run();
+
+    fetchOrg();
     return () => {
-      controller.abort();
+      if (orgFetchRetryTimerRef.current) {
+        window.clearTimeout(orgFetchRetryTimerRef.current);
+        orgFetchRetryTimerRef.current = null;
+      }
     };
-  }, [user?.id, orgFetchRetryToken]);
+  }, [user?.id]);
 
   const showSpinner = authStatus === 'booting';
 
