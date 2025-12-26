@@ -5,6 +5,31 @@ import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from 
 import { ENABLE_DEMO_MODE, ENABLE_EXTRAS, isDemoModeEnabled, setDemoModeEnabled } from './flags';
 import { GoogleGenAI } from "@google/genai";
 
+const getEnv = (key: string): string => {
+    try {
+        if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+            const v = (import.meta as any).env[key];
+            return typeof v === 'string' ? v : '';
+        }
+    } catch {
+        // ignore
+    }
+
+    try {
+        if (typeof process !== 'undefined' && (process as any).env) {
+            const v = (process as any).env[key];
+            return typeof v === 'string' ? v : '';
+        }
+    } catch {
+        // ignore
+    }
+
+    return '';
+};
+
+const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');
+const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY');
+
 const logDuration = (label: string, start: number, extra?: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - start);
     console.info(`[api] ${label} (${ms}ms)`, extra || {});
@@ -38,6 +63,35 @@ const withTimeout = async <T,>(promise: Promise<T>, ms = DEFAULT_TIMEOUT_MS, lab
         if (timeoutId) clearTimeout(timeoutId);
     }
 };
+
+export async function fetchJsonWithAbort(
+    input: RequestInfo | URL,
+    init: RequestInit = {},
+    timeoutMs = 20000,
+    label = 'fetch'
+) {
+    const controller = new AbortController();
+    const t = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const res = await fetch(input, { ...init, signal: controller.signal });
+        const status = res.status;
+        const text = await res.text();
+        let json: any = null;
+        try { json = text ? JSON.parse(text) : null; } catch {}
+
+        if (!res.ok) {
+            const err = new Error(`${label} HTTP ${status}`);
+            (err as any).status = status;
+            (err as any).body = json ?? text;
+            throw err;
+        }
+
+        return { data: json, status };
+    } finally {
+        window.clearTimeout(t);
+    }
+}
 
 const isRetryableError = (error: any) => {
     const status = error?.status ?? error?.statusCode;
@@ -232,7 +286,7 @@ export const api = {
           if (inFlightOrg) return inFlightOrg;
           inFlightOrg = (async () => {
               const start = performance.now();
-              console.info('[api] organization.get start', { url: supabase?.rest?.url });
+              console.info('[api.organization.get] step 1: start');
               if (isDemoModeEnabled()) {
                   if (DEMO_ORG.locations && DEMO_ORG.locations.length > 0 && !DEMO_ORG.locations[0].public_config) {
                       DEMO_ORG.locations[0].public_config = {
@@ -248,10 +302,16 @@ export const api = {
               }
 
               if (!supabase) return null;
+              console.info('[api.organization.get] step 2: before getSession');
               const sessionRes = await supabase.auth.getSession();
+              console.info('[api.organization.get] step 3: after getSession', {
+                  hasSession: !!sessionRes.data.session,
+                  hasToken: !!sessionRes.data.session?.access_token,
+              });
               if (sessionRes.error) throw sessionRes.error;
               const sessionUser = sessionRes.data.session?.user;
               if (!sessionUser) return null;
+              const token = sessionRes.data.session?.access_token;
 
               const { data: userProfile, error: profileError } = await runTimedQuery(
                   () => withAbortSignal(
@@ -263,26 +323,31 @@ export const api = {
               if (profileError) throw profileError;
               if (!userProfile?.organization_id) return null;
 
-              const { data, error } = await runTimedQuery(
-                () => withAbortSignal(
-                  supabase
-                    .from('organizations')
-                    .select(`
-                      *, 
-                      locations(*), 
-                      staff_members(*), 
-                      offers(*)
-                  `)
-                    .eq('id', userProfile.organization_id)
-                    .single(),
-                  options?.signal
-                ),
-                'supabase.from(organizations).select'
+              if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return null;
+
+              const url =
+                `${SUPABASE_URL}/rest/v1/organizations?select=` +
+                `*,locations(*),staff_members(*),offers(*)` +
+                `&id=eq.${userProfile.organization_id}&limit=1`;
+              console.info('[api.organization.get] step 4: before fetch', { url });
+              const { data, status } = await fetchJsonWithAbort(
+                url,
+                {
+                  method: 'GET',
+                  headers: {
+                    apikey: SUPABASE_ANON_KEY,
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  }
+                },
+                20000,
+                'api.organization.get'
               );
-              if (error) throw error;
+              console.info('[api.organization.get] step 5: after fetch', { status });
+              const orgData = Array.isArray(data) ? data[0] : data;
                 
-              logDuration('organization.get done', start, { orgId: (data as any)?.id });
-              return data as any;
+              logDuration('organization.get done', start, { orgId: (orgData as any)?.id });
+              return orgData as any;
           })().finally(() => {
               inFlightOrg = null;
           });

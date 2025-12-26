@@ -34,6 +34,22 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ENABLE_EXTRAS } from './lib/flags';
 import { supabase } from './lib/supabase';
 
+if (typeof window !== 'undefined' && !(window as any).__FETCH_HOOKED__) {
+  (window as any).__FETCH_HOOKED__ = true;
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    try {
+      console.info('[fetch] ->', args[0]);
+      const res = await _fetch(...args);
+      console.info('[fetch] <-', args[0], res.status);
+      return res;
+    } catch (e) {
+      console.error('[fetch] !!', args[0], e);
+      throw e;
+    }
+  };
+}
+
 // ScrollToTop component
 const ScrollToTop = () => {
   const { pathname } = useLocation();
