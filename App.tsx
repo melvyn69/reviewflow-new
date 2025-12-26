@@ -94,7 +94,9 @@ function AppRoutes() {
       console.info('[build]', window.location.origin, 'commit:', commit);
     }
     if (!supabase) {
-      setAuthError("Supabase non configuré. Vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.");
+      const msg = "Supabase non configuré. Vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.";
+      console.error('[auth] supabase missing');
+      setAuthError(msg);
       setLoading(false);
       return;
     }
@@ -106,10 +108,11 @@ function AppRoutes() {
         (async () => {
           try {
             console.info('[oauth] exchangeCodeForSession start');
-            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            console.info('[oauth] exchangeCodeForSession done', { hasSession: !!data?.session });
             if (error) {
               console.error('[oauth] exchangeCodeForSession error', error);
-              setAuthError("Connexion Google échouée. Réessayez.");
+              setAuthError(error.message || "Connexion Google échouée. Réessayez.");
             }
           } finally {
             window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
@@ -121,6 +124,7 @@ function AppRoutes() {
             ) {
               navigate(defaultPrivateRoute);
             }
+            setLoading(false);
           }
         })();
       }
@@ -173,7 +177,7 @@ function AppRoutes() {
   useEffect(() => {
     if (!loading) return;
     const timeout = window.setTimeout(() => {
-      setAuthError("Temps d’attente dépassé. Vérifiez la configuration OAuth/Supabase.");
+      setAuthError((prev) => prev || "Temps d’attente dépassé. Vérifiez la configuration OAuth/Supabase.");
       setLoading(false);
     }, 10000);
     return () => window.clearTimeout(timeout);
@@ -183,7 +187,9 @@ function AppRoutes() {
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
     try {
+      console.info('[auth] checkUser start');
       const userData = await api.auth.getUser();
+      console.info('[auth] checkUser getUser done', { hasUser: !!userData, userId: userData?.id });
       if (userData?.id !== lastUserIdRef.current) {
         orgInitAttempted.current = false;
         tokensSavedRef.current = false;
@@ -192,21 +198,28 @@ function AppRoutes() {
       if (userData && !userData.organization_id && !orgInitAttempted.current) {
         orgInitAttempted.current = true;
         try {
+          console.info('[auth] ensureDefaultForCurrentUser start');
           await api.organization.ensureDefaultForCurrentUser();
+          console.info('[auth] ensureDefaultForCurrentUser done');
           const refreshedUser = await api.auth.getUser();
+          console.info('[auth] checkUser refreshed user', { hasUser: !!refreshedUser, orgId: refreshedUser?.organization_id });
           setUser(refreshedUser);
         } catch (e: any) {
           console.error("Org init failed", e);
+          setAuthError(e?.message || "Impossible de créer votre organisation. Vérifiez la configuration Supabase.");
           toast.error("Impossible de créer votre organisation. Vérifiez la configuration Supabase.");
           setUser(userData);
         }
       } else {
         setUser(userData);
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[auth] checkUser error', e);
+      setAuthError(e?.message || "Erreur d’authentification.");
       setUser(null);
       setOrg(null);
     } finally {
+      console.info('[auth] checkUser done');
       setLoading(false);
       isCheckingRef.current = false;
     }
@@ -217,7 +230,16 @@ function AppRoutes() {
       setOrg(null);
       return;
     }
-    api.organization.get().then(setOrg).catch(() => setOrg(null));
+    console.info('[auth] org fetch start');
+    api.organization.get()
+      .then((nextOrg) => {
+        console.info('[auth] org fetch done', { hasOrg: !!nextOrg, orgId: nextOrg?.id });
+        setOrg(nextOrg);
+      })
+      .catch((e) => {
+        console.error('[auth] org fetch error', e);
+        setOrg(null);
+      });
   }, [user?.id]);
 
   const showSpinner = loading && !authError;
