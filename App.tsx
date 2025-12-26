@@ -78,6 +78,7 @@ function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
   const [authStatus, setAuthStatus] = useState<'booting' | 'authenticated' | 'unauthenticated'>('booting');
+  const [isSyncing, setIsSyncing] = useState(false);
   const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
   const navigate = useNavigate();
   const toast = useToast();
@@ -105,10 +106,6 @@ function AppRoutes() {
     return {
       id: sessionUser.id,
       email: sessionUser.email || '',
-      name: sessionUser.user_metadata?.name || 'Utilisateur',
-      avatar: '',
-      role: 'viewer',
-      organizations: [],
       organization_id: null
     };
   };
@@ -356,13 +353,14 @@ function AppRoutes() {
     if (authStatusRef.current !== 'authenticated') return;
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
+    setIsSyncing(true);
     try {
       console.info('[auth] checkUser start');
       const userStart = performance.now();
       const clearSlow = logSlow('api.auth.getUser');
       let userData: User | null = null;
       try {
-        userData = await withTimeout(api.auth.getUser(), 8000, 'api.auth.getUser');
+        userData = await api.auth.getUser();
       } catch (e: any) {
         clearSlow();
         if (isTimeoutError(e)) {
@@ -400,7 +398,7 @@ function AppRoutes() {
         orgInitAttempted.current = true;
         try {
           console.info('[auth] ensureDefaultForCurrentUser start');
-          await withTimeout(api.organization.ensureDefaultForCurrentUser(), 12000, 'ensureDefaultForCurrentUser');
+          await api.organization.ensureDefaultForCurrentUser();
           console.info('[auth] ensureDefaultForCurrentUser done');
           const refreshedStart = performance.now();
           const refreshedUser = await api.auth.getUser();
@@ -430,6 +428,7 @@ function AppRoutes() {
       // Non-fatal: do not flip to unauthenticated unless explicitly no session
     } finally {
       console.info('[auth] checkUser done');
+      setIsSyncing(false);
       isCheckingRef.current = false;
     }
   };
@@ -440,14 +439,21 @@ function AppRoutes() {
       return;
     }
     console.info('[auth] org fetch start');
-    withTimeout(api.organization.get(), 12000, 'organization.get')
+    setIsSyncing(true);
+    const clearOrgSlow = logSlow('api.organization.get');
+    api.organization.get()
       .then((nextOrg) => {
+        clearOrgSlow();
         console.info('[auth] org fetch done', { hasOrg: !!nextOrg, orgId: nextOrg?.id });
         setOrg(nextOrg);
       })
       .catch((e) => {
+        clearOrgSlow();
         console.error('[auth] org fetch error', e);
         setOrg(null);
+      })
+      .finally(() => {
+        setIsSyncing(false);
       });
   }, [user?.id]);
 
@@ -462,6 +468,11 @@ function AppRoutes() {
       )}
       {!showSpinner && (
         <>
+          {authStatus === 'authenticated' && isSyncing && (
+            <div className="bg-amber-50 text-amber-900 text-sm px-4 py-2">
+              Session active. Synchronisation en cours...
+            </div>
+          )}
           <ScrollToTop />
           <Routes>
             {/* Public Routes */}
