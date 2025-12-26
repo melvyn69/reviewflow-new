@@ -303,7 +303,11 @@ export const api = {
 
               if (!supabase) return null;
               console.info('[api.organization.get] step 2: before getSession');
-              const sessionRes = await supabase.auth.getSession();
+              const sessionRes = await withTimeout(
+                  supabase.auth.getSession(),
+                  8000,
+                  'supabase.auth.getSession'
+              );
               console.info('[api.organization.get] step 3: after getSession', {
                   hasSession: !!sessionRes.data.session,
                   hasToken: !!sessionRes.data.session?.access_token,
