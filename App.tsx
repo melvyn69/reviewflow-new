@@ -101,6 +101,25 @@ function AppRoutes() {
     console.info(`[auth] ${label} (${ms}ms)`, extra || {});
   };
 
+  const buildFallbackUser = (sessionUser: any): User => {
+    return {
+      id: sessionUser.id,
+      email: sessionUser.email || '',
+      name: sessionUser.user_metadata?.name || 'Utilisateur',
+      avatar: '',
+      role: 'viewer',
+      organizations: [],
+      organization_id: null
+    };
+  };
+
+  const logSlow = (label: string, ms = 2000) => {
+    const timer = window.setTimeout(() => {
+      console.warn('[auth] slow request', { label, ms });
+    }, ms);
+    return () => window.clearTimeout(timer);
+  };
+
   const setAuthStatusSafe = (next: 'booting' | 'authenticated' | 'unauthenticated', reason?: string) => {
     if (authStatusRef.current === next) return;
     if (authStatusRef.current === 'authenticated' && next === 'booting') return;
@@ -197,6 +216,9 @@ function AppRoutes() {
       supabase?.auth.onAuthStateChange(async (event, session) => {
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
           setAuthStatusSafe('authenticated', `onAuthStateChange:${event}`);
+          if (!user && session.user) {
+            setUser(buildFallbackUser(session.user));
+          }
           console.log('[oauth] provider_token:', session.provider_token);
           console.log('[oauth] provider_refresh_token:', session.provider_refresh_token);
           if ((session.provider_token || session.provider_refresh_token) && !tokensSavedRef.current) {
@@ -291,15 +313,7 @@ function AppRoutes() {
       }
 
       if (sessionUser) {
-        setUser({
-          id: sessionUser.id,
-          email: sessionUser.email || '',
-          name: sessionUser.user_metadata?.name || 'Utilisateur',
-          avatar: '',
-          role: 'viewer',
-          organizations: [],
-          organization_id: null
-        });
+        setUser(buildFallbackUser(sessionUser));
         if (
           window.location.pathname === '/' ||
           window.location.pathname.includes('/login') ||
@@ -345,10 +359,12 @@ function AppRoutes() {
     try {
       console.info('[auth] checkUser start');
       const userStart = performance.now();
+      const clearSlow = logSlow('api.auth.getUser');
       let userData: User | null = null;
       try {
         userData = await withTimeout(api.auth.getUser(), 8000, 'api.auth.getUser');
       } catch (e: any) {
+        clearSlow();
         if (isTimeoutError(e)) {
           console.warn('[auth] api.auth.getUser timeout → fallback session.user');
           const fallbackUser = await getSessionFallbackUser();
@@ -368,8 +384,13 @@ function AppRoutes() {
         }
         throw e;
       }
+      clearSlow();
       logStep('[auth] api.auth.getUser done', userStart, { hasUser: !!userData, userId: userData?.id });
       console.info('[auth] checkUser getUser done', { hasUser: !!userData, userId: userData?.id });
+      if (!userData) {
+        console.warn('[auth] checkUser: no user profile, keeping fallback user');
+        return;
+      }
       if (userData?.id !== lastUserIdRef.current) {
         orgInitAttempted.current = false;
         tokensSavedRef.current = false;
