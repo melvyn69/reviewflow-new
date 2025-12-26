@@ -192,12 +192,17 @@ function AppRoutes() {
 
   const bootstrapImmediate = async (skipCheckUser: boolean) => {
     try {
+      const code = new URLSearchParams(window.location.search).get('code');
+      if (code && window.location.pathname !== '/auth/callback') {
+        console.warn('[bootstrap] redirecting to /auth/callback', { pathname: window.location.pathname });
+        window.location.replace(`/auth/callback${window.location.search}`);
+        return;
+      }
       const sessionStart = performance.now();
       let sessionRes = await supabase!.auth.getSession();
       logStep('[bootstrap] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
       setHasSession(!!sessionRes.data.session);
       let sessionUser = sessionRes.data.session?.user;
-      const code = new URLSearchParams(window.location.search).get('code');
       if (!sessionUser && code) {
         console.info('[bootstrap] exchangeCodeForSession start');
         const { error } = await supabase!.auth.exchangeCodeForSession(code);
