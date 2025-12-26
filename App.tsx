@@ -79,6 +79,28 @@ function AppRoutes() {
   const tokensSavedRef = useRef(false);
   const hasLoggedBuildRef = useRef(false);
   const exchangeAttemptedRef = useRef(false);
+  const sessionEstablishedRef = useRef(false);
+
+  const logStep = (label: string, start: number, extra?: Record<string, unknown>) => {
+    const ms = Math.round(performance.now() - start);
+    console.info(`[auth] ${label} (${ms}ms)`, extra || {});
+  };
+
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    const start = performance.now();
+    return await Promise.race([
+      promise.then((result) => {
+        logStep(`${label} ok`, start);
+        return result;
+      }),
+      new Promise<T>((_, reject) =>
+        setTimeout(() => {
+          logStep(`${label} timeout`, start);
+          reject(new Error(`${label} timeout`));
+        }, ms)
+      )
+    ]);
+  };
 
   useEffect(() => {
     if (!hasCheckedRef.current) {
@@ -108,11 +130,19 @@ function AppRoutes() {
         (async () => {
           try {
             console.info('[oauth] exchangeCodeForSession start');
+            const exchangeStart = performance.now();
             const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-            console.info('[oauth] exchangeCodeForSession done', { hasSession: !!data?.session });
+            logStep('[oauth] exchangeCodeForSession done', exchangeStart, { hasSession: !!data?.session });
             if (error) {
               console.error('[oauth] exchangeCodeForSession error', error);
               setAuthError(error.message || "Connexion Google échouée. Réessayez.");
+            }
+            const sessionStart = performance.now();
+            const sessionRes = await supabase.auth.getSession();
+            logStep('[oauth] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
+            if (sessionRes.data.session && !sessionEstablishedRef.current) {
+              sessionEstablishedRef.current = true;
+              setLoading(false);
             }
           } finally {
             window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
@@ -188,20 +218,31 @@ function AppRoutes() {
     isCheckingRef.current = true;
     try {
       console.info('[auth] checkUser start');
+      const userStart = performance.now();
       const userData = await api.auth.getUser();
+      logStep('[auth] api.auth.getUser done', userStart, { hasUser: !!userData, userId: userData?.id });
       console.info('[auth] checkUser getUser done', { hasUser: !!userData, userId: userData?.id });
       if (userData?.id !== lastUserIdRef.current) {
         orgInitAttempted.current = false;
         tokensSavedRef.current = false;
         lastUserIdRef.current = userData?.id || null;
       }
+      const sessionStart = performance.now();
+      const sessionRes = await supabase!.auth.getSession();
+      logStep('[auth] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
+      if (sessionRes.data.session && !sessionEstablishedRef.current) {
+        sessionEstablishedRef.current = true;
+        setLoading(false);
+      }
       if (userData && !userData.organization_id && !orgInitAttempted.current) {
         orgInitAttempted.current = true;
         try {
           console.info('[auth] ensureDefaultForCurrentUser start');
-          await api.organization.ensureDefaultForCurrentUser();
+          await withTimeout(api.organization.ensureDefaultForCurrentUser(), 3000, 'ensureDefaultForCurrentUser');
           console.info('[auth] ensureDefaultForCurrentUser done');
+          const refreshedStart = performance.now();
           const refreshedUser = await api.auth.getUser();
+          logStep('[auth] api.auth.getUser refreshed done', refreshedStart, { hasUser: !!refreshedUser, orgId: refreshedUser?.organization_id });
           console.info('[auth] checkUser refreshed user', { hasUser: !!refreshedUser, orgId: refreshedUser?.organization_id });
           setUser(refreshedUser);
         } catch (e: any) {
@@ -231,7 +272,7 @@ function AppRoutes() {
       return;
     }
     console.info('[auth] org fetch start');
-    api.organization.get()
+    withTimeout(api.organization.get(), 3000, 'organization.get')
       .then((nextOrg) => {
         console.info('[auth] org fetch done', { hasOrg: !!nextOrg, orgId: nextOrg?.id });
         setOrg(nextOrg);
