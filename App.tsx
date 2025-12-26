@@ -69,6 +69,7 @@ function AppRoutes() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [hasSession, setHasSession] = useState(false);
   const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
   const navigate = useNavigate();
   const toast = useToast();
@@ -105,7 +106,7 @@ function AppRoutes() {
   useEffect(() => {
     if (!hasCheckedRef.current) {
       hasCheckedRef.current = true;
-      checkUser();
+      bootstrapImmediate();
     }
     if (!hasLoggedBuildRef.current) {
       hasLoggedBuildRef.current = true;
@@ -137,16 +138,9 @@ function AppRoutes() {
               console.error('[oauth] exchangeCodeForSession error', error);
               setAuthError(error.message || "Connexion Google échouée. Réessayez.");
             }
-            const sessionStart = performance.now();
-            const sessionRes = await supabase.auth.getSession();
-            logStep('[oauth] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
-            if (sessionRes.data.session && !sessionEstablishedRef.current) {
-              sessionEstablishedRef.current = true;
-              setLoading(false);
-            }
           } finally {
             window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
-            await checkUser();
+            await bootstrapImmediate();
             if (
               window.location.hash === '#/' ||
               window.location.hash.includes('login') ||
@@ -207,24 +201,61 @@ function AppRoutes() {
   useEffect(() => {
     if (!loading) return;
     const timeout = window.setTimeout(() => {
-      setAuthError((prev) => prev || "Temps d’attente dépassé. Vérifiez la configuration OAuth/Supabase.");
-      setLoading(false);
-    }, 10000);
+      if (!hasSession) {
+        setAuthError((prev) => prev || "Aucune session Supabase détectée.");
+        setLoading(false);
+      }
+    }, 2000);
     return () => window.clearTimeout(timeout);
-  }, [loading]);
+  }, [loading, hasSession]);
+
+  const bootstrapImmediate = async () => {
+    try {
+      const sessionStart = performance.now();
+      const sessionRes = await supabase!.auth.getSession();
+      logStep('[bootstrap] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
+      setHasSession(!!sessionRes.data.session);
+      if (sessionRes.data.session && !sessionEstablishedRef.current) {
+        sessionEstablishedRef.current = true;
+        setLoading(false);
+      }
+
+      const directUserStart = performance.now();
+      const directUserRes = await supabase!.auth.getUser();
+      logStep('[bootstrap] direct getUser done', directUserStart, { hasUser: !!directUserRes.data.user, userId: directUserRes.data.user?.id });
+      if (directUserRes.data.user) {
+        setUser({
+          id: directUserRes.data.user.id,
+          email: directUserRes.data.user.email || '',
+          name: directUserRes.data.user.user_metadata?.name || 'Utilisateur',
+          avatar: '',
+          role: 'viewer',
+          organizations: [],
+          organization_id: null
+        });
+        if (
+          window.location.hash === '#/' ||
+          window.location.hash.includes('login') ||
+          window.location.hash.includes('register')
+        ) {
+          navigate(defaultPrivateRoute);
+        }
+      }
+
+      // Background profile/org fetch (non-blocking)
+      checkUser();
+    } catch (e: any) {
+      console.error('[bootstrap] error', e);
+      setAuthError(e?.message || "Erreur d’authentification.");
+      setLoading(false);
+    }
+  };
 
   const checkUser = async () => {
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
     try {
       console.info('[auth] checkUser start');
-      const sessionStart = performance.now();
-      const sessionRes = await supabase!.auth.getSession();
-      logStep('[auth] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
-      const directUserStart = performance.now();
-      const directUserRes = await supabase!.auth.getUser();
-      logStep('[auth] direct supabase.auth.getUser done', directUserStart, { hasUser: !!directUserRes.data.user, userId: directUserRes.data.user?.id });
-
       const userStart = performance.now();
       const userData = await api.auth.getUser();
       logStep('[auth] api.auth.getUser done', userStart, { hasUser: !!userData, userId: userData?.id });
@@ -233,10 +264,6 @@ function AppRoutes() {
         orgInitAttempted.current = false;
         tokensSavedRef.current = false;
         lastUserIdRef.current = userData?.id || null;
-      }
-      if (sessionRes.data.session && !sessionEstablishedRef.current) {
-        sessionEstablishedRef.current = true;
-        setLoading(false);
       }
       if (userData && !userData.organization_id && !orgInitAttempted.current) {
         orgInitAttempted.current = true;
