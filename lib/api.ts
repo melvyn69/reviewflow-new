@@ -64,9 +64,13 @@ const runTimed = async <T,>(fn: () => Promise<T>, label: string): Promise<T> => 
         if (isRetryableError(error)) {
             console.warn(`[api] ${label} retry`, { status: error?.status, message: error?.message });
             return await attempt();
-        }
-        throw error;
     }
+    throw error;
+  }
+};
+
+const withAbortSignal = (query: any, signal?: AbortSignal) => {
+    return signal ? query.abortSignal(signal) : query;
 };
 
 let inFlightUser: Promise<User | null> | null = null;
@@ -224,7 +228,7 @@ export const api = {
           logDuration('organization.ensureDefaultForCurrentUser done', start, { hasOrg: !!data });
           return data as Organization;
       },
-      get: async (): Promise<Organization | null> => {
+      get: async (options?: { signal?: AbortSignal }): Promise<Organization | null> => {
           if (inFlightOrg) return inFlightOrg;
           inFlightOrg = (async () => {
               const start = performance.now();
@@ -250,23 +254,29 @@ export const api = {
               if (!sessionUser) return null;
 
               const { data: userProfile, error: profileError } = await runTimedQuery(
-                  () => supabase.from('users').select('organization_id').eq('id', sessionUser.id).maybeSingle(),
+                  () => withAbortSignal(
+                      supabase.from('users').select('organization_id').eq('id', sessionUser.id).maybeSingle(),
+                      options?.signal
+                  ),
                   'supabase.from(users).select organization_id'
               );
               if (profileError) throw profileError;
               if (!userProfile?.organization_id) return null;
 
               const { data, error } = await runTimedQuery(
-                () => supabase
-                  .from('organizations')
-                  .select(`
-                    *, 
-                    locations(*), 
-                    staff_members(*), 
-                    offers(*)
-                `)
-                  .eq('id', userProfile.organization_id)
-                  .single(),
+                () => withAbortSignal(
+                  supabase
+                    .from('organizations')
+                    .select(`
+                      *, 
+                      locations(*), 
+                      staff_members(*), 
+                      offers(*)
+                  `)
+                    .eq('id', userProfile.organization_id)
+                    .single(),
+                  options?.signal
+                ),
                 'supabase.from(organizations).select'
               );
               if (error) throw error;

@@ -79,6 +79,8 @@ function AppRoutes() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [authStatus, setAuthStatus] = useState<'booting' | 'authenticated' | 'unauthenticated'>('booting');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [orgFetchDegraded, setOrgFetchDegraded] = useState(false);
+  const [orgFetchRetryToken, setOrgFetchRetryToken] = useState(0);
   const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
   const navigate = useNavigate();
   const toast = useToast();
@@ -96,6 +98,8 @@ function AppRoutes() {
   const lastRedirectRef = useRef<string | null>(null);
   const location = useLocation();
   const checkUserRetryScheduledRef = useRef(false);
+  const orgRetryScheduledRef = useRef(false);
+  const ORG_FETCH_TIMEOUT_MS = 6000;
 
   const logStep = (label: string, start: number, extra?: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - start);
@@ -351,6 +355,7 @@ function AppRoutes() {
 
   const checkUser = async () => {
     if (authStatusRef.current !== 'authenticated') return;
+    if (isAuthCallbackPath()) return;
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
     setIsSyncing(true);
@@ -436,26 +441,60 @@ function AppRoutes() {
   useEffect(() => {
     if (!user) {
       setOrg(null);
+      setOrgFetchDegraded(false);
+      return;
+    }
+    if (isAuthCallbackPath()) {
+      setOrgFetchDegraded(false);
       return;
     }
     console.info('[auth] org fetch start');
     setIsSyncing(true);
+    setOrgFetchDegraded(false);
+    const controller = new AbortController();
     const clearOrgSlow = logSlow('api.organization.get');
-    api.organization.get()
-      .then((nextOrg) => {
+    const run = async () => {
+      try {
+        const nextOrg = await withTimeout(
+          api.organization.get({ signal: controller.signal }),
+          ORG_FETCH_TIMEOUT_MS,
+          'api.organization.get'
+        );
         clearOrgSlow();
         console.info('[auth] org fetch done', { hasOrg: !!nextOrg, orgId: nextOrg?.id });
         setOrg(nextOrg);
-      })
-      .catch((e) => {
+      } catch (e) {
         clearOrgSlow();
+        if (isTimeoutError(e)) {
+          controller.abort();
+          console.warn('[auth] org fetch timeout → degraded mode');
+          setOrg(null);
+          setOrgFetchDegraded(true);
+          if (!orgRetryScheduledRef.current) {
+            orgRetryScheduledRef.current = true;
+            window.setTimeout(() => {
+              orgRetryScheduledRef.current = false;
+              if (authStatusRef.current === 'authenticated' && !isAuthCallbackPath()) {
+                setOrgFetchRetryToken((value) => value + 1);
+              }
+            }, 2000);
+          }
+          return;
+        }
+        if ((e as any)?.name === 'AbortError') {
+          return;
+        }
         console.error('[auth] org fetch error', e);
         setOrg(null);
-      })
-      .finally(() => {
+      } finally {
         setIsSyncing(false);
-      });
-  }, [user?.id]);
+      }
+    };
+    run();
+    return () => {
+      controller.abort();
+    };
+  }, [user?.id, orgFetchRetryToken]);
 
   const showSpinner = authStatus === 'booting';
 
@@ -471,6 +510,11 @@ function AppRoutes() {
           {authStatus === 'authenticated' && isSyncing && (
             <div className="bg-amber-50 text-amber-900 text-sm px-4 py-2">
               Session active. Synchronisation en cours...
+            </div>
+          )}
+          {authStatus === 'authenticated' && orgFetchDegraded && (
+            <div className="bg-amber-50 text-amber-900 text-sm px-4 py-2">
+              Organisation non chargée, réessai en arrière-plan.
             </div>
           )}
           <ScrollToTop />
