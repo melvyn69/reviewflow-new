@@ -68,9 +68,7 @@ const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) =
 function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [hasSession, setHasSession] = useState(false);
+  const [authStatus, setAuthStatus] = useState<'booting' | 'authenticated' | 'unauthenticated'>('booting');
   const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
   const navigate = useNavigate();
   const toast = useToast();
@@ -82,10 +80,27 @@ function AppRoutes() {
   const hasLoggedBuildRef = useRef(false);
   const isAuthCallbackPath = () => window.location.pathname === '/auth/callback';
   const sessionEstablishedRef = useRef(false);
+  const authStatusRef = useRef<'booting' | 'authenticated' | 'unauthenticated'>('booting');
+  const bootstrapAttemptRef = useRef(0);
+  const bootstrapRetryScheduledRef = useRef(false);
 
   const logStep = (label: string, start: number, extra?: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - start);
     console.info(`[auth] ${label} (${ms}ms)`, extra || {});
+  };
+
+  const setAuthStatusSafe = (next: 'booting' | 'authenticated' | 'unauthenticated', reason?: string) => {
+    if (authStatusRef.current === next) return;
+    if (authStatusRef.current === 'authenticated' && next === 'booting') return;
+    const prev = authStatusRef.current;
+    authStatusRef.current = next;
+    console.info('[auth] status', {
+      from: prev,
+      to: next,
+      at: new Date().toISOString(),
+      reason
+    });
+    setAuthStatus(next);
   };
 
   const isGetSessionTimeout = (error: any) => {
@@ -133,13 +148,13 @@ function AppRoutes() {
     if (!supabase) {
       const msg = "Supabase non configuré. Vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.";
       console.error('[auth] supabase missing');
-      setAuthError(msg);
-      setLoading(false);
+      setAuthStatusSafe('unauthenticated', msg);
       return;
     }
     const authListener =
       supabase?.auth.onAuthStateChange(async (event, session) => {
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+          setAuthStatusSafe('authenticated', `onAuthStateChange:${event}`);
           console.log('[oauth] provider_token:', session.provider_token);
           console.log('[oauth] provider_refresh_token:', session.provider_refresh_token);
           if ((session.provider_token || session.provider_refresh_token) && !tokensSavedRef.current) {
@@ -181,6 +196,7 @@ function AppRoutes() {
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setOrg(null);
+          setAuthStatusSafe('unauthenticated', 'onAuthStateChange:SIGNED_OUT');
           navigate('/');
         }
       }) || { data: { subscription: { unsubscribe: () => {} } } };
@@ -192,6 +208,8 @@ function AppRoutes() {
 
   const bootstrapImmediate = async (skipCheckUser: boolean) => {
     try {
+      bootstrapAttemptRef.current += 1;
+      console.info('[auth] bootstrap attempt', { attempt: bootstrapAttemptRef.current });
       const code = new URLSearchParams(window.location.search).get('code');
       if (code && window.location.pathname !== '/auth/callback') {
         console.warn('[bootstrap] redirecting to /auth/callback', { pathname: window.location.pathname });
@@ -201,7 +219,6 @@ function AppRoutes() {
       const sessionStart = performance.now();
       let sessionRes = await supabase!.auth.getSession();
       logStep('[bootstrap] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
-      setHasSession(!!sessionRes.data.session);
       let sessionUser = sessionRes.data.session?.user;
       if (!sessionUser && code) {
         console.info('[bootstrap] exchangeCodeForSession start');
@@ -216,7 +233,9 @@ function AppRoutes() {
       }
       if (sessionUser && !sessionEstablishedRef.current) {
         sessionEstablishedRef.current = true;
-        setLoading(false);
+      }
+      if (sessionUser) {
+        setAuthStatusSafe('authenticated', 'session_present');
       }
 
       if (sessionUser) {
@@ -239,7 +258,14 @@ function AppRoutes() {
       }
 
       if (skipCheckUser) {
-        setLoading(false);
+        if (!sessionUser) {
+          setAuthStatusSafe('unauthenticated', 'bootstrap:no_session_skip');
+        }
+        return;
+      }
+
+      if (!sessionUser) {
+        setAuthStatusSafe('unauthenticated', 'bootstrap:no_session');
         return;
       }
 
@@ -247,12 +273,21 @@ function AppRoutes() {
       checkUser();
     } catch (e: any) {
       console.error('[bootstrap] error', e);
-      setAuthError(e?.message || "Erreur d’authentification.");
-      setLoading(false);
+      if (!bootstrapRetryScheduledRef.current) {
+        bootstrapRetryScheduledRef.current = true;
+        console.warn('[bootstrap] getSession timeout -> retry scheduled');
+        window.setTimeout(() => {
+          bootstrapRetryScheduledRef.current = false;
+          bootstrapImmediate(skipCheckUser);
+        }, 500);
+        return;
+      }
+      setAuthStatusSafe('unauthenticated', 'bootstrap:error');
     }
   };
 
   const checkUser = async () => {
+    if (authStatusRef.current !== 'authenticated') return;
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
     try {
@@ -277,14 +312,19 @@ function AppRoutes() {
           logStep('[auth] api.auth.getUser refreshed done', refreshedStart, { hasUser: !!refreshedUser, orgId: refreshedUser?.organization_id });
           console.info('[auth] checkUser refreshed user', { hasUser: !!refreshedUser, orgId: refreshedUser?.organization_id });
           setUser(refreshedUser);
+          setAuthStatusSafe('authenticated', 'checkUser:refreshed');
         } catch (e: any) {
           console.error("Org init failed", e);
-          setAuthError(e?.message || "Impossible de créer votre organisation. Vérifiez la configuration Supabase.");
           toast.error("Impossible de créer votre organisation. Vérifiez la configuration Supabase.");
           setUser(userData);
         }
       } else {
         setUser(userData);
+        if (userData) {
+          setAuthStatusSafe('authenticated', 'checkUser:userData');
+        } else {
+          setAuthStatusSafe('unauthenticated', 'checkUser:no_user');
+        }
       }
     } catch (e: any) {
       if (isGetSessionTimeout(e)) {
@@ -292,12 +332,9 @@ function AppRoutes() {
         return;
       }
       console.error('[auth] checkUser error', e);
-      setAuthError(e?.message || "Erreur d’authentification.");
-      setUser(null);
-      setOrg(null);
+      // Non-fatal: do not flip to unauthenticated unless explicitly no session
     } finally {
       console.info('[auth] checkUser done');
-      setLoading(false);
       isCheckingRef.current = false;
     }
   };
@@ -319,24 +356,16 @@ function AppRoutes() {
       });
   }, [user?.id]);
 
-  const showSpinner = loading && !authError;
+  const showSpinner = authStatus === 'booting';
 
   return (
     <>
-      {authError && (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-center">
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 mb-2">Erreur d’authentification</h1>
-            <p className="text-slate-600">{authError}</p>
-          </div>
-        </div>
-      )}
       {showSpinner && (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         </div>
       )}
-      {!authError && !showSpinner && (
+      {!showSpinner && (
         <>
           <ScrollToTop />
           <Routes>
