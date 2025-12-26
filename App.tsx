@@ -218,6 +218,13 @@ function AppRoutes() {
     isCheckingRef.current = true;
     try {
       console.info('[auth] checkUser start');
+      const sessionStart = performance.now();
+      const sessionRes = await supabase!.auth.getSession();
+      logStep('[auth] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
+      const directUserStart = performance.now();
+      const directUserRes = await supabase!.auth.getUser();
+      logStep('[auth] direct supabase.auth.getUser done', directUserStart, { hasUser: !!directUserRes.data.user, userId: directUserRes.data.user?.id });
+
       const userStart = performance.now();
       const userData = await api.auth.getUser();
       logStep('[auth] api.auth.getUser done', userStart, { hasUser: !!userData, userId: userData?.id });
@@ -227,9 +234,6 @@ function AppRoutes() {
         tokensSavedRef.current = false;
         lastUserIdRef.current = userData?.id || null;
       }
-      const sessionStart = performance.now();
-      const sessionRes = await supabase!.auth.getSession();
-      logStep('[auth] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
       if (sessionRes.data.session && !sessionEstablishedRef.current) {
         sessionEstablishedRef.current = true;
         setLoading(false);

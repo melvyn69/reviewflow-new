@@ -5,6 +5,28 @@ import { DEMO_USER, DEMO_ORG, DEMO_REVIEWS, DEMO_STATS, DEMO_COMPETITORS } from 
 import { ENABLE_DEMO_MODE, ENABLE_EXTRAS, isDemoModeEnabled, setDemoModeEnabled } from './flags';
 import { GoogleGenAI } from "@google/genai";
 
+const logDuration = (label: string, start: number, extra?: Record<string, unknown>) => {
+    const ms = Math.round(performance.now() - start);
+    console.info(`[api] ${label} (${ms}ms)`, extra || {});
+};
+
+const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    const start = performance.now();
+    return await Promise.race([
+        promise.then((result) => {
+            logDuration(`${label} ok`, start);
+            return result;
+        }),
+        new Promise<T>((_, reject) =>
+            setTimeout(() => {
+                const err = new Error(`${label} timeout after ${ms}ms`);
+                console.error(err.message);
+                reject(err);
+            }, ms)
+        )
+    ]);
+};
+
 // Helper for Edge Functions
 const invoke = async (functionName: string, body: any) => {
     if (isDemoModeEnabled()) {
@@ -25,15 +47,21 @@ const getAIClient = () => {
 export const api = {
   auth: {
     getUser: async (): Promise<User | null> => {
+      const start = performance.now();
+      console.info('[api] auth.getUser start', { url: supabase?.auth?.url });
       if (isDemoModeEnabled()) return DEMO_USER;
       
       if (!supabase) return null;
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(supabase.auth.getUser(), 4000, 'supabase.auth.getUser');
       if (!user) return null;
       
-      const { data } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
+      const { data } = await withTimeout(
+          supabase.from('users').select('*').eq('id', user.id).maybeSingle(),
+          4000,
+          'supabase.from(users).select'
+      );
       
-      return {
+      const result = {
           id: user.id,
           email: user.email!,
           name: (data?.name) || (user.user_metadata?.name) || 'Utilisateur',
@@ -42,6 +70,8 @@ export const api = {
           organizations: data?.organizations || [],
           organization_id: data?.organization_id
       };
+      logDuration('auth.getUser done', start, { userId: result.id, hasOrg: !!result.organization_id });
+      return result;
     },
     login: async (email: string, password: string) => {
       if (email === 'demo@reviewflow.com') {
@@ -129,12 +159,21 @@ export const api = {
   },
   organization: {
       ensureDefaultForCurrentUser: async (): Promise<Organization | null> => {
+          const start = performance.now();
+          console.info('[api] organization.ensureDefaultForCurrentUser start', { url: supabase?.rest?.url });
           if (!supabase) throw new Error("Supabase not initialized");
-          const { data, error } = await supabase.rpc('create_default_org_for_current_user');
+          const { data, error } = await withTimeout(
+              supabase.rpc('create_default_org_for_current_user'),
+              4000,
+              'supabase.rpc(create_default_org_for_current_user)'
+          );
           if (error) throw error;
+          logDuration('organization.ensureDefaultForCurrentUser done', start, { hasOrg: !!data });
           return data as Organization;
       },
       get: async (): Promise<Organization | null> => {
+          const start = performance.now();
+          console.info('[api] organization.get start', { url: supabase?.rest?.url });
           if (isDemoModeEnabled()) {
               if (DEMO_ORG.locations && DEMO_ORG.locations.length > 0 && !DEMO_ORG.locations[0].public_config) {
                   DEMO_ORG.locations[0].public_config = {
@@ -150,23 +189,32 @@ export const api = {
           }
 
           if (!supabase) return null;
-          const { data: { user } } = await supabase.auth.getUser();
+          const { data: { user } } = await withTimeout(supabase.auth.getUser(), 4000, 'supabase.auth.getUser');
           if (!user) return null;
 
-          const { data: userProfile } = await supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle();
+          const { data: userProfile } = await withTimeout(
+              supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle(),
+              4000,
+              'supabase.from(users).select organization_id'
+          );
           if (!userProfile?.organization_id) return null;
 
-          const { data } = await supabase
-            .from('organizations')
-            .select(`
+          const { data } = await withTimeout(
+            supabase
+              .from('organizations')
+              .select(`
                 *, 
                 locations(*), 
                 staff_members(*), 
                 offers(*)
             `)
-            .eq('id', userProfile.organization_id)
-            .single();
+              .eq('id', userProfile.organization_id)
+              .single(),
+            4000,
+            'supabase.from(organizations).select'
+          );
             
+          logDuration('organization.get done', start, { orgId: (data as any)?.id });
           return data as any;
       },
       create: async (name: string, industry: string) => {
