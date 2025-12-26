@@ -3,6 +3,7 @@ import { Review } from '../types';
 import { api } from '../lib/api';
 import { Button, Badge, useToast } from './ui';
 import { X, Send, SkipForward, Wand2, CheckCircle2, MessageSquare, Star, ArrowRight, Keyboard, Zap } from 'lucide-react';
+import { safeInitial } from '../lib/utils';
 
 interface InboxFocusModeProps {
     reviews: Review[];
@@ -142,7 +143,7 @@ export const InboxFocusMode: React.FC<InboxFocusModeProps> = ({ reviews, onClose
 
                         <div className="flex items-center gap-4 mb-6">
                             <div className="h-14 w-14 bg-indigo-100 rounded-full flex items-center justify-center text-xl font-bold text-indigo-700 ring-4 ring-indigo-50">
-                                {currentReview.author_name.charAt(0)}
+                                {safeInitial(currentReview.author_name)}
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-900">{currentReview.author_name}</h3>

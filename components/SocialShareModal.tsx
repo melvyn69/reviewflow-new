@@ -4,6 +4,7 @@ import { Review } from '../types';
 import { Button, useToast } from './ui';
 import { Star, Share2, X, Instagram, Facebook, Linkedin, Copy, Sparkles, Download, ExternalLink } from 'lucide-react';
 import { toPng } from 'html-to-image';
+import { safeInitial } from '../lib/utils';
 
 export const SocialShareModal = ({ review, onClose }: { review: Review; onClose: () => void }) => {
     const [platform, setPlatform] = useState<'instagram' | 'facebook' | 'linkedin'>('instagram');
@@ -85,7 +86,7 @@ export const SocialShareModal = ({ review, onClose }: { review: Review; onClose:
                         </p>
                         <div className="flex items-center justify-center gap-3">
                             <div className="h-10 w-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md">
-                                {review.author_name.charAt(0)}
+                                {safeInitial(review.author_name)}
                             </div>
                             <div className="text-left">
                                 <div className="font-bold text-sm text-slate-900">{review.author_name}</div>

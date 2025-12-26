@@ -5,6 +5,7 @@ import { Button, Input, useToast } from '../components/ui';
 import { api } from '../lib/api';
 import { useParams, useSearchParams } from '../components/ui';
 import { Offer, Coupon } from '../types';
+import { safeInitial } from '../lib/utils';
 
 const POSITIVE_TAGS = ['Accueil', 'Rapidité', 'Propreté', 'Qualité', 'Ambiance', 'Conseil'];
 const NEGATIVE_TAGS = ['Attente', 'Service', 'Prix', 'Bruit', 'Hygiène', 'Qualité'];
@@ -304,7 +305,7 @@ export const ReviewFunnel = () => {
                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
                      <div className="absolute -bottom-8 bg-white p-1 rounded-full shadow-lg">
                         <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-bold text-2xl border-4 border-white">
-                            {locationInfo.name ? locationInfo.name.charAt(0) : 'E'}
+                            {safeInitial(locationInfo.name, 'E')}
                         </div>
                      </div>
                 </div>

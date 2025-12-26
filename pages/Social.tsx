@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { useNavigate } from '../components/ui';
+import { safeInitial } from '../lib/utils';
 
 // Template styles
 const TEMPLATES = [
@@ -308,7 +309,7 @@ export const SocialPage = () => {
 
                                 <div className="flex items-center gap-6 mt-12 w-full border-t border-current pt-8 opacity-90">
                                     <div className={`h-24 w-24 rounded-full flex items-center justify-center text-4xl font-bold ${template === 'dark' ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
-                                        {selectedReview?.author_name.charAt(0)}
+                                        {safeInitial(selectedReview?.author_name)}
                                     </div>
                                     <div>
                                         <div className="font-bold text-3xl">{selectedReview?.author_name}</div>

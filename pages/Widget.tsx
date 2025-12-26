@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from '../components/ui';
 import { api } from '../lib/api';
 import { Star, MessageCircle, Loader2 } from 'lucide-react';
+import { safeInitial } from '../lib/utils';
 
 export const WidgetPage = () => {
     const { locationId } = useParams();
@@ -77,7 +78,7 @@ export const WidgetPage = () => {
                         <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-2">
                                 <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-slate-700 text-white' : 'bg-indigo-100 text-indigo-700'}`}>
-                                    {review.author_name.charAt(0)}
+                                    {safeInitial(review.author_name)}
                                 </div>
                                 <div>
                                     <div className="font-bold text-sm">{review.author_name}</div>
@@ -106,7 +107,7 @@ export const WidgetPage = () => {
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
                         <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold shadow-sm ${isDark ? 'bg-slate-700 text-white' : 'bg-indigo-600 text-white'}`}>
-                            {currentReview.author_name.charAt(0)}
+                            {safeInitial(currentReview.author_name)}
                         </div>
                         <div>
                             <div className="font-bold">{currentReview.author_name}</div>

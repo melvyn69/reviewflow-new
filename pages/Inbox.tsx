@@ -34,6 +34,7 @@ import {
   X
 } from 'lucide-react';
 import { useNavigate, useLocation as useRouterLocation } from '../components/ui';
+import { safeInitial } from '../lib/utils';
 
 const SourceIcon = ({ source }: { source: string }) => {
   const colors: Record<string, string> = {
@@ -712,7 +713,7 @@ export const InboxPage = () => {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-4">
                     <div className="h-10 w-10 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold text-lg shrink-0">
-                        {selectedReview.author_name.charAt(0)}
+                        {safeInitial(selectedReview.author_name)}
                     </div>
                     <div>
                         <div className="font-bold text-slate-900">{selectedReview.author_name}</div>

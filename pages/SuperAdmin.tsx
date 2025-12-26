@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input, useToas
 import { api } from '../lib/api';
 import { Users, CreditCard, Activity, TrendingUp, Search, LogIn, ShieldAlert, DollarSign, Building } from 'lucide-react';
 import { useNavigate } from '../components/ui';
+import { safeInitial } from '../lib/utils';
 
 const AdminKPI = ({ title, value, subtext, icon: Icon, color }: any) => (
     <Card>
@@ -134,7 +135,7 @@ export const SuperAdminPage = () => {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
                                                 <div className="h-8 w-8 rounded bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold mr-3">
-                                                    {tenant.name.charAt(0)}
+                                                    {safeInitial(tenant.name)}
                                                 </div>
                                                 <div>
                                                     <div className="font-medium text-slate-900">{tenant.name}</div>

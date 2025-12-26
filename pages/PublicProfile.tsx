@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from '../components/ui';
 import { api } from '../lib/api';
 import { Review, Location } from '../types';
+import { safeInitial } from '../lib/utils';
 import { Button, Card, CardContent, Skeleton } from '../components/ui';
 import { Star, MapPin, Globe, Phone, CheckCircle2, ShieldCheck, MessageCircle, ExternalLink, Calendar } from 'lucide-react';
 
@@ -90,7 +91,7 @@ export const PublicProfilePage = () => {
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative -mt-16 pb-6">
                     <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 flex flex-col md:flex-row gap-6 items-start md:items-center">
                         <div className="h-24 w-24 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-3xl font-bold border-4 border-white shadow-sm shrink-0">
-                            {location.name.charAt(0)}
+                            {safeInitial(location.name)}
                         </div>
                         <div className="flex-1">
                             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2 flex items-center gap-2">
@@ -181,7 +182,7 @@ export const PublicProfilePage = () => {
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex items-center gap-3">
                                             <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-500 text-sm">
-                                                {review.author_name.charAt(0)}
+                                                {safeInitial(review.author_name)}
                                             </div>
                                             <div>
                                                 <div className="font-bold text-slate-900 text-sm">{review.author_name}</div>

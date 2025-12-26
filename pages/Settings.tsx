@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { Organization, Location, BrandSettings, User, IndustryType, NotificationSettings, ApiKey, WebhookConfig } from '../types';
 import { Card, CardContent, Button, Input, Select, Toggle, useToast, Badge, CardHeader, CardTitle, useNavigate, useLocation, ProLock } from '../components/ui';
 import { ENABLE_EXTRAS, getRuntimeModeLabel } from '../lib/flags';
+import { safeInitial } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { 
     Building2, 
@@ -950,7 +951,7 @@ export const SettingsPage = () => {
                 <div className="max-w-xl space-y-6">
                     <div className="flex items-center gap-4 mb-6">
                         <div className="h-16 w-16 bg-indigo-100 rounded-full flex items-center justify-center text-2xl font-bold text-indigo-600">
-                            {userName.charAt(0)}
+                            {safeInitial(userName)}
                         </div>
                         <div>
                             <h3 className="font-bold text-slate-900">{userName}</h3>
@@ -1259,7 +1260,7 @@ export const SettingsPage = () => {
                             <div key={member.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl">
                                 <div className="flex items-center gap-4">
                                     <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center font-bold text-indigo-700">
-                                        {member.name.charAt(0)}
+                                        {safeInitial(member.name)}
                                     </div>
                                     <div>
                                         <div className="font-bold text-slate-900">{member.name}</div>

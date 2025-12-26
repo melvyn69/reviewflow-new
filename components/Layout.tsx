@@ -33,6 +33,7 @@ import { AppNotification, User, Organization } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { useTranslation } from '../lib/i18n';
 import { ENABLE_DEMO_MODE, ENABLE_EXTRAS } from '../lib/flags';
+import { safeInitial } from '../lib/utils';
 
 // Sidebar Item Component
 const SidebarItem = ({ to, icon: Icon, label, exact = false, onClick, isPro = false }: { to: string; icon: any; label: string, exact?: boolean, onClick?: () => void, isPro?: boolean }) => {
@@ -417,7 +418,7 @@ const Topbar = ({ onMenuClick, user }: { onMenuClick: () => void; user?: User | 
                 onClick={() => setShowUserMenu(!showUserMenu)}
             >
                 <div className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold border border-indigo-200">
-                    {user.name.charAt(0)}
+                    {safeInitial(user.name)}
                 </div>
                 <div className="text-right hidden md:block">
                   <div className="text-xs font-bold text-slate-700 leading-tight">{user.name}</div>

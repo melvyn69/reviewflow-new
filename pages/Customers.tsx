@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { Customer, PipelineStage } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input, useToast, Select } from '../components/ui';
 import { Users, Search, Download, Star, Filter, Heart, AlertTriangle, X, Mail, MessageCircle, DollarSign, Calendar, LayoutGrid, List, Sparkles, Wand2, ArrowRight, Zap } from 'lucide-react';
+import { safeInitial } from '../lib/utils';
 
 const STAGES: { id: PipelineStage; label: string; color: string }[] = [
     { id: 'new', label: 'Nouveaux', color: 'bg-blue-50 border-blue-200 text-blue-700' },
@@ -245,7 +246,7 @@ export const CustomersPage = () => {
                                       <td className="px-6 py-4 whitespace-nowrap">
                                           <div className="flex items-center">
                                               <div className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs mr-3 border border-indigo-200">
-                                                  {customer.name.charAt(0)}
+                                                  {safeInitial(customer.name)}
                                               </div>
                                               <div>
                                                   <div className="font-medium text-slate-900">{customer.name}</div>
@@ -285,7 +286,7 @@ export const CustomersPage = () => {
                   <div className="flex justify-between items-start mb-4">
                       <div className="flex items-center gap-4">
                           <div className="h-16 w-16 bg-white border-2 border-indigo-100 rounded-full flex items-center justify-center font-bold text-2xl text-indigo-600 shadow-sm">
-                              {selectedCustomer.name.charAt(0)}
+                              {safeInitial(selectedCustomer.name)}
                           </div>
                           <div>
                               <h2 className="text-xl font-bold text-slate-900">{selectedCustomer.name}</h2>
