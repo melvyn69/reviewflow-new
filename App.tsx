@@ -188,10 +188,22 @@ function AppRoutes() {
   const bootstrapImmediate = async (skipCheckUser: boolean) => {
     try {
       const sessionStart = performance.now();
-      const sessionRes = await supabase!.auth.getSession();
+      let sessionRes = await supabase!.auth.getSession();
       logStep('[bootstrap] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
       setHasSession(!!sessionRes.data.session);
-      const sessionUser = sessionRes.data.session?.user;
+      let sessionUser = sessionRes.data.session?.user;
+      const code = new URLSearchParams(window.location.search).get('code');
+      if (!sessionUser && code) {
+        console.info('[bootstrap] exchangeCodeForSession start');
+        const { error } = await supabase!.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error('[bootstrap] exchangeCodeForSession error', error);
+        }
+        sessionRes = await supabase!.auth.getSession();
+        logStep('[bootstrap] getSession after exchange', sessionStart, { hasSession: !!sessionRes.data.session });
+        sessionUser = sessionRes.data.session?.user;
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
       if (sessionUser && !sessionEstablishedRef.current) {
         sessionEstablishedRef.current = true;
         setLoading(false);

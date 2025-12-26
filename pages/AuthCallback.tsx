@@ -30,8 +30,7 @@ export const AuthCallbackPage = () => {
         setMessage("Supabase n'est pas configuré. Vérifiez les variables d'environnement.");
         return;
       }
-      const url = window.location.href;
-      const params = new URL(url).searchParams;
+      const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
       console.info('[auth/callback] code present', { hasCode: !!code });
 
@@ -40,7 +39,7 @@ export const AuthCallbackPage = () => {
 
       if (!sessionBefore.data.session && code) {
         console.info('[auth/callback] exchangeCodeForSession start');
-        const { data, error } = await supabase.auth.exchangeCodeForSession(url);
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         console.info('[auth/callback] exchangeCodeForSession result', {
           hasSession: !!data?.session
         });
