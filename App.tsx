@@ -94,6 +94,7 @@ function AppRoutes() {
   const bootstrapRetryScheduledRef = useRef(false);
   const lastRedirectRef = useRef<string | null>(null);
   const location = useLocation();
+  const checkUserRetryScheduledRef = useRef(false);
 
   const logStep = (label: string, start: number, extra?: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - start);
@@ -127,6 +128,26 @@ function AppRoutes() {
   const isGetSessionTimeout = (error: any) => {
     const message = String(error?.message || '').toLowerCase();
     return message.includes('supabase.auth.getsession') && message.includes('timeout');
+  };
+
+  const isTimeoutError = (error: any) => {
+    return String(error?.message || '').toLowerCase().includes('timeout');
+  };
+
+  const getSessionFallbackUser = async (): Promise<Pick<User, 'id' | 'email' | 'organization_id'> | null> => {
+    try {
+      const sessionRes = await supabase!.auth.getSession();
+      const sessionUser = sessionRes.data.session?.user;
+      if (!sessionUser) return null;
+      return {
+        id: sessionUser.id,
+        email: sessionUser.email || '',
+        organization_id: null
+      };
+    } catch (e) {
+      console.warn('[auth] fallback getSession failed', e);
+      return null;
+    }
   };
 
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
@@ -324,7 +345,29 @@ function AppRoutes() {
     try {
       console.info('[auth] checkUser start');
       const userStart = performance.now();
-      const userData = await api.auth.getUser();
+      let userData: User | null = null;
+      try {
+        userData = await withTimeout(api.auth.getUser(), 8000, 'api.auth.getUser');
+      } catch (e: any) {
+        if (isTimeoutError(e)) {
+          console.warn('[auth] api.auth.getUser timeout → fallback session.user');
+          const fallbackUser = await getSessionFallbackUser();
+          if (fallbackUser) {
+            setUser(fallbackUser as User);
+          }
+          if (!checkUserRetryScheduledRef.current) {
+            checkUserRetryScheduledRef.current = true;
+            window.setTimeout(() => {
+              checkUserRetryScheduledRef.current = false;
+              if (authStatusRef.current === 'authenticated' && !isCheckingRef.current) {
+                checkUser();
+              }
+            }, 500);
+          }
+          return;
+        }
+        throw e;
+      }
       logStep('[auth] api.auth.getUser done', userStart, { hasUser: !!userData, userId: userData?.id });
       console.info('[auth] checkUser getUser done', { hasUser: !!userData, userId: userData?.id });
       if (userData?.id !== lastUserIdRef.current) {
