@@ -88,6 +88,11 @@ function AppRoutes() {
     console.info(`[auth] ${label} (${ms}ms)`, extra || {});
   };
 
+  const isGetSessionTimeout = (error: any) => {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('supabase.auth.getsession') && message.includes('timeout');
+  };
+
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     const start = performance.now();
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -277,6 +282,10 @@ function AppRoutes() {
         setUser(userData);
       }
     } catch (e: any) {
+      if (isGetSessionTimeout(e)) {
+        console.warn('[auth] checkUser getSession timeout', e);
+        return;
+      }
       console.error('[auth] checkUser error', e);
       setAuthError(e?.message || "Erreur d’authentification.");
       setUser(null);

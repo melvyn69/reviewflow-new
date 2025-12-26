@@ -11,6 +11,7 @@ const logDuration = (label: string, start: number, extra?: Record<string, unknow
 };
 
 const DEFAULT_TIMEOUT_MS = 12000;
+const CANONICAL_REDIRECT_BASE = 'https://reviewflow-new.vercel.app';
 
 const withTimeout = async <T,>(promise: Promise<T>, ms = DEFAULT_TIMEOUT_MS, label = 'timeout'): Promise<T> => {
     const start = performance.now();
@@ -98,7 +99,7 @@ export const api = {
           if (isDemoModeEnabled()) return DEMO_USER;
           
           if (!supabase) return null;
-          const sessionRes = await runTimedQuery(() => supabase.auth.getSession(), 'supabase.auth.getSession');
+          const sessionRes = await supabase.auth.getSession();
           if (sessionRes.error) throw sessionRes.error;
           const sessionUser = sessionRes.data.session?.user;
           if (!sessionUser) return null;
@@ -159,7 +160,7 @@ export const api = {
         await supabase.auth.signInWithOAuth({ 
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
+                redirectTo: `${CANONICAL_REDIRECT_BASE}/auth/callback`,
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -174,7 +175,7 @@ export const api = {
         const { data } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
+                redirectTo: `${CANONICAL_REDIRECT_BASE}/auth/callback`,
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -243,7 +244,7 @@ export const api = {
               }
 
               if (!supabase) return null;
-              const sessionRes = await runTimedQuery(() => supabase.auth.getSession(), 'supabase.auth.getSession');
+              const sessionRes = await supabase.auth.getSession();
               if (sessionRes.error) throw sessionRes.error;
               const sessionUser = sessionRes.data.session?.user;
               if (!sessionUser) return null;
