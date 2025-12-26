@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { Button, Input } from '../components/ui';
 import { Mail, Lock, User as UserIcon, AlertCircle, CheckCircle2, Copy, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useNavigate, useLocation } from '../components/ui';
 import { ENABLE_DEMO_MODE, ENABLE_EXTRAS } from '../lib/flags';
+import { supabase } from '../lib/supabase';
 
 interface AuthPageProps {
   onLoginSuccess: () => void;
@@ -20,6 +21,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   const [currentUrl, setCurrentUrl] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  const exchangeAttemptedRef = useRef(false);
   
   // Form State
   const [email, setEmail] = useState('');
@@ -48,6 +50,30 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
           navigate(location.pathname, { replace: true });
       }
   }, [location, navigate]);
+
+  useEffect(() => {
+      if (exchangeAttemptedRef.current) return;
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (!code || !supabase) return;
+      exchangeAttemptedRef.current = true;
+      setIsLoading(true);
+      setError(null);
+      (async () => {
+          try {
+              const { error } = await supabase.auth.exchangeCodeForSession(code);
+              if (error) {
+                  console.error("OAuth exchange failed", error);
+                  setError("Connexion Google échouée. Réessayez.");
+              } else {
+                  onLoginSuccess();
+              }
+          } finally {
+              window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+              setIsLoading(false);
+          }
+      })();
+  }, [onLoginSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

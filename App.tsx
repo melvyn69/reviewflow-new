@@ -68,6 +68,7 @@ function AppRoutes() {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const defaultPrivateRoute = DEFAULT_PRIVATE_ROUTE;
   const navigate = useNavigate();
   const toast = useToast();
@@ -77,6 +78,7 @@ function AppRoutes() {
   const lastUserIdRef = useRef<string | null>(null);
   const tokensSavedRef = useRef(false);
   const hasLoggedBuildRef = useRef(false);
+  const exchangeAttemptedRef = useRef(false);
 
   useEffect(() => {
     if (!hasCheckedRef.current) {
@@ -90,6 +92,38 @@ function AppRoutes() {
         (import.meta as any).env?.VERCEL_GIT_COMMIT_SHA ||
         'unknown';
       console.info('[build]', window.location.origin, 'commit:', commit);
+    }
+    if (!supabase) {
+      setAuthError("Supabase non configuré. Vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.");
+      setLoading(false);
+      return;
+    }
+    if (!exchangeAttemptedRef.current) {
+      exchangeAttemptedRef.current = true;
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        (async () => {
+          try {
+            console.info('[oauth] exchangeCodeForSession start');
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) {
+              console.error('[oauth] exchangeCodeForSession error', error);
+              setAuthError("Connexion Google échouée. Réessayez.");
+            }
+          } finally {
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+            await checkUser();
+            if (
+              window.location.hash === '#/' ||
+              window.location.hash.includes('login') ||
+              window.location.hash.includes('register')
+            ) {
+              navigate(defaultPrivateRoute);
+            }
+          }
+        })();
+      }
     }
     const authListener =
       supabase?.auth.onAuthStateChange(async (event, session) => {
@@ -136,6 +170,15 @@ function AppRoutes() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!loading) return;
+    const timeout = window.setTimeout(() => {
+      setAuthError("Temps d’attente dépassé. Vérifiez la configuration OAuth/Supabase.");
+      setLoading(false);
+    }, 10000);
+    return () => window.clearTimeout(timeout);
+  }, [loading]);
+
   const checkUser = async () => {
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
@@ -168,6 +211,17 @@ function AppRoutes() {
       isCheckingRef.current = false;
     }
   };
+
+  if (authError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-center">
+        <div>
+          <h1 className="text-lg font-bold text-slate-900 mb-2">Erreur d’authentification</h1>
+          <p className="text-slate-600">{authError}</p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!user) {
