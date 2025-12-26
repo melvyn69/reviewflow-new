@@ -10,22 +10,66 @@ const logDuration = (label: string, start: number, extra?: Record<string, unknow
     console.info(`[api] ${label} (${ms}ms)`, extra || {});
 };
 
-const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+const DEFAULT_TIMEOUT_MS = 12000;
+
+const withTimeout = async <T,>(promise: Promise<T>, ms = DEFAULT_TIMEOUT_MS, label = 'timeout'): Promise<T> => {
     const start = performance.now();
-    return await Promise.race([
-        promise.then((result) => {
-            logDuration(`${label} ok`, start);
-            return result;
-        }),
-        new Promise<T>((_, reject) =>
-            setTimeout(() => {
-                const err = new Error(`${label} timeout after ${ms}ms`);
-                console.error(err.message);
-                reject(err);
-            }, ms)
-        )
-    ]);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+            const err = new Error(`${label} timeout after ${ms}ms`);
+            console.error(err.message);
+            reject(err);
+        }, ms);
+    });
+
+    try {
+        const result = await Promise.race([
+            promise.then((value) => {
+                logDuration(`${label} ok`, start);
+                return value;
+            }),
+            timeoutPromise,
+        ]);
+        return result as T;
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+    }
 };
+
+const isRetryableError = (error: any) => {
+    const status = error?.status ?? error?.statusCode;
+    if (status === 429 || (status >= 500 && status < 600)) return true;
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('network') || message.includes('fetch') || message.includes('timeout');
+};
+
+const runTimedQuery = async <T extends { error?: any }>(fn: () => Promise<T>, label: string): Promise<T> => {
+    const attempt = () => withTimeout(fn(), DEFAULT_TIMEOUT_MS, label);
+    const result = await attempt();
+    if (result?.error && isRetryableError(result.error)) {
+        console.warn(`[api] ${label} retry`, { status: result.error?.status, message: result.error?.message });
+        return await attempt();
+    }
+    return result;
+};
+
+const runTimed = async <T,>(fn: () => Promise<T>, label: string): Promise<T> => {
+    const attempt = () => withTimeout(fn(), DEFAULT_TIMEOUT_MS, label);
+    try {
+        return await attempt();
+    } catch (error) {
+        if (isRetryableError(error)) {
+            console.warn(`[api] ${label} retry`, { status: error?.status, message: error?.message });
+            return await attempt();
+        }
+        throw error;
+    }
+};
+
+let inFlightUser: Promise<User | null> | null = null;
+let inFlightOrg: Promise<Organization | null> | null = null;
 
 // Helper for Edge Functions
 const invoke = async (functionName: string, body: any) => {
@@ -47,31 +91,39 @@ const getAIClient = () => {
 export const api = {
   auth: {
     getUser: async (): Promise<User | null> => {
-      const start = performance.now();
-      console.info('[api] auth.getUser start', { url: supabase?.auth?.url });
-      if (isDemoModeEnabled()) return DEMO_USER;
-      
-      if (!supabase) return null;
-      const { data: { user } } = await withTimeout(supabase.auth.getUser(), 4000, 'supabase.auth.getUser');
-      if (!user) return null;
-      
-      const { data } = await withTimeout(
-          supabase.from('users').select('*').eq('id', user.id).maybeSingle(),
-          4000,
-          'supabase.from(users).select'
-      );
-      
-      const result = {
-          id: user.id,
-          email: user.email!,
-          name: (data?.name) || (user.user_metadata?.name) || 'Utilisateur',
-          avatar: data?.avatar || '',
-          role: (data?.role) || 'admin', 
-          organizations: data?.organizations || [],
-          organization_id: data?.organization_id
-      };
-      logDuration('auth.getUser done', start, { userId: result.id, hasOrg: !!result.organization_id });
-      return result;
+      if (inFlightUser) return inFlightUser;
+      inFlightUser = (async () => {
+          const start = performance.now();
+          console.info('[api] auth.getUser start', { url: supabase?.auth?.url });
+          if (isDemoModeEnabled()) return DEMO_USER;
+          
+          if (!supabase) return null;
+          const sessionRes = await runTimedQuery(() => supabase.auth.getSession(), 'supabase.auth.getSession');
+          if (sessionRes.error) throw sessionRes.error;
+          const sessionUser = sessionRes.data.session?.user;
+          if (!sessionUser) return null;
+          
+          const { data, error } = await runTimedQuery(
+              () => supabase.from('users').select('*').eq('id', sessionUser.id).maybeSingle(),
+              'supabase.from(users).select'
+          );
+          if (error) throw error;
+
+          const result = {
+              id: sessionUser.id,
+              email: sessionUser.email!,
+              name: (data?.name) || (sessionUser.user_metadata?.name) || 'Utilisateur',
+              avatar: data?.avatar || '',
+              role: (data?.role) || 'admin', 
+              organizations: data?.organizations || [],
+              organization_id: data?.organization_id
+          };
+          logDuration('auth.getUser done', start, { userId: result.id, hasOrg: !!result.organization_id });
+          return result;
+      })().finally(() => {
+          inFlightUser = null;
+      });
+      return inFlightUser;
     },
     login: async (email: string, password: string) => {
       if (email === 'demo@reviewflow.com') {
@@ -107,7 +159,7 @@ export const api = {
         await supabase.auth.signInWithOAuth({ 
             provider: 'google',
             options: {
-                redirectTo: 'https://reviewflow-new.vercel.app/auth/callback',
+                redirectTo: `${window.location.origin}/auth/callback`,
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -122,7 +174,7 @@ export const api = {
         const { data } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: 'https://reviewflow-new.vercel.app/auth/callback',
+                redirectTo: `${window.location.origin}/auth/callback`,
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -163,9 +215,8 @@ export const api = {
           const start = performance.now();
           console.info('[api] organization.ensureDefaultForCurrentUser start', { url: supabase?.rest?.url });
           if (!supabase) throw new Error("Supabase not initialized");
-          const { data, error } = await withTimeout(
-              supabase.rpc('create_default_org_for_current_user'),
-              4000,
+          const { data, error } = await runTimedQuery(
+              () => supabase.rpc('create_default_org_for_current_user'),
               'supabase.rpc(create_default_org_for_current_user)'
           );
           if (error) throw error;
@@ -173,50 +224,58 @@ export const api = {
           return data as Organization;
       },
       get: async (): Promise<Organization | null> => {
-          const start = performance.now();
-          console.info('[api] organization.get start', { url: supabase?.rest?.url });
-          if (isDemoModeEnabled()) {
-              if (DEMO_ORG.locations && DEMO_ORG.locations.length > 0 && !DEMO_ORG.locations[0].public_config) {
-                  DEMO_ORG.locations[0].public_config = {
-                      template: 'modern',
-                      primaryColor: '#4f46e5',
-                      showReviews: true,
-                      showMap: true,
-                      customCta: { enabled: true, label: 'Réserver', url: 'https://cal.com' },
-                      stats: { views: 1240, clicks: 85 }
-                  };
+          if (inFlightOrg) return inFlightOrg;
+          inFlightOrg = (async () => {
+              const start = performance.now();
+              console.info('[api] organization.get start', { url: supabase?.rest?.url });
+              if (isDemoModeEnabled()) {
+                  if (DEMO_ORG.locations && DEMO_ORG.locations.length > 0 && !DEMO_ORG.locations[0].public_config) {
+                      DEMO_ORG.locations[0].public_config = {
+                          template: 'modern',
+                          primaryColor: '#4f46e5',
+                          showReviews: true,
+                          showMap: true,
+                          customCta: { enabled: true, label: 'Réserver', url: 'https://cal.com' },
+                          stats: { views: 1240, clicks: 85 }
+                      };
+                  }
+                  return DEMO_ORG;
               }
-              return DEMO_ORG;
-          }
 
-          if (!supabase) return null;
-          const { data: { user } } = await withTimeout(supabase.auth.getUser(), 4000, 'supabase.auth.getUser');
-          if (!user) return null;
+              if (!supabase) return null;
+              const sessionRes = await runTimedQuery(() => supabase.auth.getSession(), 'supabase.auth.getSession');
+              if (sessionRes.error) throw sessionRes.error;
+              const sessionUser = sessionRes.data.session?.user;
+              if (!sessionUser) return null;
 
-          const { data: userProfile } = await withTimeout(
-              supabase.from('users').select('organization_id').eq('id', user.id).maybeSingle(),
-              4000,
-              'supabase.from(users).select organization_id'
-          );
-          if (!userProfile?.organization_id) return null;
+              const { data: userProfile, error: profileError } = await runTimedQuery(
+                  () => supabase.from('users').select('organization_id').eq('id', sessionUser.id).maybeSingle(),
+                  'supabase.from(users).select organization_id'
+              );
+              if (profileError) throw profileError;
+              if (!userProfile?.organization_id) return null;
 
-          const { data } = await withTimeout(
-            supabase
-              .from('organizations')
-              .select(`
-                *, 
-                locations(*), 
-                staff_members(*), 
-                offers(*)
-            `)
-              .eq('id', userProfile.organization_id)
-              .single(),
-            4000,
-            'supabase.from(organizations).select'
-          );
-            
-          logDuration('organization.get done', start, { orgId: (data as any)?.id });
-          return data as any;
+              const { data, error } = await runTimedQuery(
+                () => supabase
+                  .from('organizations')
+                  .select(`
+                    *, 
+                    locations(*), 
+                    staff_members(*), 
+                    offers(*)
+                `)
+                  .eq('id', userProfile.organization_id)
+                  .single(),
+                'supabase.from(organizations).select'
+              );
+              if (error) throw error;
+                
+              logDuration('organization.get done', start, { orgId: (data as any)?.id });
+              return data as any;
+          })().finally(() => {
+              inFlightOrg = null;
+          });
+          return inFlightOrg;
       },
       create: async (name: string, industry: string) => {
           if (isDemoModeEnabled()) return;

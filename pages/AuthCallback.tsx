@@ -22,18 +22,20 @@ export const AuthCallbackPage = () => {
     if (attemptedRef.current) return;
     attemptedRef.current = true;
     const run = async () => {
-      console.info('[auth/callback] href', window.location.href);
+      console.info('[auth/callback] start', { href: window.location.href });
       if (!supabase) {
         setMessage("Supabase n'est pas configuré. Vérifiez les variables d'environnement.");
         return;
       }
-      const params = new URLSearchParams(window.location.search);
+      const url = window.location.href;
+      const params = new URL(url).searchParams;
       const code = params.get('code');
 
       const sessionBefore = await supabase.auth.getSession();
       console.info('[auth/callback] getSession before', { hasSession: !!sessionBefore.data.session });
 
       if (!sessionBefore.data.session && code) {
+        console.info('[auth/callback] exchangeCodeForSession start');
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         logError('[auth/callback] exchangeCodeForSession error', error);
       }
@@ -41,8 +43,13 @@ export const AuthCallbackPage = () => {
       const sessionAfter = await supabase.auth.getSession();
       console.info('[auth/callback] getSession after', { hasSession: !!sessionAfter.data.session });
 
+      if (!sessionAfter.data.session) {
+        setMessage('Aucune session détectée après OAuth. Vérifiez la configuration Supabase.');
+        return;
+      }
+
       window.history.replaceState({}, document.title, window.location.pathname);
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     };
 
     run().catch((e) => {

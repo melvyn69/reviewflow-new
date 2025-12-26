@@ -80,7 +80,7 @@ function AppRoutes() {
   const lastUserIdRef = useRef<string | null>(null);
   const tokensSavedRef = useRef(false);
   const hasLoggedBuildRef = useRef(false);
-  const exchangeAttemptedRef = useRef(false);
+  const isAuthCallbackPath = () => window.location.pathname === '/auth/callback';
   const sessionEstablishedRef = useRef(false);
 
   const logStep = (label: string, start: number, extra?: Record<string, unknown>) => {
@@ -90,24 +90,32 @@ function AppRoutes() {
 
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     const start = performance.now();
-    return await Promise.race([
-      promise.then((result) => {
-        logStep(`${label} ok`, start);
-        return result;
-      }),
-      new Promise<T>((_, reject) =>
-        setTimeout(() => {
-          logStep(`${label} timeout`, start);
-          reject(new Error(`${label} timeout`));
-        }, ms)
-      )
-    ]);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        logStep(`${label} timeout`, start);
+        reject(new Error(`${label} timeout`));
+      }, ms);
+    });
+
+    try {
+      const result = await Promise.race([
+        promise.then((value) => {
+          logStep(`${label} ok`, start);
+          return value;
+        }),
+        timeoutPromise
+      ]);
+      return result as T;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   };
 
   useEffect(() => {
     if (!hasCheckedRef.current) {
       hasCheckedRef.current = true;
-      bootstrapImmediate();
+      bootstrapImmediate(isAuthCallbackPath());
     }
     if (!hasLoggedBuildRef.current) {
       hasLoggedBuildRef.current = true;
@@ -149,13 +157,21 @@ function AppRoutes() {
               console.error("Failed to save Google tokens", e);
             }
           }
-          await checkUser();
-          if (
-            window.location.pathname === '/' ||
-            window.location.pathname.includes('/login') ||
-            window.location.pathname.includes('/register')
-          ) {
-            navigate(defaultPrivateRoute);
+          if (!isAuthCallbackPath()) {
+            await checkUser();
+            if (
+              window.location.pathname === '/' ||
+              window.location.pathname.includes('/login') ||
+              window.location.pathname.includes('/register')
+            ) {
+              navigate(defaultPrivateRoute);
+            }
+          } else {
+            window.setTimeout(() => {
+              if (!isAuthCallbackPath()) {
+                checkUser();
+              }
+            }, 150);
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
@@ -169,25 +185,23 @@ function AppRoutes() {
     };
   }, []);
 
-  const bootstrapImmediate = async () => {
+  const bootstrapImmediate = async (skipCheckUser: boolean) => {
     try {
       const sessionStart = performance.now();
       const sessionRes = await supabase!.auth.getSession();
       logStep('[bootstrap] getSession done', sessionStart, { hasSession: !!sessionRes.data.session });
       setHasSession(!!sessionRes.data.session);
-      if (sessionRes.data.session && !sessionEstablishedRef.current) {
+      const sessionUser = sessionRes.data.session?.user;
+      if (sessionUser && !sessionEstablishedRef.current) {
         sessionEstablishedRef.current = true;
         setLoading(false);
       }
 
-      const directUserStart = performance.now();
-      const directUserRes = await supabase!.auth.getUser();
-      logStep('[bootstrap] direct getUser done', directUserStart, { hasUser: !!directUserRes.data.user, userId: directUserRes.data.user?.id });
-      if (directUserRes.data.user) {
+      if (sessionUser) {
         setUser({
-          id: directUserRes.data.user.id,
-          email: directUserRes.data.user.email || '',
-          name: directUserRes.data.user.user_metadata?.name || 'Utilisateur',
+          id: sessionUser.id,
+          email: sessionUser.email || '',
+          name: sessionUser.user_metadata?.name || 'Utilisateur',
           avatar: '',
           role: 'viewer',
           organizations: [],
@@ -200,6 +214,11 @@ function AppRoutes() {
         ) {
           navigate(defaultPrivateRoute);
         }
+      }
+
+      if (skipCheckUser) {
+        setLoading(false);
+        return;
       }
 
       // Background profile/org fetch (non-blocking)
@@ -229,7 +248,7 @@ function AppRoutes() {
         orgInitAttempted.current = true;
         try {
           console.info('[auth] ensureDefaultForCurrentUser start');
-          await withTimeout(api.organization.ensureDefaultForCurrentUser(), 3000, 'ensureDefaultForCurrentUser');
+          await withTimeout(api.organization.ensureDefaultForCurrentUser(), 12000, 'ensureDefaultForCurrentUser');
           console.info('[auth] ensureDefaultForCurrentUser done');
           const refreshedStart = performance.now();
           const refreshedUser = await api.auth.getUser();
@@ -263,7 +282,7 @@ function AppRoutes() {
       return;
     }
     console.info('[auth] org fetch start');
-    withTimeout(api.organization.get(), 3000, 'organization.get')
+    withTimeout(api.organization.get(), 12000, 'organization.get')
       .then((nextOrg) => {
         console.info('[auth] org fetch done', { hasOrg: !!nextOrg, orgId: nextOrg?.id });
         setOrg(nextOrg);
