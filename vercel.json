@@ -8,6 +8,10 @@
       "destination": "/api/$1"
     },
     {
+      "source": "/auth/callback",
+      "destination": "/index.html"
+    },
+    {
       "source": "/((?!api/|_next/|static/|assets/|favicon.ico).*)",
       "destination": "/index.html"
     }

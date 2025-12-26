@@ -287,8 +287,8 @@ const LocationModal = ({ location, onClose, onSave, onUpload }: { location?: Loc
                                             <div className="flex items-center gap-2 font-bold mb-2">
                                                 <ExternalLink className="h-4 w-4" /> Lien Public
                                             </div>
-                                            <a href={`/#/v/${location?.id}`} target="_blank" className="underline break-all block">
-                                                {window.location.origin}/#/v/{location?.id}
+                                            <a href={`/v/${location?.id}`} target="_blank" className="underline break-all block">
+                                                {window.location.origin}/v/{location?.id}
                                             </a>
                                         </div>
                                     </>

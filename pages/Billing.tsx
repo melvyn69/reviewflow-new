@@ -177,7 +177,7 @@ export const BillingPage = () => {
                 setIsVerifyingPayment(true);
                 await pollForPlanUpdate();
                 // Clear URL param without reload
-                window.history.replaceState({}, '', '#/billing');
+                window.history.replaceState({}, '', '/billing');
             } else {
                 loadOrg();
             }

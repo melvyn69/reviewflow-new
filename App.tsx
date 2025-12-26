@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, ToastProvider, useToast } from './components/ui';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, ToastProvider, useToast } from './components/ui';
 import { AppLayout } from './components/Layout';
 import { InboxPage } from './pages/Inbox';
 import { AnalyticsPage } from './pages/Analytics';
@@ -26,6 +26,7 @@ import { TeamPage } from './pages/Team';
 import { OffersPage } from './pages/Offers';
 import { SocialPage } from './pages/Social';
 import { PublicProfilePage } from './pages/PublicProfile';
+import { AuthCallbackPage } from './pages/AuthCallback';
 import { api } from './lib/api';
 import { Organization, User } from './types';
 import { I18nProvider } from './lib/i18n';
@@ -123,36 +124,6 @@ function AppRoutes() {
       setLoading(false);
       return;
     }
-    if (!exchangeAttemptedRef.current) {
-      exchangeAttemptedRef.current = true;
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      if (code) {
-        (async () => {
-          try {
-            console.info('[oauth] exchangeCodeForSession start');
-            const exchangeStart = performance.now();
-            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-            logStep('[oauth] exchangeCodeForSession done', exchangeStart, { hasSession: !!data?.session });
-            if (error) {
-              console.error('[oauth] exchangeCodeForSession error', error);
-              setAuthError(error.message || "Connexion Google échouée. Réessayez.");
-            }
-          } finally {
-            window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
-            await bootstrapImmediate();
-            if (
-              window.location.hash === '#/' ||
-              window.location.hash.includes('login') ||
-              window.location.hash.includes('register')
-            ) {
-              navigate(defaultPrivateRoute);
-            }
-            setLoading(false);
-          }
-        })();
-      }
-    }
     const authListener =
       supabase?.auth.onAuthStateChange(async (event, session) => {
         if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
@@ -180,9 +151,9 @@ function AppRoutes() {
           }
           await checkUser();
           if (
-            window.location.hash === '#/' ||
-            window.location.hash.includes('login') ||
-            window.location.hash.includes('register')
+            window.location.pathname === '/' ||
+            window.location.pathname.includes('/login') ||
+            window.location.pathname.includes('/register')
           ) {
             navigate(defaultPrivateRoute);
           }
@@ -197,17 +168,6 @@ function AppRoutes() {
       authListener.data.subscription.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (!loading) return;
-    const timeout = window.setTimeout(() => {
-      if (!hasSession) {
-        setAuthError((prev) => prev || "Aucune session Supabase détectée.");
-        setLoading(false);
-      }
-    }, 2000);
-    return () => window.clearTimeout(timeout);
-  }, [loading, hasSession]);
 
   const bootstrapImmediate = async () => {
     try {
@@ -234,9 +194,9 @@ function AppRoutes() {
           organization_id: null
         });
         if (
-          window.location.hash === '#/' ||
-          window.location.hash.includes('login') ||
-          window.location.hash.includes('register')
+          window.location.pathname === '/' ||
+          window.location.pathname.includes('/login') ||
+          window.location.pathname.includes('/register')
         ) {
           navigate(defaultPrivateRoute);
         }
@@ -339,6 +299,7 @@ function AppRoutes() {
             <Route path="/" element={user ? <Navigate to={defaultPrivateRoute} replace /> : <LandingPage />} />
             <Route path="/login" element={user ? <Navigate to={defaultPrivateRoute} replace /> : <AuthPage initialMode="login" onLoginSuccess={checkUser} />} />
             <Route path="/book-demo" element={ENABLE_EXTRAS ? <BookDemoPage /> : <Navigate to="/" replace />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
         
             {/* Hidden Registration */}
             <Route path="/register" element={user ? <Navigate to={defaultPrivateRoute} replace /> : <AuthPage initialMode="register" onLoginSuccess={checkUser} />} />
@@ -406,7 +367,7 @@ function AppRoutes() {
 
 const App = () => {
   return (
-    <HashRouter>
+    <BrowserRouter>
       <I18nProvider>
         <ToastProvider>
           <ErrorBoundary>
@@ -414,7 +375,7 @@ const App = () => {
           </ErrorBoundary>
         </ToastProvider>
       </I18nProvider>
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 

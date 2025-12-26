@@ -309,7 +309,7 @@ export const DashboardPage = ({ user: initialUser }: { user?: User | null }) => 
 
   const openFunnel = () => {
       if (realLocationId) {
-          window.open(`#/feedback/${realLocationId}`, '_blank');
+          window.open(`/feedback/${realLocationId}`, '_blank');
       } else {
           toast.error("Aucun établissement configuré.");
           navigate('/settings?tab=locations');

@@ -158,7 +158,7 @@ export const PublicProfilePage = () => {
                             <MessageCircle className="h-10 w-10 mx-auto mb-3 text-indigo-300" />
                             <h4 className="font-bold mb-2">Vous connaissez ce lieu ?</h4>
                             <p className="text-sm text-indigo-200 mb-4">Partagez votre expérience pour aider la communauté.</p>
-                            <Button variant="secondary" className="w-full" onClick={() => window.location.href = `/#/feedback/${location.id}`}>
+                            <Button variant="secondary" className="w-full" onClick={() => window.location.href = `/feedback/${location.id}`}>
                                 Donner mon avis
                             </Button>
                         </div>

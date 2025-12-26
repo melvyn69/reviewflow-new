@@ -72,7 +72,7 @@ export const CollectPage = () => {
   
   // URL Construction logic
   let reviewLink = selectedLocation 
-    ? `${window.location.origin}/#/feedback/${selectedLocation.id}` 
+    ? `${window.location.origin}/feedback/${selectedLocation.id}` 
     : '';
   
   if (selectedStaffId !== 'all') {
@@ -89,7 +89,7 @@ export const CollectPage = () => {
 
   // Generate dynamic iframe URL based on all customization options
   const getWidgetUrl = () => {
-      const baseUrl = window.location.origin + window.location.pathname;
+      const baseUrl = `${window.location.origin}/`;
       const params = new URLSearchParams({
           theme: widgetTheme,
           type: widgetType,
@@ -98,7 +98,7 @@ export const CollectPage = () => {
           border: widgetShowBorder.toString(),
           radius: widgetBorderRadius.toString()
       });
-      return `${baseUrl}#/widget/${selectedLocationId}?${params.toString()}`;
+      return `${baseUrl}widget/${selectedLocationId}?${params.toString()}`;
   };
 
   const handleCopyWidgetCode = () => {

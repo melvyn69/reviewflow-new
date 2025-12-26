@@ -1,8 +1,8 @@
 
 import React, { InputHTMLAttributes, SelectHTMLAttributes, useContext, useState, useEffect, useMemo } from 'react';
 import { LucideIcon, X, CheckCircle, AlertTriangle, Info, AlertCircle, Lock, Sparkles, ChevronRight } from 'lucide-react';
-import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
-export { HashRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams };
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
+export { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams, Link, useSearchParams };
 
 // --- TOAST SYSTEM ---
 type ToastType = 'success' | 'error' | 'warning' | 'info';

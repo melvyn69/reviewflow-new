@@ -1,0 +1,59 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from '../components/ui';
+import { supabase } from '../lib/supabase';
+
+const logError = (label: string, error: any) => {
+  if (!error) return;
+  console.error(label, {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+    status: error.status
+  });
+};
+
+export const AuthCallbackPage = () => {
+  const navigate = useNavigate();
+  const [message, setMessage] = useState('Finalisation de la connexion...');
+  const attemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (attemptedRef.current) return;
+    attemptedRef.current = true;
+    const run = async () => {
+      console.info('[auth/callback] href', window.location.href);
+      if (!supabase) {
+        setMessage("Supabase n'est pas configuré. Vérifiez les variables d'environnement.");
+        return;
+      }
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+
+      const sessionBefore = await supabase.auth.getSession();
+      console.info('[auth/callback] getSession before', { hasSession: !!sessionBefore.data.session });
+
+      if (!sessionBefore.data.session && code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        logError('[auth/callback] exchangeCodeForSession error', error);
+      }
+
+      const sessionAfter = await supabase.auth.getSession();
+      console.info('[auth/callback] getSession after', { hasSession: !!sessionAfter.data.session });
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+      navigate('/dashboard');
+    };
+
+    run().catch((e) => {
+      logError('[auth/callback] error', e);
+      setMessage('Erreur de connexion OAuth. Vérifiez la configuration Supabase.');
+    });
+  }, [navigate]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-center">
+      <p className="text-slate-600">{message}</p>
+    </div>
+  );
+};

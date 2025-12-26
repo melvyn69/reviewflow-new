@@ -355,7 +355,7 @@ export const InboxPage = () => {
         const target = filtered.find(r => r.id === targetReviewId);
         if (target) {
             onSelectReview(target);
-            window.history.replaceState({}, '', '#/inbox');
+            window.history.replaceState({}, '', '/inbox');
         }
     }
     

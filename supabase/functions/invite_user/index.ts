@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
             role: role || 'editor',
             invited_by: user.id
         },
-        redirectTo: 'https://reviewflow.vercel.app/#/login?mode=setup' 
+        redirectTo: 'https://reviewflow.vercel.app/login?mode=setup' 
     })
 
     if (inviteError) throw inviteError

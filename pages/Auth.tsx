@@ -37,19 +37,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
   }, [initialMode]);
 
   useEffect(() => {
-      const hash = location.hash;
-      if (hash && hash.includes('error=')) {
-          const params = new URLSearchParams(hash.substring(1));
-          const errorDesc = params.get('error_description') || params.get('error') || 'Erreur de connexion';
-          
-          if (errorDesc.includes('access_denied')) {
-              setError("Accès refusé par Google. (Si mode test: vérifiez que votre email est invité)");
-          } else {
-              setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '));
-          }
-          navigate(location.pathname, { replace: true });
+      const params = new URLSearchParams(location.search);
+      const errorDesc = params.get('error_description') || params.get('error');
+      if (!errorDesc) return;
+
+      if (errorDesc.includes('access_denied')) {
+          setError("Accès refusé par Google. (Si mode test: vérifiez que votre email est invité)");
+      } else {
+          setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '));
       }
-  }, [location, navigate]);
+      navigate(location.pathname, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
       if (exchangeAttemptedRef.current) return;
@@ -69,7 +67,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess, initialMode 
                   onLoginSuccess();
               }
           } finally {
-              window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+              window.history.replaceState({}, document.title, window.location.pathname);
               setIsLoading(false);
           }
       })();

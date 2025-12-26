@@ -107,6 +107,7 @@ export const api = {
         await supabase.auth.signInWithOAuth({ 
             provider: 'google',
             options: {
+                redirectTo: 'https://reviewflow-new.vercel.app/auth/callback',
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -121,7 +122,7 @@ export const api = {
         const { data } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin + '/settings?tab=integrations',
+                redirectTo: 'https://reviewflow-new.vercel.app/auth/callback',
                 queryParams: {
                     access_type: 'offline',
                     prompt: 'consent',
@@ -149,7 +150,7 @@ export const api = {
     resetPassword: async (email: string) => {
         if (isDemoModeEnabled()) return;
         if (supabase) await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.origin + '/#/login?mode=reset'
+            redirectTo: window.location.origin + '/login?mode=reset'
         });
     },
     deleteAccount: async () => {
@@ -943,8 +944,8 @@ export const api = {
           if (isDemoModeEnabled()) return 'https://example.com/checkout';
           const { url } = await invoke('create_checkout', { 
               plan,
-              successUrl: window.location.origin + '/#/billing?success=true',
-              cancelUrl: window.location.origin + '/#/billing?canceled=true'
+              successUrl: window.location.origin + '/billing?success=true',
+              cancelUrl: window.location.origin + '/billing?canceled=true'
           });
           return url;
       },
@@ -952,7 +953,7 @@ export const api = {
           if (!ENABLE_EXTRAS) return '';
           if (isDemoModeEnabled()) return 'https://example.com/portal';
           const { url } = await invoke('create_portal', {
-              returnUrl: window.location.origin + '/#/billing'
+              returnUrl: window.location.origin + '/billing'
           });
           return url;
       }
