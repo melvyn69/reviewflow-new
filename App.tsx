@@ -46,12 +46,21 @@ const ScrollToTop = () => {
 interface ProtectedRouteProps {
   children?: React.ReactNode;
   user: User | null;
+  authStatus: 'booting' | 'authenticated' | 'unauthenticated';
   allowedRoles?: string[];
 }
 
 const DEFAULT_PRIVATE_ROUTE = ENABLE_EXTRAS ? '/dashboard' : '/inbox';
 
-const ProtectedRoute = ({ children, user, allowedRoles }: ProtectedRouteProps) => {
+const ProtectedRoute = ({ children, user, authStatus, allowedRoles }: ProtectedRouteProps) => {
+  if (authStatus === 'booting' || (authStatus === 'authenticated' && !user)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -83,6 +92,8 @@ function AppRoutes() {
   const authStatusRef = useRef<'booting' | 'authenticated' | 'unauthenticated'>('booting');
   const bootstrapAttemptRef = useRef(0);
   const bootstrapRetryScheduledRef = useRef(false);
+  const lastRedirectRef = useRef<string | null>(null);
+  const location = useLocation();
 
   const logStep = (label: string, start: number, extra?: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - start);
@@ -101,6 +112,16 @@ function AppRoutes() {
       reason
     });
     setAuthStatus(next);
+  };
+
+  const isPublicPath = (path: string) => {
+    if (path === '/' || path === '/login' || path === '/register') return true;
+    if (path === '/legal' || path === '/privacy' || path === '/contact') return true;
+    if (path === '/auth/callback' || path === '/book-demo') return true;
+    if (path.startsWith('/feedback/')) return true;
+    if (path.startsWith('/widget/')) return true;
+    if (path.startsWith('/v/')) return true;
+    return false;
   };
 
   const isGetSessionTimeout = (error: any) => {
@@ -205,6 +226,27 @@ function AppRoutes() {
       authListener.data.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (authStatus === 'booting') return;
+    const path = location.pathname;
+    if (authStatus === 'authenticated') {
+      if (path === '/' || path === '/login' || path === '/register') {
+        if (lastRedirectRef.current !== 'auth_to_private') {
+          lastRedirectRef.current = 'auth_to_private';
+          navigate(DEFAULT_PRIVATE_ROUTE, { replace: true });
+        }
+      }
+      return;
+    }
+
+    if (authStatus === 'unauthenticated' && !isPublicPath(path)) {
+      if (lastRedirectRef.current !== 'unauth_to_login') {
+        lastRedirectRef.current = 'unauth_to_login';
+        navigate('/login', { replace: true });
+      }
+    }
+  }, [authStatus, location.pathname, navigate]);
 
   const bootstrapImmediate = async (skipCheckUser: boolean) => {
     try {
@@ -390,7 +432,7 @@ function AppRoutes() {
 
             {/* Protected Routes (App Layout) */}
             <Route path="/*" element={
-                <ProtectedRoute user={user}>
+                <ProtectedRoute user={user} authStatus={authStatus}>
                     <AppLayout user={user} org={org}>
                         <Routes>
                             <Route path="dashboard" element={ENABLE_EXTRAS ? <DashboardPage user={user} /> : <Navigate to="/inbox" replace />} />
@@ -409,21 +451,21 @@ function AppRoutes() {
                             {/* Sensitive Routes - Admin Only */}
                             <Route 
                                 path="settings" 
-                                element={<ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><SettingsPage /></ProtectedRoute>} 
+                                element={<ProtectedRoute user={user} authStatus={authStatus} allowedRoles={['admin', 'super_admin']}><SettingsPage /></ProtectedRoute>} 
                             />
                             <Route 
                                 path="billing" 
-                                element={ENABLE_EXTRAS ? <ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><BillingPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
+                                element={ENABLE_EXTRAS ? <ProtectedRoute user={user} authStatus={authStatus} allowedRoles={['admin', 'super_admin']}><BillingPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
                             />
                             <Route 
                                 path="team" 
-                                element={ENABLE_EXTRAS ? <ProtectedRoute user={user} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
+                                element={ENABLE_EXTRAS ? <ProtectedRoute user={user} authStatus={authStatus} allowedRoles={['admin', 'super_admin']}><TeamPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
                             />
                         
                             {/* Super Admin Route */}
                             <Route 
                                 path="admin" 
-                                element={ENABLE_EXTRAS ? <ProtectedRoute user={user} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
+                                element={ENABLE_EXTRAS ? <ProtectedRoute user={user} authStatus={authStatus} allowedRoles={['super_admin']}><SuperAdminPage /></ProtectedRoute> : <Navigate to="/inbox" replace />} 
                             />
                         
                             {/* Fallback for protected routes */}
