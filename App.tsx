@@ -90,7 +90,7 @@ function AppRoutes() {
   const lastUserIdRef = useRef<string | null>(null);
   const tokensSavedRef = useRef(false);
   const hasLoggedBuildRef = useRef(false);
-  const isAuthCallbackPath = () => window.location.pathname === '/auth/callback';
+  const isAuthCallback = () => window.location.pathname === '/auth/callback';
   const sessionEstablishedRef = useRef(false);
   const authStatusRef = useRef<'booting' | 'authenticated' | 'unauthenticated'>('booting');
   const bootstrapAttemptRef = useRef(0);
@@ -197,7 +197,7 @@ function AppRoutes() {
   useEffect(() => {
     if (!hasCheckedRef.current) {
       hasCheckedRef.current = true;
-      bootstrapImmediate(isAuthCallbackPath());
+      bootstrapImmediate(isAuthCallback());
     }
     if (!hasLoggedBuildRef.current) {
       hasLoggedBuildRef.current = true;
@@ -228,6 +228,10 @@ function AppRoutes() {
             (window as any).__rf_metrics.saveGoogleTokensCalls =
               ((window as any).__rf_metrics.saveGoogleTokensCalls || 0) + 1;
             try {
+              if (isAuthCallback()) {
+                console.info('[rpc] skip save_google_tokens on /auth/callback');
+                return;
+              }
               console.info('[rpc] save_google_tokens start');
               const { error } = await supabase.rpc('save_google_tokens', {
                 access_token: session.provider_token ?? null,
@@ -242,7 +246,7 @@ function AppRoutes() {
               console.error("Failed to save Google tokens", e);
             }
           }
-          if (!isAuthCallbackPath()) {
+          if (!isAuthCallback()) {
             await checkUser();
             if (
               window.location.pathname === '/' ||
@@ -253,7 +257,7 @@ function AppRoutes() {
             }
           } else {
             window.setTimeout(() => {
-              if (!isAuthCallbackPath()) {
+              if (!isAuthCallback()) {
                 checkUser();
               }
             }, 150);
@@ -296,6 +300,10 @@ function AppRoutes() {
     try {
       bootstrapAttemptRef.current += 1;
       console.info('[auth] bootstrap attempt', { attempt: bootstrapAttemptRef.current });
+      if (isAuthCallback()) {
+        console.info('[auth] skip bootstrap on /auth/callback');
+        return;
+      }
       const code = new URLSearchParams(window.location.search).get('code');
       if (code && window.location.pathname !== '/auth/callback') {
         console.warn('[bootstrap] redirecting to /auth/callback', { pathname: window.location.pathname });
@@ -355,7 +363,10 @@ function AppRoutes() {
 
   const checkUser = async () => {
     if (authStatusRef.current !== 'authenticated') return;
-    if (isAuthCallbackPath()) return;
+    if (isAuthCallback()) {
+      console.info('[auth] skip checkUser on /auth/callback');
+      return;
+    }
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
     setIsSyncing(true);
@@ -444,7 +455,8 @@ function AppRoutes() {
       setOrgFetchDegraded(false);
       return;
     }
-    if (isAuthCallbackPath()) {
+    if (isAuthCallback()) {
+      console.info('[auth] skip org fetch on /auth/callback');
       setOrgFetchDegraded(false);
       return;
     }
@@ -474,7 +486,7 @@ function AppRoutes() {
             orgRetryScheduledRef.current = true;
             window.setTimeout(() => {
               orgRetryScheduledRef.current = false;
-              if (authStatusRef.current === 'authenticated' && !isAuthCallbackPath()) {
+              if (authStatusRef.current === 'authenticated' && !isAuthCallback()) {
                 setOrgFetchRetryToken((value) => value + 1);
               }
             }, 2000);

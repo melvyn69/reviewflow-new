@@ -13,6 +13,24 @@ const logError = (label: string, error: any) => {
   });
 };
 
+const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timeout after ${ms}ms`));
+    }, ms);
+  });
+  try {
+    return (await Promise.race([promise, timeoutPromise])) as T;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+const isTimeoutError = (error: any) => {
+  return String(error?.message || '').toLowerCase().includes('timeout');
+};
+
 export const AuthCallbackPage = () => {
   const navigate = useNavigate();
   const [message, setMessage] = useState('Finalisation de la connexion...');
@@ -43,23 +61,71 @@ export const AuthCallbackPage = () => {
       const code = params.get('code');
       console.info('[auth/callback] code present', { hasCode: !!code });
 
-      const sessionBefore = await supabase.auth.getSession();
+      let sessionBefore;
+      try {
+        sessionBefore = await withTimeout(supabase.auth.getSession(), 8000, 'auth.getSession before');
+      } catch (e) {
+        logError('[auth/callback] getSession before error', e);
+        if (isTimeoutError(e)) {
+          setMessage('Délai dépassé lors de la récupération de session. Réessayez.');
+          setCanRetry(true);
+          return;
+        }
+        throw e;
+      }
       console.info('[auth/callback] getSession before', { hasSession: !!sessionBefore.data.session });
 
       if (!sessionBefore.data.session && code) {
         console.info('[auth/callback] exchangeCodeForSession start');
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        let exchangeResult;
+        try {
+          exchangeResult = await withTimeout(
+            supabase.auth.exchangeCodeForSession(code),
+            12000,
+            'auth.exchangeCodeForSession'
+          );
+        } catch (e) {
+          logError('[auth/callback] exchangeCodeForSession error', e);
+          if (isTimeoutError(e)) {
+            setMessage('Délai dépassé lors de l’échange OAuth. Réessayez.');
+            setCanRetry(true);
+            return;
+          }
+          throw e;
+        }
+        const { data, error } = exchangeResult as any;
         console.info('[auth/callback] exchangeCodeForSession result', {
           hasSession: !!data?.session
         });
         logError('[auth/callback] exchangeCodeForSession error', error);
       }
 
-      let sessionAfter = await supabase.auth.getSession();
+      let sessionAfter;
+      try {
+        sessionAfter = await withTimeout(supabase.auth.getSession(), 8000, 'auth.getSession after');
+      } catch (e) {
+        logError('[auth/callback] getSession after error', e);
+        if (isTimeoutError(e)) {
+          setMessage('Délai dépassé lors de la récupération de session. Réessayez.');
+          setCanRetry(true);
+          return;
+        }
+        throw e;
+      }
       for (let attempt = 1; attempt <= 5 && !sessionAfter.data.session; attempt += 1) {
         console.info('[auth/callback] wait session retry', { attempt });
         await new Promise((resolve) => setTimeout(resolve, 200));
-        sessionAfter = await supabase.auth.getSession();
+        try {
+          sessionAfter = await withTimeout(supabase.auth.getSession(), 8000, 'auth.getSession after');
+        } catch (e) {
+          logError('[auth/callback] getSession after error', e);
+          if (isTimeoutError(e)) {
+            setMessage('Délai dépassé lors de la récupération de session. Réessayez.');
+            setCanRetry(true);
+            return;
+          }
+          throw e;
+        }
       }
       console.info('[auth/callback] getSession after', { hasSession: !!sessionAfter.data.session });
 
