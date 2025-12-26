@@ -302,20 +302,19 @@ export const api = {
               }
 
               if (!supabase) return null;
-              console.info('[api.organization.get] step 2: before getSession');
-              const sessionRes = await withTimeout(
-                  supabase.auth.getSession(),
+              // Avoid getSession here: it can hang on some clients. getUser is safer for auth presence.
+              console.info('[api.organization.get] step 2: before getUser');
+              const userRes = await withTimeout(
+                  supabase.auth.getUser(),
                   8000,
-                  'supabase.auth.getSession'
+                  'supabase.auth.getUser'
               );
-              console.info('[api.organization.get] step 3: after getSession', {
-                  hasSession: !!sessionRes.data.session,
-                  hasToken: !!sessionRes.data.session?.access_token,
+              console.info('[api.organization.get] step 3: after getUser', {
+                  hasUser: !!userRes.data.user,
               });
-              if (sessionRes.error) throw sessionRes.error;
-              const sessionUser = sessionRes.data.session?.user;
+              if (userRes.error) throw userRes.error;
+              const sessionUser = userRes.data.user;
               if (!sessionUser) return null;
-              const token = sessionRes.data.session?.access_token;
 
               const { data: userProfile, error: profileError } = await runTimedQuery(
                   () => withAbortSignal(
@@ -327,28 +326,28 @@ export const api = {
               if (profileError) throw profileError;
               if (!userProfile?.organization_id) return null;
 
-              if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !token) return null;
-
-              const url =
-                `${SUPABASE_URL}/rest/v1/organizations?select=` +
-                `*,locations(*),staff_members(*),offers(*)` +
-                `&id=eq.${userProfile.organization_id}&limit=1`;
-              console.info('[api.organization.get] step 4: before fetch', { url });
-              const { data, status } = await fetchJsonWithAbort(
-                url,
-                {
-                  method: 'GET',
-                  headers: {
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  }
-                },
-                20000,
-                'api.organization.get'
+              console.info('[api.organization.get] step 4: before fetch', {
+                  orgId: userProfile.organization_id
+              });
+              const { data, error } = await runTimedQuery(
+                () => withAbortSignal(
+                  supabase
+                    .from('organizations')
+                    .select(`
+                      *, 
+                      locations(*), 
+                      staff_members(*), 
+                      offers(*)
+                  `)
+                    .eq('id', userProfile.organization_id)
+                    .single(),
+                  options?.signal
+                ),
+                'supabase.from(organizations).select'
               );
-              console.info('[api.organization.get] step 5: after fetch', { status });
-              const orgData = Array.isArray(data) ? data[0] : data;
+              if (error) throw error;
+              console.info('[api.organization.get] step 5: after fetch', { hasOrg: !!data });
+              const orgData = data;
                 
               logDuration('organization.get done', start, { orgId: (orgData as any)?.id });
               return orgData as any;
