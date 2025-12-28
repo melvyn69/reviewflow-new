@@ -42,6 +42,8 @@ export const supabase =
           autoRefreshToken: true,
           // Required for OAuth redirects to be detected (especially on Vercel)
           detectSessionInUrl: false,
+          // Ensure refresh tokens are persisted in the browser
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
           // Safer default for modern OAuth flows
           flowType: 'pkce',
         },

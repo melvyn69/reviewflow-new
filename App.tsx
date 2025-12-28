@@ -170,6 +170,23 @@ function AppRoutes() {
     return String(error?.message || '').toLowerCase().includes('timeout');
   };
 
+  const isInvalidRefreshToken = (error: any) => {
+    const message = String(error?.message || '');
+    return message.includes('Invalid Refresh Token') || (error?.status === 400 && message.includes('Refresh Token'));
+  };
+
+  const handleInvalidRefreshToken = async (error: any, context: string) => {
+    if (!isInvalidRefreshToken(error)) return false;
+    console.warn('[auth] invalid refresh token', { context });
+    try {
+      await supabase?.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      console.warn('[auth] signOut local failed', e);
+    }
+    window.location.replace('/?reauth=1');
+    return true;
+  };
+
   const getSessionFallbackUser = async (): Promise<Pick<User, 'id' | 'email' | 'organization_id'> | null> => {
     try {
       const sessionRes = await supabase!.auth.getSession();
@@ -365,6 +382,7 @@ function AppRoutes() {
       // Background profile/org fetch (non-blocking)
       checkUser();
     } catch (e: any) {
+      if (await handleInvalidRefreshToken(e, 'bootstrapImmediate')) return;
       console.error('[bootstrap] error', e);
       if (!bootstrapRetryScheduledRef.current) {
         bootstrapRetryScheduledRef.current = true;
@@ -458,6 +476,7 @@ function AppRoutes() {
         console.warn('[auth] checkUser getSession timeout', e);
         return;
       }
+      if (await handleInvalidRefreshToken(e, 'checkUser')) return;
       console.error('[auth] checkUser error', e);
       // Non-fatal: do not flip to unauthenticated unless explicitly no session
     } finally {

@@ -60,6 +60,11 @@ export const AuthCallbackPage = () => {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code');
       console.info('[auth/callback] code present', { hasCode: !!code });
+      if (!code) {
+        setMessage("Code OAuth manquant. Réessayez la connexion.");
+        setCanRetry(true);
+        return;
+      }
 
       let sessionBefore;
       try {
@@ -128,6 +133,7 @@ export const AuthCallbackPage = () => {
         }
       }
       console.info('[auth/callback] getSession after', { hasSession: !!sessionAfter.data.session });
+      console.info('[auth/callback] exchange success', { hasSession: !!sessionAfter.data.session });
 
       if (!sessionAfter.data.session) {
         setMessage('Aucune session détectée après OAuth. Réessayez.');
